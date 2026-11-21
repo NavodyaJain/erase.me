@@ -2,12 +2,15 @@
   "name": "erase-me",
   "private": true,
   "packageManager": "pnpm@9.12.0",
+  "engines": { "node": ">=20" },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "lint": "turbo run lint",
+    "lint": "turbo run lint && pnpm lint:words",
+    "lint:words": "node scripts/lint-banned-words.mjs",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test"
+    "test": "turbo run test && pnpm test:scripts",
+    "test:scripts": "node --test scripts/lint-banned-words.test.mjs"
   },
   "devDependencies": { "turbo": "^2.0.0" }
 }
