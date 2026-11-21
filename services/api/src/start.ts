@@ -36,7 +36,7 @@ export async function start(opts: StartOptions = {}): Promise<void> {
     modules: {
       db,
       queue,
-      gmail: new HttpGmailClient(),
+      gmail: new HttpGmailClient({ maxRequestsPerSecond: 15 }),
       // Secrets stay inside these two objects: they are never logged or returned.
       google:
         env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET

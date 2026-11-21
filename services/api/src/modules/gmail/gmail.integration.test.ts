@@ -338,6 +338,49 @@ describe('scan', () => {
     expect(await scanStatus(s, inboxId)).toMatchObject({ status: 'done', foundCount: 5 });
   });
 
+  it('skips messages that cannot be dated and still finishes (regression)', async () => {
+    const s = await signIn(h, { email: 'scan12@example.test', sub: 'g-scan12' });
+    const { inboxId } = await connectInbox(h, s, { email: 'scan12-mail@example.test', sub: 'g-scan12-mail' });
+    h.gmail.messages = [
+      ...mailbox(3, 2),
+      { id: 'odd', receivedAt: new Date(0), from: 'hi@odd-date.example', subject: 'Your receipt', undatable: true },
+    ];
+    await post(s, `/v1/inboxes/${inboxId}/scan`);
+    await h.queue.drain();
+    expect(await scanStatus(s, inboxId)).toMatchObject({ status: 'done', foundCount: 3, errorCode: null });
+    expect(h.logs.text()).toMatch(/"skipped":1/);
+  });
+
+  it('logs which call failed, the HTTP status and Google reason and status, and nothing else (retryable)', async () => {
+    const s = await signIn(h, { email: 'scan13@example.test', sub: 'g-scan13' });
+    const { inboxId } = await connectInbox(h, s, { email: 'scan13-mail@example.test', sub: 'g-scan13-mail' });
+    h.gmail.messages = mailbox(3, 2);
+    h.gmail.failListOn = {
+      call: h.gmail.listCalls + 1,
+      error: new GmailApiError('auth', {
+        call: 'messages.list',
+        httpStatus: 403,
+        reason: 'accessNotConfigured',
+        googleStatus: 'PERMISSION_DENIED',
+      }),
+    };
+    await post(s, `/v1/inboxes/${inboxId}/scan`);
+    await h.queue.drain();
+    expect(await scanStatus(s, inboxId)).toMatchObject({ status: 'failed', errorCode: 'gmail_auth' });
+    const line = h.logs.lines().find((l) => l.msg === 'scan failed' && l.failedCall === 'messages.list');
+    expect(line).toMatchObject({
+      errorCode: 'gmail_auth',
+      failedCall: 'messages.list',
+      httpStatus: 403,
+      googleReason: 'accessNotConfigured',
+      googleStatus: 'PERMISSION_DENIED',
+    });
+    // Retryable: the next scan runs and finishes.
+    await post(s, `/v1/inboxes/${inboxId}/scan`);
+    await h.queue.drain();
+    expect(await scanStatus(s, inboxId)).toMatchObject({ status: 'done', foundCount: 3 });
+  });
+
   it('marks the inbox as needing reconnection when Google says the grant is gone', async () => {
     const s = await signIn(h, { email: 'scan9@example.test', sub: 'g-scan9' });
     const { inboxId, refreshToken } = await connectInbox(h, s, { email: 'scan9-mail@example.test', sub: 'g-scan9-mail' });

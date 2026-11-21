@@ -17,7 +17,11 @@ export type GoogleOAuthErrorCode = 'invalid_grant' | 'bad_response' | 'unavailab
 
 /** Never carries a response body or token: only a stable code. */
 export class GoogleOAuthError extends Error {
-  constructor(readonly code: GoogleOAuthErrorCode) {
+  constructor(
+    readonly code: GoogleOAuthErrorCode,
+    /** Content-free detail for logs: HTTP status and Google's `error` code (for example `invalid_grant`). */
+    readonly detail?: { httpStatus?: number; reason?: string; cause?: 'network' | 'timeout' | 'bad_response' },
+  ) {
     super(`google oauth: ${code}`);
     this.name = 'GoogleOAuthError';
   }
@@ -188,13 +192,29 @@ export class HttpGoogleOAuthClient implements GoogleOAuthClient {
         }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-    } catch {
-      throw new GoogleOAuthError('unavailable');
+    } catch (err) {
+      throw new GoogleOAuthError('unavailable', {
+        cause: err instanceof Error && err.name === 'TimeoutError' ? 'timeout' : 'network',
+      });
     }
-    if (res.status === 400 || res.status === 401) throw new GoogleOAuthError('invalid_grant');
-    if (!res.ok) throw new GoogleOAuthError('unavailable');
+    if (!res.ok) {
+      const reason = await res
+        .json()
+        .then((b: unknown) => {
+          const e = (b as { error?: unknown }).error;
+          return typeof e === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(e) ? e : undefined;
+        })
+        .catch(() => undefined);
+      const detail = { httpStatus: res.status, ...(reason ? { reason } : {}) };
+      // Only an authorisation failure means the grant is gone. Other 4xx answers (for example
+      // invalid_client, a wrong client secret) are our configuration, not the user's grant.
+      if (res.status === 400 || res.status === 401) {
+        throw new GoogleOAuthError(reason === undefined || reason === 'invalid_grant' ? 'invalid_grant' : 'unavailable', detail);
+      }
+      throw new GoogleOAuthError('unavailable', detail);
+    }
     const parsed = TokenResponse.safeParse(await res.json().catch(() => null));
-    if (!parsed.success) throw new GoogleOAuthError('bad_response');
+    if (!parsed.success) throw new GoogleOAuthError('bad_response', { httpStatus: res.status, cause: 'bad_response' });
     return parsed.data;
   }
 }

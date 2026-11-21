@@ -82,6 +82,8 @@ export interface FakeMessage {
   subject: string;
   listUnsubscribe?: boolean;
   listId?: boolean;
+  /** Gmail returned a message that cannot be placed in time; the client skips it. */
+  undatable?: boolean;
 }
 
 /** A mailbox in memory. Implements only the metadata calls the scan is allowed to make. */
@@ -117,7 +119,7 @@ export class FakeGmail implements GmailClient {
   getMessageMetadata(accessToken: string, id: string): Promise<GmailMessageMeta | null> {
     this.calls.push(`meta:${accessToken}`);
     const m = this.messages.find((x) => x.id === id);
-    if (!m) return Promise.resolve(null);
+    if (!m || m.undatable) return Promise.resolve(null);
     return Promise.resolve({
       id: m.id,
       receivedAt: m.receivedAt,

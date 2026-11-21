@@ -155,10 +155,17 @@ export class InboxService implements InboxDisconnector {
     } catch (err) {
       if (err instanceof GoogleOAuthError && err.code === 'invalid_grant') {
         await this.repo.markInboxError(inbox.id, this.now());
-        throw new GmailApiError('auth');
+        throw new GmailApiError('auth', { call: 'token.refresh', ...err.detail });
       }
-      if (err instanceof GoogleOAuthError) throw new GmailApiError('unavailable');
-      throw new GmailApiError('auth'); // could not decrypt the stored token
+      if (err instanceof GoogleOAuthError) {
+        throw new GmailApiError('unavailable', {
+          call: 'token.refresh',
+          ...(err.detail?.httpStatus ? { httpStatus: err.detail.httpStatus } : {}),
+          ...(err.detail?.reason ? { reason: err.detail.reason } : {}),
+          ...(err.detail?.cause ? { cause: err.detail.cause } : {}),
+        });
+      }
+      throw new GmailApiError('auth', { call: 'token.refresh', cause: 'token_unreadable' }); // could not decrypt
     }
   }
 }

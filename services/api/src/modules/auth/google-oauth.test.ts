@@ -101,6 +101,25 @@ describe('token endpoint', () => {
     await expect(client().refreshAccessToken('rt')).rejects.toMatchObject({ code: 'unavailable' });
   });
 
+  it('treats a rejected client (wrong secret) as unavailable with detail, not as a revoked grant', async () => {
+    const err = await client(ok({ error: 'invalid_client', error_description: 'The OAuth client was not found.' }, 401))
+      .refreshAccessToken('rt')
+      .then(
+        () => new GoogleOAuthError('bad_response'),
+        (e: unknown) => e as GoogleOAuthError,
+      );
+    expect(err.code).toBe('unavailable');
+    expect(err.detail).toEqual({ httpStatus: 401, reason: 'invalid_client' });
+    const grant = await client(ok({ error: 'invalid_grant' }, 400))
+      .refreshAccessToken('rt')
+      .then(
+        () => new GoogleOAuthError('bad_response'),
+        (e: unknown) => e as GoogleOAuthError,
+      );
+    expect(grant.code).toBe('invalid_grant');
+    expect(grant.detail).toEqual({ httpStatus: 400, reason: 'invalid_grant' });
+  });
+
   it('revoke is true for ok and already-invalid tokens, false when Google is unreachable', async () => {
     expect(await client(ok({}, 200)).revoke('t')).toBe(true);
     expect(await client(ok({ error: 'invalid_token' }, 400)).revoke('t')).toBe(true);

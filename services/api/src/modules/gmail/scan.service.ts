@@ -111,6 +111,7 @@ export class ScanService {
     try {
       let cursor: string | undefined = scan.cursor ?? undefined;
       let scanned = 0;
+      let skipped = 0; // deleted since listing, or no usable date
       let estimate: number | undefined;
       let found = await this.repo.countDetected(inbox.userId, inbox.id);
 
@@ -130,6 +131,7 @@ export class ScanService {
         estimate ??= page.estimatedTotal;
 
         const metas = await mapLimit(page.ids, FETCH_CONCURRENCY, (id) => this.gmail.getMessageMetadata(accessToken, id));
+        skipped += metas.filter((m) => m === null).length;
         const sightings = metas.flatMap((m) => {
           const s = m ? readSighting(m) : null;
           return s ? [s] : [];
@@ -148,11 +150,27 @@ export class ScanService {
       const now = this.now();
       await this.repo.finishScan(scan.id, found, now);
       await this.repo.setLastScan(inbox.id, now);
-      this.log.info({ scanned, found }, 'scan finished');
+      this.log.info({ scanned, skipped, found }, 'scan finished');
     } catch (err) {
       const code = err instanceof GmailApiError ? `gmail_${err.code}` : 'internal_error';
       await this.repo.failScan(scan.id, code, this.now());
-      this.log.warn({ errorCode: code }, 'scan failed');
+      // Which call failed, the HTTP status and Google's reason and status only: no tokens, subjects or addresses.
+      const f = err instanceof GmailApiError ? err.failure : undefined;
+      this.log.warn(
+        {
+          errorCode: code,
+          ...(f
+            ? {
+                failedCall: f.call,
+                httpStatus: f.httpStatus,
+                googleReason: f.reason,
+                googleStatus: f.googleStatus,
+                cause: f.cause,
+              }
+            : {}),
+        },
+        'scan failed',
+      );
       if (!(err instanceof GmailApiError)) throw err;
     }
   }
