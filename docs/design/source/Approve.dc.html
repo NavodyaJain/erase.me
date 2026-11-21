@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Approve requests</title>
+<script src="./_runtime/react.js"></script>
+<script src="./_runtime/react-dom.js"></script>
+<script src="./_runtime/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{text-decoration:none;color:inherit}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;display:flex;flex-direction:column;background:#F5F6F8;color:#0B1220;font-family:Inter,system-ui,sans-serif;font-feature-settings:'tnum';-webkit-font-smoothing:antialiased">
+
+<div style="flex:1;min-height:0;overflow:hidden;padding:48px 20px 0;box-sizing:border-box;display:flex;flex-direction:column;gap:14px">
+
+<div style="display:flex;align-items:center;gap:4px;min-height:44px;margin-left:-8px">
+<a href="Tracker.dc.html" aria-label="Back to requests" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B1220" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+</a>
+<span style="font-size:15px;font-weight:600;color:#5B6475">Requests</span>
+</div>
+
+<div>
+<div style="font-size:28px;line-height:34px;font-weight:700;letter-spacing:-0.03em">6 drafts ready</div>
+<div style="margin-top:4px;font-size:14px;color:#5B6475">Sent from your own Gmail. Riskiest first.</div>
+</div>
+
+<div style="background:#FFFFFF;border:1px solid #E6E8EC;border-radius:12px;padding:0 14px">
+<sc-for list="{{items}}" as="i" hint-placeholder-count="6">
+<div style="border-top:{{i.border}};padding:10px 0">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="width:22px;height:22px;flex:none;border-radius:6px;box-sizing:border-box;background:{{i.checkBg}};border:1.5px solid {{i.checkBorder}};display:flex;align-items:center;justify-content:center">
+<sc-if value="{{i.on}}" hint-placeholder-val="{{ true }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></sc-if>
+</div>
+<div style="flex:1;min-width:0">
+<div style="font-size:14px;line-height:18px;font-weight:600">{{i.name}}</div>
+<div style="margin-top:2px;font-size:12px;line-height:16px;color:#5B6475">{{i.sub}}</div>
+</div>
+<span style="flex:none;display:flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;background:{{i.bg}};color:{{i.fg}};font-size:10px;font-weight:600"><span style="width:5px;height:5px;border-radius:3px;background:{{i.fg}}"></span>{{i.tag}}</span>
+</div>
+<sc-if value="{{i.open}}" hint-placeholder-val="{{ false }}">
+<div style="margin:10px 0 2px 34px;padding:12px;border-radius:10px;background:#F5F6F8;border:1px solid #E6E8EC">
+<div style="font-size:12px;font-weight:600;color:#5B6475">To: grievance@quickcash.example</div>
+<div style="margin-top:6px;font-size:13px;line-height:19px">Please erase my account and KYC documents under Section 12 of the DPDP Act, 2023. Please confirm within 30 days.</div>
+<div style="margin-top:4px;display:flex;gap:16px">
+<a href="Approve.dc.html" style="min-height:44px;display:flex;align-items:center;font-size:13px;font-weight:600;color:#2F55F4">Edit draft</a>
+<a href="Approve.dc.html" style="min-height:44px;display:flex;align-items:center;font-size:13px;font-weight:600;color:#5B6475">Skip</a>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+
+</div>
+
+<div style="flex:none;padding:12px 20px 28px;background:#FFFFFF;border-top:1px solid #E6E8EC;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:8px">
+<a href="Tracker.dc.html" style="align-self:stretch;display:flex;align-items:center;justify-content:center;min-height:52px;border-radius:10px;background:#2F55F4;color:#FFFFFF;font-size:15px;font-weight:600">Approve and send 5</a>
+<span style="font-size:12px;color:#5B6475">Nothing is sent until you tap this</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const hi = { fg: '#C62828', bg: '#FDECEC' };
+    const med = { fg: '#8A5A00', bg: '#FFF3D6' };
+    const low = { fg: '#14733F', bg: '#E6F4EC' };
+    const nt = { fg: '#5B6475', bg: '#EEF0F4' };
+    const on = { on: true, checkBg: '#2F55F4', checkBorder: '#2F55F4', open: false };
+    const off = { on: false, checkBg: '#FFFFFF', checkBorder: '#9AA3B2', open: false };
+    const line = '1px solid #EEF0F4';
+    return {
+      items: [
+        { name: 'QuickCash', sub: 'Erase account and KYC', tag: 'High risk', ...hi, ...on, open: true, border: 'none' },
+        { name: 'PayNest', sub: 'Erase account and KYC', tag: 'High risk', ...hi, ...on, border: line },
+        { name: 'TradeLeaf', sub: 'Erase account', tag: 'Medium', ...med, ...on, border: line },
+        { name: 'WorkNook', sub: 'Erase account', tag: 'Medium', ...med, ...on, border: line },
+        { name: 'ShopHive', sub: 'Erase account', tag: 'Low', ...low, ...on, border: line },
+        { name: 'Horizon Bank', sub: 'May keep records by law', tag: 'Skipped', ...nt, ...off, border: line }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

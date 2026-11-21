@@ -1,0 +1,53 @@
+/* Erase.me design tokens. Source of truth: docs/design. See tokens.json. */
+:root {
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --font-features: 'tnum';
+
+  --fs-10: 10px; --fs-11: 11px; --fs-12: 12px; --fs-13: 13px; --fs-14: 14px; --fs-15: 15px;
+  --fs-17: 17px; --fs-22: 22px; --fs-28: 28px; --fs-32: 32px; --fs-38: 38px; --fs-52: 52px;
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+  --ls-tight: -0.02em; --ls-tighter: -0.03em; --ls-display: -0.04em; --ls-caps: 0.04em;
+
+  --color-bg: #F5F6F8;
+  --color-surface: #FFFFFF;
+  --color-surface-hover: #F8F9FB;
+  --color-tile: #F0F2F6;
+  --color-line: #E6E8EC;
+  --color-line-soft: #EEF0F4;
+  --color-input-border: #D5D9E0;
+  --color-ink: #0B1220;
+  --color-muted: #5B6475;
+  --color-accent: #2F55F4;
+  --color-accent-soft: #EBF0FF;
+
+  --status-bad-fg: #C62828;     --status-bad-bg: #FDECEC;
+  --status-good-fg: #14733F;    --status-good-bg: #E6F4EC;
+  --status-warn-fg: #8A5A00;    --status-warn-bg: #FFF3D6;
+  --status-neutral-fg: #5B6475; --status-neutral-bg: #EEF0F4;
+  --status-info-fg: #2F55F4;    --status-info-bg: #EBF0FF;
+  --color-warning-bar: #B8861B;
+
+  --dark-bg: #0B1220;
+  --dark-line: #1B2434;
+  --dark-muted: #8C96AB;
+  --dark-hover: rgba(127,140,170,.14);
+
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-panel: 16px;
+  --radius-chip: 999px;
+
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px; --space-12: 48px; --space-24: 96px;
+
+  --border-width: 1px;
+  --shadow-floating: 0 12px 40px rgba(11,18,32,.06);
+  --shadow-accent-button: 0 6px 18px rgba(47,85,244,.22);
+
+  --focus-ring: 2px solid #2F55F4;
+  --focus-offset: 2px;
+  --motion-hover: 150ms ease;
+  --touch-target-min: 44px;
+}
+@media (prefers-reduced-motion: reduce) { :root { --motion-hover: 0ms; } }

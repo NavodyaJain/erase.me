@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Leak trace</title>
+<script src="./_runtime/react.js"></script>
+<script src="./_runtime/react-dom.js"></script>
+<script src="./_runtime/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{text-decoration:none;color:inherit}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;display:flex;flex-direction:column;background:#F5F6F8;color:#0B1220;font-family:Inter,system-ui,sans-serif;font-feature-settings:'tnum';-webkit-font-smoothing:antialiased">
+
+<div style="flex:1;min-height:0;overflow:hidden;padding:56px 20px 0;box-sizing:border-box;display:flex;flex-direction:column;gap:14px">
+
+<div style="display:flex;align-items:center;justify-content:space-between;min-height:44px">
+<span style="font-size:22px;font-weight:700;letter-spacing:-0.03em">Leak trace</span>
+<a href="Connect.dc.html" style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border-radius:999px;background:#FFFFFF;border:1px solid #E6E8EC;font-size:13px;font-weight:600"><span style="width:7px;height:7px;border-radius:4px;background:#14733F"></span>3 inboxes</a>
+</div>
+
+<div style="background:#FFFFFF;border:1px solid #E6E8EC;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px">
+<span style="align-self:flex-start;display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:#FDECEC;color:#C62828;font-size:11px;font-weight:600"><span style="width:6px;height:6px;border-radius:3px;background:#C62828"></span>Likely leak found</span>
+<div style="font-size:22px;line-height:28px;font-weight:700;letter-spacing:-0.025em">TicketLy may have shared your email</div>
+<div style="font-size:14px;line-height:21px;color:#5B6475">3 spam emails reached <span style="font-weight:600;color:#0B1220">riya.ticketly@alias.erase.me</span> since Oct 3. 4 other users report the same.</div>
+<div style="display:flex;gap:10px;margin-top:4px">
+<a href="Approve.dc.html" style="flex:1;min-height:48px;border-radius:10px;background:#2F55F4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">Request deletion</a>
+<a href="Leak.dc.html" style="flex:1;min-height:48px;border-radius:10px;background:#FFFFFF;border:1px solid #D5D9E0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">Block alias</a>
+</div>
+</div>
+
+<div style="background:#FFFFFF;border:1px solid #E6E8EC;border-radius:12px;padding:0 14px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;padding:12px 0 8px">
+<span style="font-size:14px;font-weight:600">Your aliases</span>
+<span style="font-size:12px;color:#5B6475">9 active</span>
+</div>
+<sc-for list="{{aliases}}" as="a" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid #EEF0F4">
+<div style="width:36px;height:36px;flex:none;border-radius:8px;background:#F0F2F6;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">{{a.initial}}</div>
+<div style="flex:1;min-width:0">
+<div style="font-size:14px;line-height:18px;font-weight:600">{{a.name}}</div>
+<div style="margin-top:2px;font-size:12px;line-height:16px;color:#5B6475;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{a.addr}}</div>
+</div>
+<span style="flex:none;display:flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;background:{{a.bg}};color:{{a.fg}};font-size:10px;font-weight:600"><span style="width:5px;height:5px;border-radius:3px;background:{{a.fg}}"></span>{{a.status}}</span>
+</div>
+</sc-for>
+<a href="Leak.dc.html" style="min-height:48px;display:flex;align-items:center;gap:8px;border-top:1px solid #EEF0F4;font-size:14px;font-weight:600;color:#2F55F4">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2F55F4" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+New alias for a signup
+</a>
+</div>
+
+</div>
+
+<div style="flex:none;height:76px;box-sizing:border-box;display:flex;background:#FFFFFF;border-top:1px solid #E6E8EC;padding-bottom:14px">
+<sc-for list="{{nav}}" as="n" hint-placeholder-count="5">
+<a href="{{n.href}}" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;font-size:11px;font-weight:600;color:{{n.color}}">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{n.color}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.d}}"></path></svg>
+{{n.label}}
+</a>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const D = {
+      home: "M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
+      money: "M3 7a2 2 0 0 1 2-2h13v4M3 7v11a2 2 0 0 0 2 2h15V9H5a2 2 0 0 1-2-2zM16 14.5h.01",
+      shield: "M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z",
+      send: "M21 3L10 14M21 3l-7 18-4-7-7-4z",
+      at: "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"
+    };
+    const active = 'Aliases';
+    const items = [['Home','Home.dc.html',D.home],['Money','Money.dc.html',D.money],['Exposure','KYC.dc.html',D.shield],['Requests','Tracker.dc.html',D.send],['Aliases','Leak.dc.html',D.at]];
+    const bad = { fg: '#C62828', bg: '#FDECEC' };
+    const warn = { fg: '#8A5A00', bg: '#FFF3D6' };
+    const ok = { fg: '#14733F', bg: '#E6F4EC' };
+    return {
+      aliases: [
+        { initial: 'T', name: 'TicketLy', addr: 'riya.ticketly@alias.erase.me', status: 'Leaked', ...bad },
+        { initial: 'Q', name: 'QuickBite', addr: 'riya.quickbite@alias.erase.me', status: 'Watch', ...warn },
+        { initial: 'F', name: 'FitTrack Pro', addr: 'riya.fittrack@alias.erase.me', status: 'Clean', ...ok },
+        { initial: 'S', name: 'ShopHive', addr: 'riya.shophive@alias.erase.me', status: 'Clean', ...ok }
+      ],
+      nav: items.map((i) => ({ label: i[0], href: i[1], d: i[2], color: i[0] === active ? '#2F55F4' : '#5B6475' }))
+    };
+  }
+}
+</script>
+</body>
+</html>

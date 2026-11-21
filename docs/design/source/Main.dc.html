@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Erase.me landing page</title>
+<script src="./_runtime/react.js"></script>
+<script src="./_runtime/react-dom.js"></script>
+<script src="./_runtime/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{text-decoration:none;color:inherit}
+html{scroll-behavior:smooth}
+
+/* ---- animated counters (integer custom properties) ---- */
+@property --h{syntax:'<integer>';inherits:false;initial-value:312}
+@property --a{syntax:'<integer>';inherits:false;initial-value:11}
+@property --b{syntax:'<integer>';inherits:false;initial-value:8}
+@property --c{syntax:'<integer>';inherits:false;initial-value:6}
+@property --d{syntax:'<integer>';inherits:false;initial-value:74}
+@keyframes heroCount{0%{--h:0}55%,100%{--h:312}}
+.hero-count{counter-reset:h var(--h);animation:heroCount 8s ease-out infinite}
+.hero-count::before{content:counter(h)}
+
+/* ---- hero loop ---- */
+@keyframes scanBar{0%{transform:scaleX(0)}55%,100%{transform:scaleX(1)}}
+@keyframes rowA{0%,18%{opacity:0;transform:translateY(10px)}28%,93%{opacity:1;transform:none}100%{opacity:0;transform:translateY(10px)}}
+@keyframes rowB{0%,32%{opacity:0;transform:translateY(10px)}42%,93%{opacity:1;transform:none}100%{opacity:0;transform:translateY(10px)}}
+@keyframes rowC{0%,46%{opacity:0;transform:translateY(10px)}56%,93%{opacity:1;transform:none}100%{opacity:0;transform:translateY(10px)}}
+@keyframes tilePop{0%,12%{opacity:0;transform:scale(.96)}24%,93%{opacity:1;transform:none}100%{opacity:0}}
+.scan-bar{transform-origin:left;animation:scanBar 8s ease-out infinite}
+.row-a{animation:rowA 8s ease-out infinite}
+.row-b{animation:rowB 8s ease-out infinite}
+.row-c{animation:rowC 8s ease-out infinite}
+.tile-pop{animation:tilePop 8s ease-out infinite}
+
+/* ---- demo tab progress ---- */
+@keyframes fillBar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes panelIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.panel-in{animation:panelIn .45s ease-out both}
+@keyframes growBar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.grow{transform-origin:left;animation:growBar .9s .15s ease-out both}
+@keyframes pop{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+.stag1{animation:pop .4s .05s ease-out both}.stag2{animation:pop .4s .18s ease-out both}.stag3{animation:pop .4s .31s ease-out both}.stag4{animation:pop .4s .44s ease-out both}.stag5{animation:pop .4s .57s ease-out both}
+
+@keyframes panelIn2{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes growBar2{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.stack-card{position:sticky;box-sizing:border-box;min-height:400px;border:1px solid #E1E4EA;border-radius:20px;padding:32px;display:flex;flex-wrap:wrap;gap:32px;box-shadow:0 18px 50px rgba(11,18,32,.10);transform-origin:center top}
+.lb-row{transition:background-color .15s ease}.lb-row:hover{background:#F8F9FB}
+@keyframes stackShrink{to{transform:scale(.94);opacity:.6}}
+@supports (animation-timeline:view()){
+  .stack-card{animation:stackShrink linear both;animation-range:entry 30% entry 100%}
+}
+@media (max-width:760px){
+  .stack-card{position:relative!important;top:auto!important;animation:none!important;padding:20px}
+}
+/* ---- hover ---- */
+.lift{transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.lift:hover{transform:translateY(-4px);box-shadow:0 14px 36px rgba(11,18,32,.09);border-color:#C9D1E8}
+.btn{transition:transform .15s ease,background-color .15s ease,box-shadow .15s ease}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(47,85,244,.28)}
+.btn-ghost:hover{background:#F0F2F6}
+.navlink{transition:color .15s ease}.navlink:hover{color:#0B1220}
+.tab{transition:background-color .2s ease,border-color .2s ease}.tab:hover{background:#F5F6F8}
+
+/* ---- scroll-driven reveals and counters (progressive: visible by default) ---- */
+@keyframes rise{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}
+@keyframes cntA{from{--a:0}to{--a:11}}
+@keyframes cntB{from{--b:0}to{--b:8}}
+@keyframes cntC{from{--c:0}to{--c:6}}
+@keyframes cntD{from{--d:0}to{--d:74}}
+@keyframes drawBar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@supports (animation-timeline:view()){
+  .rv{animation:rise linear both;animation-timeline:view();animation-range:entry 5% entry 45%}
+  .rv-s{animation:rise linear both;animation-timeline:view();animation-range:entry 15% entry 55%}
+  .cnt-a .st,.cnt-b .st,.cnt-c .st,.cnt-d .st{display:none}
+  .cnt-a{counter-reset:a var(--a);animation:cntA linear both;animation-timeline:view();animation-range:entry 20% entry 80%}
+  .cnt-a::before{content:counter(a)}
+  .cnt-a::after{content:",400"}
+  .cnt-b{counter-reset:b var(--b);animation:cntB linear both;animation-timeline:view();animation-range:entry 20% entry 80%}
+  .cnt-b::before{content:counter(b)}
+  .cnt-c{counter-reset:c var(--c);animation:cntC linear both;animation-timeline:view();animation-range:entry 20% entry 80%}
+  .cnt-c::before{content:counter(c)}
+  .cnt-d{counter-reset:d var(--d);animation:cntD linear both;animation-timeline:view();animation-range:entry 20% entry 80%}
+  .cnt-d::before{content:counter(d)}
+  .draw{transform-origin:left;animation:drawBar linear both;animation-timeline:view();animation-range:entry 20% entry 70%}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</helmet>
+<div style="width:100%;min-width:320px;background:#F5F6F8;color:#0B1220;font-family:Inter,system-ui,sans-serif;font-feature-settings:'tnum','cv11';-webkit-font-smoothing:antialiased">
+
+<!-- NAV -->
+<div style="position:sticky;top:0;z-index:20;background:rgba(255,255,255,0.92);backdrop-filter:blur(10px);border-bottom:1px solid #E6E8EC">
+<div style="max-width:1120px;margin:0 auto;padding:0 24px;min-height:68px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 24px;box-sizing:border-box">
+<a href="Main.dc.html" style="display:flex;align-items:center;gap:10px;font-size:19px;font-weight:700;letter-spacing:-0.02em">
+<span style="width:26px;height:26px;border-radius:7px;background:#2F55F4;display:flex;align-items:center;justify-content:center"><span style="width:13px;height:3px;border-radius:1px;background:#FFFFFF"></span></span>
+Erase.me
+</a>
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:0 26px;font-size:14px;font-weight:500;color:#5B6475">
+<a class="navlink" href="#demo" style="min-height:44px;display:flex;align-items:center">See it work</a>
+<a class="navlink" href="#features" style="min-height:44px;display:flex;align-items:center">What it does</a>
+<a class="navlink" href="#leaderboard" style="min-height:44px;display:flex;align-items:center">Leaderboard</a>
+<a class="navlink" href="#privacy" style="min-height:44px;display:flex;align-items:center">Privacy</a>
+<a class="navlink" href="#faq" style="min-height:44px;display:flex;align-items:center">FAQ</a>
+<a class="btn" href="Connect.dc.html" style="min-height:44px;padding:0 18px;border-radius:8px;background:#0B1220;color:#FFFFFF;display:flex;align-items:center;font-weight:600">Connect Gmail</a>
+</div>
+</div>
+</div>
+
+<!-- HERO -->
+<div style="max-width:1120px;margin:0 auto;padding:72px 24px 72px;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:56px">
+<div style="flex:1 1 440px;min-width:0;display:flex;flex-direction:column;gap:24px">
+<div style="align-self:flex-start;display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#EBF0FF;color:#2F55F4;font-size:13px;font-weight:600">
+<span style="width:6px;height:6px;border-radius:3px;background:#2F55F4"></span>Built for India's DPDP Act, 2023
+</div>
+<h1 style="margin:0;font-size:56px;line-height:60px;font-weight:700;letter-spacing:-0.035em;text-wrap:balance">See every company that holds your data. Then make them delete it.</h1>
+<p style="margin:0;font-size:18px;line-height:28px;color:#5B6475;max-width:520px">Erase.me reads your sign-up emails to find who has your details, shows what they cost you and what they expose, and sends the erasure requests from your own Gmail.</p>
+<div style="display:flex;flex-wrap:wrap;gap:12px">
+<a class="btn" href="Connect.dc.html" style="min-height:52px;padding:0 24px;border-radius:10px;background:#2F55F4;color:#FFFFFF;display:flex;align-items:center;font-size:15px;font-weight:600">Connect Gmail</a>
+<a class="btn-ghost" href="#demo" style="min-height:52px;padding:0 24px;border-radius:10px;background:#FFFFFF;border:1px solid #D5D9E0;display:flex;align-items:center;font-size:15px;font-weight:600;transition:background-color .15s ease">Watch it work</a>
+</div>
+<div style="font-size:13px;color:#5B6475">Read-only Gmail access. Nothing is sent until you approve it.</div>
+</div>
+
+<!-- animated hero card -->
+<div style="flex:1 1 380px;min-width:0;display:flex;justify-content:center">
+<div style="width:100%;max-width:420px;background:#FFFFFF;border:1px solid #E6E8EC;border-radius:16px;box-shadow:0 12px 40px rgba(11,18,32,0.08);padding:20px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<span style="font-size:13px;font-weight:600;color:#5B6475">Scanning 3 inboxes</span>
+<span style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:#F5F6F8"><span style="width:6px;height:6px;border-radius:3px;background:#14733F"></span>Sample data</span>
+</div>
+<div style="height:4px;border-radius:2px;background:#E6E8EC;overflow:hidden"><div class="scan-bar" style="height:4px;background:#2F55F4"></div></div>
+<div>
+<div style="font-size:28px;line-height:32px;font-weight:700;letter-spacing:-0.03em"><span class="hero-count"></span> companies hold your data</div>
+<div style="margin-top:4px;font-size:13px;color:#5B6475">Found across 3 inboxes</div>
+</div>
+<div class="tile-pop" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+<div style="padding:12px;border:1px solid #E6E8EC;border-radius:10px"><div style="font-size:12px;font-weight:600;color:#5B6475">Money</div><div style="margin-top:6px;font-size:20px;font-weight:700;letter-spacing:-0.02em">₹11,400</div><div style="font-size:11px;color:#5B6475">per year</div></div>
+<div style="padding:12px;border:1px solid #E6E8EC;border-radius:10px"><div style="font-size:12px;font-weight:600;color:#5B6475">Risk</div><div style="margin-top:6px;font-size:20px;font-weight:700;letter-spacing:-0.02em;color:#C62828">8</div><div style="font-size:11px;color:#5B6475">hold Aadhaar</div></div>
+<div style="padding:12px;border:1px solid #E6E8EC;border-radius:10px"><div style="font-size:12px;font-weight:600;color:#5B6475">Control</div><div style="margin-top:6px;font-size:20px;font-weight:700;letter-spacing:-0.02em;color:#14733F">2</div><div style="font-size:11px;color:#5B6475">deleted</div></div>
+</div>
+<div style="display:flex;flex-direction:column">
+<div class="row-a" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #E6E8EC"><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">Cancel MindfulMe</div><div style="font-size:12px;color:#5B6475">₹3,599 renews Dec 4 · looks unused</div></div><span style="padding:7px 12px;border-radius:8px;background:#EBF0FF;color:#2F55F4;font-size:13px;font-weight:600">Cancel</span></div>
+<div class="row-b" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #E6E8EC"><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">Remove your Aadhaar</div><div style="font-size:12px;color:#5B6475">4 inactive companies hold it</div></div><span style="padding:7px 12px;border-radius:8px;background:#EBF0FF;color:#2F55F4;font-size:13px;font-weight:600">Review</span></div>
+<div class="row-c" style="display:flex;align-items:center;gap:12px;padding:11px 0 0;border-top:1px solid #E6E8EC"><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">Send 6 requests</div><div style="font-size:12px;color:#5B6475">Drafts ready for your approval</div></div><span style="padding:7px 12px;border-radius:8px;background:#2F55F4;color:#FFFFFF;font-size:13px;font-weight:600">Approve</span></div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- RESULTS BAND (scroll counters) -->
+<div style="background:#FFFFFF;border-top:1px solid #E6E8EC;border-bottom:1px solid #E6E8EC">
+<div style="max-width:1120px;margin:0 auto;padding:56px 24px;box-sizing:border-box;display:flex;flex-direction:column;gap:28px">
+<div class="rv" style="font-size:13px;font-weight:600;color:#5B6475">What a first scan can look like. Sample account, not a real result.</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:32px">
+<div class="rv" style="display:flex;flex-direction:column;gap:6px;border-top:2px solid #0B1220;padding-top:16px">
+<div style="font-size:48px;line-height:52px;font-weight:700;letter-spacing:-0.04em"><span class="cnt-a"><span class="st">11,400</span></span><span style="font-size:20px;font-weight:600;color:#5B6475"> ₹ a year</span></div>
+<div style="font-size:15px;line-height:22px;color:#5B6475">in subscriptions and autopays, 3 of them look unused</div>
+</div>
+<div class="rv" style="display:flex;flex-direction:column;gap:6px;border-top:2px solid #C62828;padding-top:16px">
+<div style="font-size:48px;line-height:52px;font-weight:700;letter-spacing:-0.04em;color:#C62828"><span class="cnt-b"><span class="st">8</span></span></div>
+<div style="font-size:15px;line-height:22px;color:#5B6475">companies likely hold your Aadhaar</div>
+</div>
+<div class="rv" style="display:flex;flex-direction:column;gap:6px;border-top:2px solid #2F55F4;padding-top:16px">
+<div style="font-size:48px;line-height:52px;font-weight:700;letter-spacing:-0.04em;color:#2F55F4"><span class="cnt-c"><span class="st">6</span></span></div>
+<div style="font-size:15px;line-height:22px;color:#5B6475">erasure requests drafted, sent in one tap</div>
+</div>
+<div class="rv" style="display:flex;flex-direction:column;gap:6px;border-top:2px solid #14733F;padding-top:16px">
+<div style="font-size:48px;line-height:52px;font-weight:700;letter-spacing:-0.04em;color:#14733F"><span class="cnt-d"><span class="st">74</span></span><span style="font-size:20px;font-weight:600;color:#5B6475"> %</span></div>
+<div style="font-size:15px;line-height:22px;color:#5B6475">of requests answered in the sample, shown only once a company has 10 or more</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- INTERACTIVE DEMO -->
+<div id="demo" style="max-width:1120px;margin:0 auto;padding:88px 24px;box-sizing:border-box;display:flex;flex-direction:column;gap:40px">
+<div class="rv" style="max-width:620px;display:flex;flex-direction:column;gap:12px">
+<div style="font-size:13px;font-weight:600;color:#2F55F4">See it work</div>
+<h2 style="margin:0;font-size:38px;line-height:44px;font-weight:700;letter-spacing:-0.03em;text-wrap:balance">From connected inbox to confirmed deletion</h2>
+<p style="margin:0;font-size:17px;line-height:26px;color:#5B6475">Pick a step, or let it play. All names and figures are sample data.</p>
+</div>
+
+<div class="rv-s" style="display:flex;flex-wrap:wrap;gap:24px;align-items:stretch">
+<div style="flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+<a class="tab" href="#demo" onClick="{{t.pick}}" style="position:relative;display:flex;flex-direction:column;gap:4px;padding:16px 18px;border-radius:12px;background:{{t.bg}};border:1px solid {{t.border}};overflow:hidden;cursor:pointer">
+<span style="font-size:13px;font-weight:600;color:{{t.kc}}">Step {{t.n}}</span>
+<span style="font-size:17px;font-weight:600;letter-spacing:-0.01em">{{t.title}}</span>
+<span style="font-size:14px;line-height:20px;color:#5B6475">{{t.desc}}</span>
+<span style="position:absolute;left:0;right:0;bottom:0;height:3px;background:transparent"><span style="display:block;height:3px;background:#2F55F4;transform-origin:left;transform:scaleX({{t.scale}});animation:{{t.anim}}"></span></span>
+</a>
+</sc-for>
+</div>
+
+<div style="flex:1.3 1 400px;min-width:0;background:#FFFFFF;border:1px solid #E6E8EC;border-radius:16px;box-shadow:0 12px 40px rgba(11,18,32,0.06);padding:22px;box-sizing:border-box;min-height:430px">
+
+<sc-if value="{{s0}}" hint-placeholder-val="{{ true }}">
+<div class="panel-in" style="display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:15px;font-weight:600">Scanning 3 inboxes</span><span style="font-size:12px;color:#5B6475">Company names only</span></div>
+<div style="height:4px;border-radius:2px;background:#E6E8EC;overflow:hidden"><div class="grow" style="height:4px;background:#2F55F4"></div></div>
+<div style="display:flex;flex-direction:column">
+<div class="stag1" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #EEF0F4"><span style="width:34px;height:34px;border-radius:8px;background:#F0F2F6;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">Q</span><div style="flex:1"><div style="font-size:14px;font-weight:600">QuickCash</div><div style="font-size:12px;color:#5B6475">Sign-up email · riya.old@gmail.com</div></div><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:#EEF0F4;color:#5B6475">Loan app</span></div>
+<div class="stag2" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #EEF0F4"><span style="width:34px;height:34px;border-radius:8px;background:#F0F2F6;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">P</span><div style="flex:1"><div style="font-size:14px;font-weight:600">PayNest</div><div style="font-size:12px;color:#5B6475">Welcome email · riya.s@gmail.com</div></div><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:#EEF0F4;color:#5B6475">Wallet</span></div>
+<div class="stag3" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #EEF0F4"><span style="width:34px;height:34px;border-radius:8px;background:#F0F2F6;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">M</span><div style="flex:1"><div style="font-size:14px;font-weight:600">MindfulMe</div><div style="font-size:12px;color:#5B6475">Renewal notice · riya.s@gmail.com</div></div><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:#EEF0F4;color:#5B6475">Subscription</span></div>
+<div class="stag4" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #EEF0F4"><span style="width:34px;height:34px;border-radius:8px;background:#F0F2F6;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">T</span><div style="flex:1"><div style="font-size:14px;font-weight:600">TradeLeaf</div><div style="font-size:12px;color:#5B6475">Account opened · riya.college@gmail.com</div></div><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:#EEF0F4;color:#5B6475">Broker</span></div>
+<div class="stag5" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #EEF0F4"><span style="width:34px;height:34px;border-radius:8px;background:#F0F2F6;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">S</span><div style="flex:1"><div style="font-size:14px;font-weight:600">ShopHive</div><div style="font-size:12px;color:#5B6475">Order receipt · riya.college@gmail.com</div></div><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:#EEF0F4;color:#5B6475">Shopping</span></div>
+</div>
+<div style="font-size:12px;color:#5B6475">312 companies found in total. Showing the first five.</div>
+</div>
+</sc-if>
+
+<sc-if value="{{s1}}" hint-placeholder-val="{{ false }}">
+<div class="panel-in" style="display:flex;flex-direction:column;gap:20px">
+<div style="font-size:15px;font-weight:600">Your results</div>
+<div class="stag1" style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600;color:#5B6475">Money</span><span style="font-size:22px;font-weight:700;letter-spacing:-0.03em">₹11,400 <span style="font-size:13px;font-weight:500;color:#5B6475">a year</span></span></div><div style="display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px"><div class="grow" style="width:55%;background:#2F55F4"></div><div class="grow" style="width:45%;background:#B8861B"></div></div><div style="font-size:12px;color:#5B6475">3 look unused · ₹5,100 you could save</div></div>
+<div class="stag2" style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600;color:#5B6475">Risk</span><span style="font-size:22px;font-weight:700;letter-spacing:-0.03em;color:#C62828">8 <span style="font-size:13px;font-weight:500;color:#5B6475">likely hold your Aadhaar</span></span></div><div style="display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px"><div class="grow" style="width:50%;background:#C62828"></div><div class="grow" style="width:25%;background:#B8861B"></div><div class="grow" style="width:25%;background:#9AA3B2"></div></div><div style="font-size:12px;color:#5B6475">4 high risk · 2 medium · 2 must keep by law</div></div>
+<div class="stag3" style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600;color:#5B6475">Control</span><span style="font-size:22px;font-weight:700;letter-spacing:-0.03em;color:#14733F">0 <span style="font-size:13px;font-weight:500;color:#5B6475">requests sent yet</span></span></div><div style="height:8px;border-radius:4px;background:#E6E8EC"></div><div style="font-size:12px;color:#5B6475">6 drafts are ready for your approval</div></div>
+</div>
+</sc-if>
+
+<sc-if value="{{s2}}" hint-placeholder-val="{{ false }}">
+<div class="panel-in" style="display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:15px;font-weight:600">6 drafts ready</span><span style="font-size:12px;color:#5B6475">Sent from your own Gmail</span></div>
+<div class="stag1" style="padding:14px;border-radius:12px;background:#F5F6F8;border:1px solid #E6E8EC"><div style="font-size:12px;font-weight:600;color:#5B6475">To: grievance@quickcash.example</div><div style="margin-top:6px;font-size:14px;line-height:21px">Please erase my account and KYC documents under Section 12 of the DPDP Act, 2023. Please confirm within 30 days.</div></div>
+<div style="display:flex;flex-direction:column">
+<div class="stag2" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #EEF0F4"><span style="width:20px;height:20px;border-radius:6px;background:#2F55F4;display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></span><span style="flex:1;font-size:14px;font-weight:600">QuickCash</span><span style="font-size:12px;color:#C62828;font-weight:600">High risk</span></div>
+<div class="stag3" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #EEF0F4"><span style="width:20px;height:20px;border-radius:6px;background:#2F55F4;display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></span><span style="flex:1;font-size:14px;font-weight:600">PayNest</span><span style="font-size:12px;color:#C62828;font-weight:600">High risk</span></div>
+<div class="stag4" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #EEF0F4"><span style="width:20px;height:20px;border-radius:6px;border:1.5px solid #9AA3B2;box-sizing:border-box"></span><span style="flex:1;font-size:14px;font-weight:600">Horizon Bank</span><span style="font-size:12px;color:#5B6475;font-weight:600">Skipped · may keep records by law</span></div>
+</div>
+<div class="stag5" style="min-height:48px;border-radius:10px;background:#2F55F4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">Approve and send 5</div>
+</div>
+</sc-if>
+
+<sc-if value="{{s3}}" hint-placeholder-val="{{ false }}">
+<div class="panel-in" style="display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:15px;font-weight:600">5 requests sent</span><span style="font-size:12px;color:#5B6475">Follow-up ready on day 30</span></div>
+<div class="stag1" style="display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px"><div class="grow" style="width:40%;background:#14733F"></div><div class="grow" style="width:20%;background:#2F55F4"></div><div class="grow" style="width:40%;background:#B8861B"></div></div>
+<div style="display:flex;flex-direction:column">
+<div class="stag2" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #EEF0F4"><div style="flex:1"><div style="font-size:14px;font-weight:600">PayNest</div><div style="font-size:12px;color:#5B6475">Confirmed deletion · Nov 9</div></div><span style="display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;background:#E6F4EC;color:#14733F;font-size:11px;font-weight:600"><span style="width:5px;height:5px;border-radius:3px;background:#14733F"></span>Deleted</span></div>
+<div class="stag3" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #EEF0F4"><div style="flex:1"><div style="font-size:14px;font-weight:600">TradeLeaf</div><div style="font-size:12px;color:#5B6475">Asked for ID proof · reply needed</div></div><span style="display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;background:#EBF0FF;color:#2F55F4;font-size:11px;font-weight:600"><span style="width:5px;height:5px;border-radius:3px;background:#2F55F4"></span>Replied</span></div>
+<div class="stag4" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #EEF0F4"><div style="flex:1"><div style="font-size:14px;font-weight:600">QuickCash</div><div style="font-size:12px;color:#5B6475">Day 21 of 30 · no reply yet</div></div><span style="display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;background:#FFF3D6;color:#8A5A00;font-size:11px;font-weight:600"><span style="width:5px;height:5px;border-radius:3px;background:#8A5A00"></span>Waiting</span></div>
+</div>
+<div class="stag5" style="min-height:48px;border-radius:10px;border:1px solid #D5D9E0;display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;font-weight:600">Download proof pack (PDF)</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+</div>
+
+<!-- STACK -->
+<div id="features" style="background:#FFFFFF;border-top:1px solid #E6E8EC;border-bottom:1px solid #E6E8EC">
+<div style="max-width:1120px;margin:0 auto;padding:88px 24px 112px;box-sizing:border-box;display:flex;flex-direction:column;gap:48px">
+<div class="rv" style="max-width:640px;display:flex;flex-direction:column;gap:12px">
+<div style="font-size:13px;font-weight:600;color:#2F55F4">What it does</div>
+<h2 style="margin:0;font-size:38px;line-height:44px;font-weight:700;letter-spacing:-0.03em;text-wrap:balance">Five jobs, one inbox connection</h2>
+<p style="margin:0;font-size:17px;line-height:26px;color:#5B6475">Scroll to stack them up. Each one builds on what the last one found.</p>
+</div>
+
+<div class="stack" style="display:flex;flex-direction:column;gap:56px;timeline-scope:--c1,--c2,--c3,--c4">
+
+<!-- card 1 -->
+<div class="stack-card" style="top:104px;animation-timeline:--c1;background:#FFFFFF">
+<div style="flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:14px;justify-content:center">
+<span style="align-self:flex-start;padding:4px 10px;border-radius:999px;background:#EBF0FF;color:#2F55F4;font-size:12px;font-weight:600">Find</span>
+<div style="font-size:28px;line-height:34px;font-weight:700;letter-spacing:-0.03em">Every sign-up, found in minutes</div>
+<div style="font-size:15px;line-height:23px;color:#5B6475">Erase.me reads sign-up and receipt emails across every Gmail you add, and lists the company behind each one.</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:14px"><span>Read-only Gmail access</span><span>Company names, not email text</span><span>Old inboxes included</span></div>
+</div>
+<div style="flex:1 1 360px;min-width:0;background:#F5F6F8;border:1px solid #E6E8EC;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;justify-content:center">
+<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600"><span>Scanning riya.old@gmail.com</span><span style="color:#2F55F4">26 found</span></div>
+<div style="height:4px;border-radius:2px;background:#E6E8EC"><div style="width:63%;height:4px;border-radius:2px;background:#2F55F4"></div></div>
+<div style="display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid #E6E8EC;font-size:13px"><b>QuickCash</b><span style="color:#5B6475">Loan app</span></div>
+<div style="display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid #E6E8EC;font-size:13px"><b>MindfulMe</b><span style="color:#5B6475">Subscription</span></div>
+<div style="display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid #E6E8EC;font-size:13px"><b>TradeLeaf</b><span style="color:#5B6475">Broker</span></div>
+</div>
+</div>
+
+<!-- card 2 -->
+<div class="stack-card" style="top:120px;view-timeline-name:--c1;animation-timeline:--c2;background:#F7F9FF">
+<div style="flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:14px;justify-content:center">
+<span style="align-self:flex-start;padding:4px 10px;border-radius:999px;background:#EBF0FF;color:#2F55F4;font-size:12px;font-weight:600">Cost</span>
+<div style="font-size:28px;line-height:34px;font-weight:700;letter-spacing:-0.03em">What each one costs you</div>
+<div style="font-size:15px;line-height:23px;color:#5B6475">Subscriptions and autopays add up to a yearly total. The ones that look unused are flagged, with a cancel link beside each.</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:14px"><span>Yearly total across all inboxes</span><span>A hint on what looks unused</span><span>Renewal dates in one list</span></div>
+</div>
+<div style="flex:1 1 360px;min-width:0;background:#FFFFFF;border:1px solid #E6E8EC;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;justify-content:center">
+<div style="font-size:12px;font-weight:600;color:#5B6475">You pay every year for</div>
+<div style="font-size:36px;line-height:40px;font-weight:700;letter-spacing:-0.04em">₹11,400</div>
+<div style="display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px"><div style="width:55%;background:#2F55F4"></div><div style="width:45%;background:#B8861B"></div></div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-top:1px solid #E6E8EC;font-size:13px"><b>MindfulMe</b><span style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#FFF3D6;color:#8A5A00">Looks unused</span>₹3,599</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-top:1px solid #E6E8EC;font-size:13px"><b>StreamBox</b><span>₹299</span></div>
+</div>
+</div>
+
+<!-- card 3 -->
+<div class="stack-card" style="top:136px;view-timeline-name:--c2;animation-timeline:--c3;background:#FFFFFF">
+<div style="flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:14px;justify-content:center">
+<span style="align-self:flex-start;padding:4px 10px;border-radius:999px;background:#FDECEC;color:#C62828;font-size:12px;font-weight:600">Risk</span>
+<div style="font-size:28px;line-height:34px;font-weight:700;letter-spacing:-0.03em">What each one may still hold</div>
+<div style="font-size:15px;line-height:23px;color:#5B6475">See which companies likely hold your Aadhaar, PAN or selfie, ranked by risk. Lenders that may have to keep records by law are marked so you know before you ask.</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:14px"><span>Ranked by how risky the data is</span><span>Inactive accounts first</span><span>Honest about "must keep"</span></div>
+</div>
+<div style="flex:1 1 360px;min-width:0;background:#F5F6F8;border:1px solid #E6E8EC;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;justify-content:center">
+<div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;font-size:13px"><b>Aadhaar</b><span style="color:#5B6475">8 companies</span></div><div style="height:6px;border-radius:3px;background:#E6E8EC"><div style="width:100%;height:6px;border-radius:3px;background:#C62828"></div></div></div>
+<div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;font-size:13px"><b>PAN</b><span style="color:#5B6475">6 companies</span></div><div style="height:6px;border-radius:3px;background:#E6E8EC"><div style="width:75%;height:6px;border-radius:3px;background:#B8861B"></div></div></div>
+<div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;font-size:13px"><b>Selfie</b><span style="color:#5B6475">4 companies</span></div><div style="height:6px;border-radius:3px;background:#E6E8EC"><div style="width:50%;height:6px;border-radius:3px;background:#2F55F4"></div></div></div>
+<div style="display:flex;flex-wrap:wrap;gap:8px"><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:#FDECEC;color:#C62828">2 high risk</span><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:#FFF3D6;color:#8A5A00">2 medium</span><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:#EEF0F4;color:#5B6475">1 must keep</span></div>
+</div>
+</div>
+
+<!-- card 4 -->
+<div class="stack-card" style="top:152px;view-timeline-name:--c3;animation-timeline:--c4;background:#F7F9FF">
+<div style="flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:14px;justify-content:center">
+<span style="align-self:flex-start;padding:4px 10px;border-radius:999px;background:#E6F4EC;color:#14733F;font-size:12px;font-weight:600">Control</span>
+<div style="font-size:28px;line-height:34px;font-weight:700;letter-spacing:-0.03em">Requests written, sent and chased</div>
+<div style="font-size:15px;line-height:23px;color:#5B6475">Each draft cites the DPDP Act and goes out from your own Gmail once you approve. Replies are sorted, and a follow-up is ready on day 30.</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:14px"><span>You approve every request</span><span>Replies sorted for you</span><span>A proof pack you can download</span></div>
+</div>
+<div style="flex:1 1 360px;min-width:0;background:#FFFFFF;border:1px solid #E6E8EC;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;justify-content:center">
+<div style="padding:12px;border-radius:10px;background:#F5F6F8;border:1px solid #E6E8EC;font-size:13px;line-height:19px"><div style="font-size:12px;font-weight:600;color:#5B6475;margin-bottom:4px">To: grievance@quickcash.example</div>Please erase my account and KYC documents under Section 12 of the DPDP Act, 2023. Please confirm within 30 days.</div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #E6E8EC;font-size:13px"><b>PayNest</b><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#E6F4EC;color:#14733F">Deleted</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #E6E8EC;font-size:13px"><b>QuickCash</b><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#FFF3D6;color:#8A5A00">Waiting · day 21</span></div>
+</div>
+</div>
+
+<!-- card 5 -->
+<div class="stack-card" style="top:168px;view-timeline-name:--c4;animation:none;background:#FFFFFF">
+<div style="flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:14px;justify-content:center">
+<span style="align-self:flex-start;padding:4px 10px;border-radius:999px;background:#FFF3D6;color:#8A5A00;font-size:12px;font-weight:600">Trace</span>
+<div style="font-size:28px;line-height:34px;font-weight:700;letter-spacing:-0.03em">Spot who leaked your email</div>
+<div style="font-size:15px;line-height:23px;color:#5B6475">Sign up with a unique alias for each company. When spam arrives on one, you can see who likely shared it and act on it.</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:14px"><span>One alias per signup</span><span>Block an alias in one tap</span><span>Request deletion from the company</span></div>
+</div>
+<div style="flex:1 1 360px;min-width:0;background:#F5F6F8;border:1px solid #E6E8EC;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;justify-content:center">
+<span style="align-self:flex-start;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:#FDECEC;color:#C62828">Likely leak found</span>
+<div style="font-size:17px;font-weight:700;letter-spacing:-0.02em">TicketLy may have shared your email</div>
+<div style="font-size:13px;line-height:19px;color:#5B6475">3 spam emails reached riya.ticketly@alias.erase.me since Oct 3.</div>
+<div style="display:flex;gap:8px"><span style="flex:1;min-height:40px;border-radius:8px;background:#2F55F4;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">Request deletion</span><span style="flex:1;min-height:40px;border-radius:8px;background:#FFFFFF;border:1px solid #D5D9E0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">Block alias</span></div>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+
+<!-- LEADERBOARD -->
+<div id="leaderboard" style="max-width:1120px;margin:0 auto;padding:96px 24px;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:48px;align-items:flex-start">
+
+<div class="rv" style="flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:16px">
+<div style="font-size:13px;font-weight:600;color:#2F55F4">Leaderboard</div>
+<h2 style="margin:0;font-size:38px;line-height:44px;font-weight:700;letter-spacing:-0.03em;text-wrap:balance">Which companies actually delete your data</h2>
+<p style="margin:0;font-size:17px;line-height:26px;color:#5B6475">Every request sent through Erase.me adds to a public scoreboard. Before you ask a company to erase you, see how it has treated everyone before you.</p>
+<div style="display:flex;flex-direction:column;gap:10px;margin-top:4px;font-size:14px;line-height:21px;color:#5B6475">
+<div style="padding-top:12px;border-top:1px solid #D5D9E0"><b style="color:#0B1220">Built from real requests.</b> Honored means the company confirmed deletion in writing.</div>
+<div style="padding-top:12px;border-top:1px solid #D5D9E0"><b style="color:#0B1220">Fair by design.</b> A rate is shown only once a company has 10 or more requests.</div>
+<div style="padding-top:12px;border-top:1px solid #D5D9E0;border-bottom:1px solid #D5D9E0;padding-bottom:12px"><b style="color:#0B1220">Names, not users.</b> Nothing about you or your requests is shown.</div>
+</div>
+<div style="font-size:12px;color:#5B6475">The companies and figures below are sample data.</div>
+</div>
+
+<div class="rv-s" style="flex:1.6 1 480px;min-width:0;background:#FFFFFF;border:1px solid #E6E8EC;border-radius:16px;box-shadow:0 12px 40px rgba(11,18,32,0.06);overflow:hidden">
+
+<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid #EEF0F4">
+<span style="font-size:15px;font-weight:600">Company scoreboard</span>
+<div style="display:flex;padding:3px;border-radius:10px;background:#E9EBF0;gap:2px">
+<sc-for list="{{boardTabs}}" as="t" hint-placeholder-count="3">
+<a href="#leaderboard" onClick="{{t.pick}}" style="min-height:36px;padding:0 14px;display:flex;align-items:center;border-radius:8px;font-size:13px;font-weight:{{t.w}};background:{{t.bg}};border:1px solid {{t.border}};color:{{t.color}};cursor:pointer">{{t.label}}</a>
+</sc-for>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:32px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.5fr);gap:14px;padding:10px 20px;background:#F8F9FB;border-bottom:1px solid #EEF0F4;font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#5B6475"><span>#</span><span>Company</span><span>Replies in</span><span>Honored</span></div>
+
+<div style="display:flex;flex-direction:column;animation:{{boardAnim}} .45s ease-out both">
+<sc-for list="{{boardRows}}" as="r" hint-placeholder-count="5">
+<div class="lb-row" style="display:grid;grid-template-columns:32px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.5fr);gap:14px;align-items:center;padding:12px 20px;border-bottom:1px solid #EEF0F4">
+<span style="font-size:14px;font-weight:700;color:{{r.rankColor}}">{{r.rank}}</span>
+<span style="display:flex;align-items:center;gap:10px;min-width:0"><span style="width:32px;height:32px;flex:none;border-radius:8px;background:#F0F2F6;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">{{r.initial}}</span><span style="min-width:0"><span style="display:block;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{r.name}}</span><span style="display:block;font-size:12px;color:#5B6475">{{r.sub}}</span></span></span>
+<span style="font-size:13px;color:#0B1220">{{r.days}}</span>
+<span style="display:flex;align-items:center;gap:10px"><span style="flex:1;height:6px;border-radius:3px;background:#E6E8EC;overflow:hidden"><span class="grow" style="animation-name:{{r.growAnim}};display:block;width:{{r.pct}};height:6px;border-radius:3px;background:{{r.fg}}"></span></span><span style="width:44px;text-align:right;font-size:15px;font-weight:700;letter-spacing:-0.02em;color:{{r.fg}}">{{r.rate}}</span></span>
+</div>
+</sc-for>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:12px 20px;font-size:12px;color:#5B6475"><span>Shown only for companies with 10 or more requests</span><a href="Registry.dc.html" style="font-weight:600;color:#2F55F4">See the full scoreboard</a></div>
+</div>
+
+</div>
+
+<!-- TRUST -->
+<div id="privacy" style="background:#0B1220;color:#FFFFFF">
+<div style="max-width:1120px;margin:0 auto;padding:88px 24px;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:48px">
+<div class="rv" style="flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:16px">
+<div style="font-size:13px;font-weight:600;color:#8FA6FF">Privacy</div>
+<h2 style="margin:0;font-size:38px;line-height:44px;font-weight:700;letter-spacing:-0.03em;text-wrap:balance">An app about your data should ask for very little of it</h2>
+<p style="margin:0;font-size:17px;line-height:26px;color:#A8B1C2">Erase.me is built so that you stay in control of every message that leaves your inbox.</p>
+</div>
+<div style="flex:1 1 400px;min-width:0;display:flex;flex-direction:column">
+<div class="rv" style="padding:18px 0;border-top:1px solid #26304A"><div style="font-size:16px;font-weight:600">Read-only access</div><div style="margin-top:4px;font-size:14px;line-height:21px;color:#A8B1C2">We can read your mail to find sign-ups. We cannot send, delete or change anything on our own.</div></div>
+<div class="rv" style="padding:18px 0;border-top:1px solid #26304A"><div style="font-size:16px;font-weight:600">Company names, not email text</div><div style="margin-top:4px;font-size:14px;line-height:21px;color:#A8B1C2">We keep which companies you deal with, not what your emails say. Replies to requests Erase.me sent are read only to sort them.</div></div>
+<div class="rv" style="padding:18px 0;border-top:1px solid #26304A"><div style="font-size:16px;font-weight:600">You approve every request</div><div style="margin-top:4px;font-size:14px;line-height:21px;color:#A8B1C2">Requests go out from your own Gmail, and only after you tap approve.</div></div>
+<div class="rv" style="padding:18px 0;border-top:1px solid #26304A;border-bottom:1px solid #26304A"><div style="font-size:16px;font-weight:600">Honest about limits</div><div style="margin-top:4px;font-size:14px;line-height:21px;color:#A8B1C2">Some companies must keep KYC records by law. We say so before you ask, and we never promise deletion we cannot get.</div></div>
+</div>
+</div>
+</div>
+
+<!-- FAQ (accordion) -->
+<div id="faq" style="max-width:1120px;margin:0 auto;padding:88px 24px;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:48px">
+<div class="rv" style="flex:1 1 280px;min-width:0"><h2 style="margin:0;font-size:38px;line-height:44px;font-weight:700;letter-spacing:-0.03em">Questions</h2></div>
+<div class="rv" style="flex:2 1 460px;min-width:0;display:flex;flex-direction:column;border-bottom:1px solid #D5D9E0">
+<sc-for list="{{faq}}" as="q" hint-placeholder-count="5">
+<div style="border-top:1px solid #D5D9E0">
+<a href="#faq" onClick="{{q.toggle}}" style="min-height:64px;display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:17px;font-weight:600;cursor:pointer">
+<span>{{q.q}}</span>
+<span style="flex:none;width:28px;height:28px;border-radius:14px;background:#FFFFFF;border:1px solid #D5D9E0;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:500;color:#2F55F4">{{q.icon}}</span>
+</a>
+<sc-if value="{{q.open}}" hint-placeholder-val="{{ false }}">
+<div class="panel-in" style="padding:0 44px 20px 0;font-size:15px;line-height:23px;color:#5B6475">{{q.a}}</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+
+<!-- CTA -->
+<div style="background:#2F55F4;color:#FFFFFF">
+<div class="rv" style="max-width:1120px;margin:0 auto;padding:72px 24px;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:24px">
+<h2 style="margin:0;flex:1 1 420px;font-size:36px;line-height:42px;font-weight:700;letter-spacing:-0.03em;text-wrap:balance">Find out who has your data in a few minutes</h2>
+<a href="Connect.dc.html" style="min-height:52px;padding:0 26px;border-radius:10px;background:#FFFFFF;color:#0B1220;display:flex;align-items:center;font-size:15px;font-weight:600;transition:transform .15s ease" class="btn">Connect Gmail</a>
+</div>
+</div>
+
+<!-- FOOTER -->
+<div style="max-width:1120px;margin:0 auto;padding:28px 24px 40px;box-sizing:border-box;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;font-size:13px;color:#5B6475">
+<span>Erase.me · A data-rights tool for India</span>
+<span>Not legal advice. Dates and figures shown are sample data.</span>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":4300}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { stage: 0, paused: false, faq: 0, board: 0 };
+  }
+  componentDidMount() {
+    let reduce = false;
+    try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+    if (reduce) return;
+    this.timer = setInterval(() => {
+      if (!this.state.paused) this.setState({ stage: (this.state.stage + 1) % 4 });
+    }, 4200);
+  }
+  componentWillUnmount() {
+    if (this.timer) clearInterval(this.timer);
+  }
+  renderVals() {
+    const st = this.state;
+    const steps = [
+      ['Connect and scan', 'Add every Gmail you have signed up with. We list the companies behind your sign-up emails.'],
+      ['See your results', 'Money, risk and control in one view, with what to act on first.'],
+      ['Approve the requests', 'Review each draft, edit or skip it, then send them all from your own Gmail.'],
+      ['Track and chase', 'Replies are sorted for you. A follow-up is ready on day 30, and a proof pack is saved.']
+    ];
+    const tabs = steps.map((s, i) => {
+      const on = st.stage === i;
+      return {
+        n: String(i + 1),
+        title: s[0],
+        desc: s[1],
+        bg: on ? '#FFFFFF' : 'transparent',
+        border: on ? '#C9D1E8' : '#E6E8EC',
+        kc: on ? '#2F55F4' : '#5B6475',
+        scale: on ? '1' : '0',
+        anim: on && !st.paused ? 'fillBar 4.2s linear both' : 'none',
+        pick: () => this.setState({ stage: i, paused: true })
+      };
+    });
+    const faqs = [
+      ['Does a company have to delete my data?', 'Section 12 of the DPDP Act, 2023 gives you the right to ask for erasure, and Section 13 gives you a route to complain. Companies may keep data they are legally required to hold, such as KYC records for lenders and brokers.'],
+      ['Why does it say "likely holds"?', 'We infer from the type of company and your emails, not from their records. We word it as a likelihood so you are never told something we cannot prove.'],
+      ['What if a company ignores the request?', 'You see it in the tracker. On day 30 a follow-up is ready to send, and the proof pack records every request and reply.'],
+      ['Does it work with work email?', 'Not yet. Company-managed Google Workspace accounts are not supported. Personal Gmail accounts are.'],
+      ['Can I disconnect?', 'Any inbox, any time, from the Connect screen.']
+    ];
+    const boards = [
+      [
+        ['ShopHive', 'Shopping', '3 days', 94, '#14733F'],
+        ['PayNest', 'Wallet', '6 days', 88, '#14733F'],
+        ['LinguaGo', 'Subscription', '7 days', 81, '#14733F'],
+        ['StreamBox', 'Subscription', '9 days', 77, '#14733F'],
+        ['TradeLeaf', 'Broker', '12 days', 61, '#8A5A00']
+      ],
+      [
+        ['TicketLy', 'Events', '24 days', 38, '#8A5A00'],
+        ['WorkNook', 'Co-working', '19 days', 43, '#8A5A00'],
+        ['FitTrack Pro', 'Fitness', '15 days', 52, '#8A5A00'],
+        ['TradeLeaf', 'Broker', '12 days', 61, '#8A5A00'],
+        ['CloudVault', 'Storage', '11 days', 66, '#8A5A00']
+      ],
+      [
+        ['LoanNow', 'Loan app', 'Rarely', 9, '#C62828'],
+        ['FlickBox', 'Streaming', 'Rarely', 14, '#C62828'],
+        ['QuickCash', 'Loan app', 'Often no reply', 18, '#C62828'],
+        ['StyleHub', 'Shopping', 'Often no reply', 22, '#C62828'],
+        ['TaxiNow', 'Rides', 'Often no reply', 27, '#C62828']
+      ]
+    ];
+    const labels = ['Best', 'Slowest', 'Never replies'];
+    const bi = st.board;
+    const flip = bi % 2 === 0;
+    const boardTabs = labels.map((l, i) => ({
+      label: l,
+      bg: bi === i ? '#FFFFFF' : 'transparent',
+      border: bi === i ? '#E1E4EA' : 'transparent',
+      color: bi === i ? '#0B1220' : '#5B6475',
+      w: bi === i ? '600' : '500',
+      pick: () => this.setState({ board: i })
+    }));
+    const boardRows = boards[bi].map((r, i) => ({
+      rank: String(i + 1),
+      rankColor: i === 0 ? '#0B1220' : '#5B6475',
+      initial: r[0].charAt(0),
+      name: r[0], sub: r[1], days: r[2],
+      rate: r[3] + '%', pct: r[3] + '%', fg: r[4],
+      growAnim: flip ? 'growBar' : 'growBar2'
+    }));
+    return {
+      boardTabs, boardRows, boardAnim: flip ? 'panelIn' : 'panelIn2',
+      s0: st.stage === 0, s1: st.stage === 1, s2: st.stage === 2, s3: st.stage === 3,
+      tabs,
+      faq: faqs.map((f, i) => ({
+        q: f[0], a: f[1], open: st.faq === i, icon: st.faq === i ? '−' : '+',
+        toggle: () => this.setState({ faq: st.faq === i ? -1 : i })
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>KYC exposure</title>
+<script src="./_runtime/react.js"></script>
+<script src="./_runtime/react-dom.js"></script>
+<script src="./_runtime/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{text-decoration:none;color:inherit}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;display:flex;flex-direction:column;background:#F5F6F8;color:#0B1220;font-family:Inter,system-ui,sans-serif;font-feature-settings:'tnum';-webkit-font-smoothing:antialiased">
+
+<div style="flex:1;min-height:0;overflow:hidden;padding:56px 20px 0;box-sizing:border-box;display:flex;flex-direction:column;gap:14px">
+
+<div style="display:flex;align-items:center;justify-content:space-between;min-height:44px">
+<span style="font-size:22px;font-weight:700;letter-spacing:-0.03em">KYC exposure</span>
+<a href="Connect.dc.html" style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border-radius:999px;background:#FFFFFF;border:1px solid #E6E8EC;font-size:13px;font-weight:600"><span style="width:7px;height:7px;border-radius:4px;background:#14733F"></span>3 inboxes</a>
+</div>
+
+<div style="background:#FFFFFF;border:1px solid #E6E8EC;border-radius:12px;overflow:hidden">
+<div style="padding:14px 16px 12px">
+<div style="font-size:20px;line-height:26px;font-weight:700;letter-spacing:-0.025em">8 companies likely hold your Aadhaar</div>
+<div style="margin-top:4px;font-size:13px;line-height:18px;color:#5B6475">5 are accounts you have not used in over a year.</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid #E6E8EC">
+<sc-for list="{{docs}}" as="d" hint-placeholder-count="3">
+<div style="padding:10px 16px;border-left:{{d.border}}">
+<div style="font-size:22px;line-height:26px;font-weight:700;letter-spacing:-0.03em">{{d.num}}</div>
+<div style="font-size:12px;color:#5B6475">{{d.label}}</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="background:#FFFFFF;border:1px solid #E6E8EC;border-radius:12px;padding:0 14px">
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+<sc-if value="{{r.isHeader}}" hint-placeholder-val="{{ false }}">
+<div style="padding:10px 0 6px;font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#5B6475;border-top:{{r.border}}">{{r.header}}</div>
+</sc-if>
+<sc-if value="{{r.isRow}}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid #EEF0F4">
+<div style="width:36px;height:36px;flex:none;border-radius:8px;background:#F0F2F6;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">{{r.initial}}</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:14px;line-height:18px;font-weight:600">{{r.name}}</span>
+<span style="display:flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;background:{{r.bg}};color:{{r.fg}};font-size:10px;font-weight:600"><span style="width:5px;height:5px;border-radius:3px;background:{{r.fg}}"></span>{{r.risk}}</span></div>
+<div style="margin-top:2px;font-size:12px;line-height:16px;color:#5B6475">{{r.sub}}</div>
+</div>
+<a href="{{r.href}}" style="flex:none;min-width:72px;min-height:44px;padding:0 12px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:8px;background:{{r.btnBg}};color:{{r.btnFg}};border:{{r.btnBorder}};font-size:13px;font-weight:600">{{r.cta}}</a>
+</div>
+</sc-if>
+</sc-for>
+</div>
+
+<div style="font-size:12px;line-height:17px;color:#5B6475">Lenders and brokers may have to keep KYC records by law. We mark these so you know before you ask.</div>
+
+</div>
+
+<div style="flex:none;height:76px;box-sizing:border-box;display:flex;background:#FFFFFF;border-top:1px solid #E6E8EC;padding-bottom:14px">
+<sc-for list="{{nav}}" as="n" hint-placeholder-count="5">
+<a href="{{n.href}}" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;font-size:11px;font-weight:600;color:{{n.color}}">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{n.color}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.d}}"></path></svg>
+{{n.label}}
+</a>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const D = {
+      home: "M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
+      money: "M3 7a2 2 0 0 1 2-2h13v4M3 7v11a2 2 0 0 0 2 2h15V9H5a2 2 0 0 1-2-2zM16 14.5h.01",
+      shield: "M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z",
+      send: "M21 3L10 14M21 3l-7 18-4-7-7-4z",
+      at: "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"
+    };
+    const active = 'Exposure';
+    const items = [['Home','Home.dc.html',D.home],['Money','Money.dc.html',D.money],['Exposure','KYC.dc.html',D.shield],['Requests','Tracker.dc.html',D.send],['Aliases','Leak.dc.html',D.at]];
+    const hi = { risk: 'High risk', fg: '#C62828', bg: '#FDECEC', btnBg: '#2F55F4', btnFg: '#FFFFFF', btnBorder: 'none', cta: 'Request', href: 'Approve.dc.html' };
+    const med = { risk: 'Medium', fg: '#8A5A00', bg: '#FFF3D6', btnBg: '#EBF0FF', btnFg: '#2F55F4', btnBorder: 'none', cta: 'Request', href: 'Approve.dc.html' };
+    const keep = { risk: 'Must keep', fg: '#5B6475', bg: '#EEF0F4', btnBg: '#FFFFFF', btnFg: '#0B1220', btnBorder: '1px solid #D5D9E0', cta: 'Learn why', href: 'KYC.dc.html' };
+    const hd = (t) => ({ isHeader: true, isRow: false, header: t, border: 'none' });
+    const row = (i, n, s, k) => ({ isHeader: false, isRow: true, initial: i, name: n, sub: s, ...k });
+    return {
+      docs: [
+        { num: '8', label: 'Aadhaar', border: 'none' },
+        { num: '6', label: 'PAN', border: '1px solid #E6E8EC' },
+        { num: '4', label: 'Selfie', border: '1px solid #E6E8EC' }
+      ],
+      rows: [
+        hd('Ask first'),
+        row('Q', 'QuickCash', 'Loan app · last used 2022', hi),
+        row('P', 'PayNest', 'Wallet · last used 2021', hi),
+        row('T', 'TradeLeaf', 'Broker · last used 2023', med),
+        row('W', 'WorkNook', 'Co-working · last used 2023', med),
+        hd('May need to keep records'),
+        row('H', 'Horizon Bank', 'Law requires records · active', keep)
+      ],
+      nav: items.map((i) => ({ label: i[0], href: i[1], d: i[2], color: i[0] === active ? '#2F55F4' : '#5B6475' }))
+    };
+  }
+}
+</script>
+</body>
+</html>

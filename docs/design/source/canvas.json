@@ -1,0 +1,394 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 1000,
+      "w": 1440,
+      "h": 7000,
+      "title": "Landing page",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "Desktop.dc.html",
+      "x": 1560,
+      "y": 1000,
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · Overview",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "DesktopRequests.dc.html",
+      "x": 1560,
+      "y": 2020,
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · Requests",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "Connect.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "1 Connect inboxes",
+      "is_interactive": true
+    },
+    {
+      "file": "Home.dc.html",
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "2 Home",
+      "is_interactive": true
+    },
+    {
+      "file": "Money.dc.html",
+      "x": 940,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "3 Money leaks",
+      "is_interactive": true
+    },
+    {
+      "file": "KYC.dc.html",
+      "x": 1410,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "4 KYC exposure",
+      "is_interactive": true
+    },
+    {
+      "file": "Approve.dc.html",
+      "x": 1880,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "5 Approve requests",
+      "is_interactive": true
+    },
+    {
+      "file": "Tracker.dc.html",
+      "x": 2350,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "6 Request tracker",
+      "is_interactive": true
+    },
+    {
+      "file": "Leak.dc.html",
+      "x": 2820,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "7 Leak trace",
+      "is_interactive": true
+    },
+    {
+      "file": "Registry.dc.html",
+      "x": 3290,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "8 Who honors deletion",
+      "is_interactive": true
+    },
+    {
+      "file": "DesktopMoney.dc.html",
+      "x": 1560,
+      "y": 3040,
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · Money",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "DesktopKYC.dc.html",
+      "x": 1560,
+      "y": 4060,
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · Exposure",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "DesktopLeak.dc.html",
+      "x": 1560,
+      "y": 5080,
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · Aliases",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "DesktopRegistry.dc.html",
+      "x": 1560,
+      "y": 6100,
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · Registry",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "DesktopConnect.dc.html",
+      "x": 1560,
+      "y": 7120,
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · Connect inboxes",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "AdminOverview.dc.html",
+      "x": 3120,
+      "y": 1000,
+      "w": 1440,
+      "h": 900,
+      "title": "Admin · Overview",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "AdminRequests.dc.html",
+      "x": 3120,
+      "y": 2020,
+      "w": 1440,
+      "h": 900,
+      "title": "Admin · Requests",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "AdminCompanies.dc.html",
+      "x": 3120,
+      "y": 5080,
+      "w": 1440,
+      "h": 900,
+      "title": "Admin · Companies",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "AdminUsers.dc.html",
+      "x": 3120,
+      "y": 6100,
+      "w": 1440,
+      "h": 900,
+      "title": "Admin · Users",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "AdminAudit.dc.html",
+      "x": 3120,
+      "y": 8140,
+      "w": 1440,
+      "h": 900,
+      "title": "Admin · Audit log",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "ProductHome.dc.html",
+      "x": 6240,
+      "y": 1000,
+      "w": 1440,
+      "h": 1000,
+      "title": "Product · Home",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "ProductRoadmap.dc.html",
+      "x": 6240,
+      "y": 2140,
+      "w": 1440,
+      "h": 900,
+      "title": "Product · Roadmap",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "ProductResearch.dc.html",
+      "x": 6240,
+      "y": 3180,
+      "w": 1440,
+      "h": 1000,
+      "title": "Product · Research",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "ProductCaseStudy.dc.html",
+      "x": 6240,
+      "y": 4320,
+      "w": 1440,
+      "h": 1000,
+      "title": "Product · Case study",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "ProductLog.dc.html",
+      "x": 6240,
+      "y": 5460,
+      "w": 1440,
+      "h": 900,
+      "title": "Product · Build log",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "AdminTickets.dc.html",
+      "x": 3120,
+      "y": 3040,
+      "w": 1440,
+      "h": 900,
+      "title": "Admin · Tickets",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "AdminTicket.dc.html",
+      "x": 3120,
+      "y": 4060,
+      "w": 1440,
+      "h": 900,
+      "title": "Admin · Ticket detail",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "AdminLookup.dc.html",
+      "x": 3120,
+      "y": 7120,
+      "w": 1440,
+      "h": 900,
+      "title": "Admin · Look up a user",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "SupportHome.dc.html",
+      "x": 4680,
+      "y": 1000,
+      "w": 1440,
+      "h": 1100,
+      "title": "Support · Help home",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "SupportArticle.dc.html",
+      "x": 4680,
+      "y": 2220,
+      "w": 1440,
+      "h": 1100,
+      "title": "Support · Docs article",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "SupportBlog.dc.html",
+      "x": 4680,
+      "y": 3440,
+      "w": 1440,
+      "h": 1100,
+      "title": "Support · Guides",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "SupportNewTicket.dc.html",
+      "x": 4680,
+      "y": 4660,
+      "w": 1440,
+      "h": 1000,
+      "title": "Support · Raise a ticket",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    {
+      "file": "SupportMyTickets.dc.html",
+      "x": 4680,
+      "y": 5780,
+      "w": 1440,
+      "h": 1000,
+      "title": "Support · My tickets",
+      "expand": "fill",
+      "is_interactive": true
+    }
+  ],
+  "annotations": [
+    {
+      "id": "t1",
+      "x": 0,
+      "y": -260,
+      "w": 240,
+      "maxW": 7700,
+      "text": "Erase.me app screens",
+      "kind": "title1"
+    },
+    {
+      "id": "s1",
+      "x": 0,
+      "y": 880,
+      "w": 420,
+      "text": "Sample data. Company names, counts and dates are placeholders, not real findings. Tap the nav and buttons to move between screens. Scroll inside the landing page to see the animations.",
+      "fill": "gray"
+    },
+    {
+      "id": "c0",
+      "x": 1560,
+      "y": 920,
+      "w": 600,
+      "maxW": 1440,
+      "text": "app.erase.me · desktop",
+      "kind": "title1"
+    },
+    {
+      "id": "c1",
+      "x": 3120,
+      "y": 920,
+      "w": 600,
+      "maxW": 1440,
+      "text": "admin.erase.me · internal, includes ticket handling",
+      "kind": "title1"
+    },
+    {
+      "id": "c2",
+      "x": 4680,
+      "y": 920,
+      "w": 600,
+      "maxW": 1440,
+      "text": "support.erase.me · help center (users)",
+      "kind": "title1"
+    },
+    {
+      "id": "c3",
+      "x": 6240,
+      "y": 920,
+      "w": 600,
+      "maxW": 1440,
+      "text": "product.erase.me",
+      "kind": "title1"
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}
