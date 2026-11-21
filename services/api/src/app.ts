@@ -41,6 +41,8 @@ export interface AppDeps {
     now?: () => Date;
     /** Requests per minute per client on the auth start and callback routes. Default 30. */
     authRateLimitPerMinute?: number;
+    /** Where the browser lands after Google. Defaults to WEB_ORIGIN. */
+    postAuthRedirect?: string;
   };
 }
 
@@ -48,6 +50,8 @@ export interface AppServices {
   scans: ScanService;
   inboxes: InboxService;
   account: AccountService;
+  sessions: SessionService;
+  auth: AuthService;
 }
 
 declare module 'fastify' {
@@ -139,11 +143,11 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     const account = new AccountService(authRepo, sessions, inboxes, m.queue, audit, now);
     m.queue.register(SCAN_JOB, (p) => scans.run(p.scanId ?? ''));
     m.queue.register(DELETE_ACCOUNT_JOB, (p) => account.runDeletion(p.userId ?? ''));
-    app.decorate('services', { scans, inboxes, account });
+    app.decorate('services', { scans, inboxes, account, sessions, auth });
 
     const requireUser = createAuthGuard(sessions, deps.env.WEB_ORIGIN);
     const limiter = createRateLimiter({ max: m.authRateLimitPerMinute ?? 30, windowMs: 60_000 });
-    void app.register(authRoutes, { env: deps.env, auth, account, sessions, requireUser, limiter });
+    void app.register(authRoutes, { env: deps.env, auth, postAuthRedirect: m.postAuthRedirect ?? deps.env.WEB_ORIGIN, account, sessions, requireUser, limiter });
     void app.register(gmailRoutes, { env: deps.env, auth, inboxes, scans, requireUser });
   }
 

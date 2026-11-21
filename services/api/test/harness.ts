@@ -145,6 +145,8 @@ export interface HarnessOptions {
   withKeys?: boolean;
   envOverrides?: Record<string, string>;
   authRateLimitPerMinute?: number;
+  /** Runs after the app is built and before it is ready, for example to register the dev helper. */
+  beforeReady?: (app: FastifyInstance, ctx: { env: Env; db: Db }) => Promise<void>;
 }
 
 export async function buildHarness(t: TestDb, opts: HarnessOptions = {}): Promise<Harness> {
@@ -181,6 +183,7 @@ export async function buildHarness(t: TestDb, opts: HarnessOptions = {}): Promis
       authRateLimitPerMinute: opts.authRateLimitPerMinute ?? 10_000,
     },
   });
+  await opts.beforeReady?.(app, { env, db });
   await app.ready();
   return { app, env, google, gmail, queue, logs, masterKey, clock };
 }

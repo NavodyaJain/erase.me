@@ -36,6 +36,15 @@ export interface Detection {
   signals: string[];
 }
 
+export interface DetectedCompany {
+  company: string;
+  domain: string;
+  firstSeen: Date;
+  lastSeen: Date;
+  signals: string[];
+  status: 'active' | 'not_mine' | 'requested';
+}
+
 const inboxColumns = {
   id: inboxes.id,
   userId: inboxes.userId,
@@ -296,6 +305,23 @@ export function createGmailRepository(db: Db) {
             updatedAt: sql`now()`,
           },
         });
+    },
+
+    /** Detected companies for a user, newest activity first. Company fields and dates only. */
+    async listDetections(userId: string): Promise<DetectedCompany[]> {
+      return db
+        .select({
+          company: companies.name,
+          domain: sql<string>`${companies.domains}[1]`,
+          firstSeen: userCompanies.firstSeen,
+          lastSeen: userCompanies.lastSeen,
+          signals: userCompanies.signalTypes,
+          status: userCompanies.status,
+        })
+        .from(userCompanies)
+        .innerJoin(companies, eq(companies.id, userCompanies.companyId))
+        .where(eq(userCompanies.userId, userId))
+        .orderBy(desc(userCompanies.lastSeen), companies.name);
     },
 
     async countDetected(userId: string, inboxId: string): Promise<number> {

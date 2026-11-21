@@ -20,6 +20,8 @@ const CallbackQuery = z.object({
 
 export interface AuthRoutesDeps {
   env: Env;
+  /** Base URL the browser is sent back to after Google. */
+  postAuthRedirect: string;
   auth: AuthService;
   account: AccountService;
   sessions: SessionService;
@@ -28,7 +30,7 @@ export interface AuthRoutesDeps {
 }
 
 export const authRoutes: FastifyPluginAsync<AuthRoutesDeps> = async (app, deps) => {
-  const { env, auth, account, sessions, requireUser, limiter } = deps;
+  const { env, auth, account, sessions, requireUser, limiter, postAuthRedirect } = deps;
   const secure = env.API_PUBLIC_URL.startsWith('https:');
   const domain = env.COOKIE_DOMAIN;
   const cookieBase = { secure, ...(domain ? { domain } : {}) };
@@ -61,7 +63,7 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesDeps> = async (app, deps) 
     if (outcome.kind === 'signed_in') {
       cookiesOut.push(serializeCookie(SESSION_COOKIE, outcome.sessionToken, { ...cookieBase, maxAgeSec: outcome.maxAgeSec }));
     }
-    return reply.header('set-cookie', cookiesOut).redirect(redirectFor(env.WEB_ORIGIN, outcome), 302);
+    return reply.header('set-cookie', cookiesOut).redirect(redirectFor(postAuthRedirect, outcome), 302);
   });
 
   app.post('/v1/auth/logout', { preHandler: requireUser }, async (request, reply) => {
@@ -89,8 +91,9 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesDeps> = async (app, deps) 
 };
 
 /** Where the browser lands after Google. Codes only, never messages or addresses. */
-function redirectFor(webOrigin: string, outcome: CallbackOutcome): string {
-  const url = new URL('/', webOrigin);
+function redirectFor(base: string, outcome: CallbackOutcome): string {
+  // A bare origin lands on `/`; a full URL (the dev helper page) is kept as given.
+  const url = new URL(base);
   if (outcome.kind === 'signed_in') return url.toString();
   if (outcome.kind === 'inbox_connected') url.searchParams.set('inbox', 'connected');
   else url.searchParams.set('auth_error', outcome.reason);
