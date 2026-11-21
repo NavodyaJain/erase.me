@@ -1,1 +1,27 @@
-{ "name": "@erase/web", "version": "0.0.0", "private": true, "description": "app.erase.me - the user product" }
+{
+  "name": "@erase/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "erase.me landing and app.erase.me (PWA)",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "next": "^16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@erase/config": "workspace:^",
+    "@types/node": "20",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^10.15.0",
+    "typescript": "~5.9"
+  }
+}

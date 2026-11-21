@@ -1,0 +1,5 @@
+{
+  "extends": "@erase/config/tsconfig/node.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["src", "test", "*.ts", "*.mjs"]
+}
