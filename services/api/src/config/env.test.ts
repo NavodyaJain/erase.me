@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EnvError, isRealSendEnabled, loadEnv } from './env.js';
+import { EnvError, googleRedirectUri, isRealSendEnabled, loadEnv } from './env.js';
 
 const base = {
   DATABASE_URL: 'postgres://erase_api:pw@localhost:5432/erase',
@@ -82,13 +82,21 @@ describe('loadEnv', () => {
     });
   });
 
+  it('derives the Google redirect URI from API_PUBLIC_URL with the registered callback path', () => {
+    expect(googleRedirectUri(loadEnv(base))).toBe('http://localhost:4000/v1/auth/google/callback');
+    expect(googleRedirectUri(loadEnv({ ...base, API_PUBLIC_URL: 'https://api.erase.me' }))).toBe(
+      'https://api.erase.me/v1/auth/google/callback',
+    );
+  });
+
   it('requires hardening settings in production', () => {
     const err = failure({ ...base, NODE_ENV: 'production', WEB_ORIGIN: 'http://erase.example' });
-    expect(err.issues.map((i) => i.variable).sort()).toEqual(['AI_SERVICE_TOKEN', 'TOKEN_MASTER_KEY', 'WEB_ORIGIN']);
+    expect(err.issues.map((i) => i.variable).sort()).toEqual(['AI_SERVICE_TOKEN', 'API_PUBLIC_URL', 'TOKEN_MASTER_KEY', 'WEB_ORIGIN']);
     const ok = loadEnv({
       ...base,
       NODE_ENV: 'production',
       WEB_ORIGIN: 'https://app.erase.me',
+      API_PUBLIC_URL: 'https://api.erase.me',
       TOKEN_MASTER_KEY: key32,
       AI_SERVICE_TOKEN: 'x'.repeat(32),
     });

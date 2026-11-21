@@ -30,6 +30,13 @@ Items marked **[OPEN]** in the PRD and TRD, with the owner's answers (2026-11-21
 - `purge-deleted` job: hard-delete detected companies 30 days after inbox disconnect (`inboxes.purge_after`) and personal data within 30 days of account deletion. Append-only tables (`request_events`) need a documented owner-role purge path.
 - Row-level security on user-owned tables (TRD 6.4 assumption) is not in Phase 1; ownership is enforced in the service layer and tested.
 
+- Purge of `sessions` and `oauth_states` rows that are expired or consumed (the app role has no DELETE).
+- Account deletion today (task 3): sessions end at once, Gmail tokens are revoked and dropped, and the user row is anonymised (email, name and Google id replaced). Rows that reference the user (detected companies, requests, events) remain until the owner-role purge deletes them. This does not yet meet "personal data deleted within 30 days"; the purge job does.
+- Scan jobs and the deletion job run in-process (`src/jobs/queue.ts`) behind a `JobQueue` interface. Moving them to BullMQ on Redis needs `bullmq` and `ioredis` and is not done yet.
+- The Gmail client is a small `fetch` wrapper (list, metadata) rather than the `googleapis` package, which is very large. Sending, reply polling and bounce detection are not in the Gmail module yet; sending arrives with the requests module so it sits behind the approval guard.
+- A scan creates a placeholder company (name from the domain, category `other`, no grievance contact) for any sender domain the catalog does not list. Placeholders cannot be drafted until a reviewed catalog entry exists. Decide whether the catalog task should merge or prune them.
+- The Google callback is shared: sign-in and inbox connect both use `/v1/auth/google/callback`, told apart by server-side state. This keeps one registered redirect URI. Post-login redirects (`/?auth_error=<code>`, `/?inbox=connected`) are provisional until the web routes exist.
+
 ## Design drift found by the banned-word lint
 
 The boards state "leaked" as fact. PRD 4.4 says use "may have shared". Boards are unedited; fix when those screens are built.

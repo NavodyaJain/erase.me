@@ -12,6 +12,8 @@ export const ID_PREFIXES = {
   event: 'evt',
   replyLabel: 'rlb',
   audit: 'aud',
+  session: 'ses',
+  oauthState: 'ost',
 } as const;
 
 export type IdKind = keyof typeof ID_PREFIXES;

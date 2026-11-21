@@ -2,7 +2,25 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { registerErrorHandling } from './common/errors.js';
 import { buildLogger } from './common/logger.js';
+import { createRateLimiter } from './common/rate-limit.js';
 import type { Env } from './config/env.js';
+import type { KeyProvider } from './crypto/key-provider.js';
+import { TokenVault } from './crypto/token-vault.js';
+import type { Db } from './db/client.js';
+import type { InProcessJobQueue } from './jobs/queue.js';
+import { createAuditRepository } from './modules/audit/audit.repository.js';
+import { AccountService, DELETE_ACCOUNT_JOB } from './modules/auth/account.service.js';
+import { authRoutes } from './modules/auth/auth.controller.js';
+import { createAuthGuard } from './modules/auth/auth.guard.js';
+import { createAuthRepository } from './modules/auth/auth.repository.js';
+import { AuthService } from './modules/auth/auth.service.js';
+import type { GoogleOAuthClient } from './modules/auth/google-oauth.js';
+import { SessionService } from './modules/auth/session.service.js';
+import type { GmailClient } from './modules/gmail/gmail.client.js';
+import { gmailRoutes } from './modules/gmail/gmail.controller.js';
+import { createGmailRepository } from './modules/gmail/gmail.repository.js';
+import { InboxService } from './modules/gmail/inbox.service.js';
+import { SCAN_JOB, ScanService } from './modules/gmail/scan.service.js';
 import { healthRoutes } from './modules/health/health.controller.js';
 import { HealthService } from './modules/health/health.service.js';
 
@@ -11,6 +29,31 @@ export interface AppDeps {
   pingDatabase: () => Promise<void>;
   /** Tests pass a stream to capture log output. */
   logStream?: NodeJS.WritableStream;
+  /** When set, auth and Gmail routes are registered. Health alone needs only the two fields above. */
+  modules?: {
+    db: Db;
+    /** Undefined when GOOGLE_CLIENT_ID is not configured: auth routes then answer 503 `auth_not_configured`. */
+    google: GoogleOAuthClient | undefined;
+    gmail: GmailClient;
+    /** Undefined when TOKEN_MASTER_KEY is not configured: connecting an inbox then answers 503. */
+    keys: KeyProvider | undefined;
+    queue: InProcessJobQueue;
+    now?: () => Date;
+    /** Requests per minute per client on the auth start and callback routes. Default 30. */
+    authRateLimitPerMinute?: number;
+  };
+}
+
+export interface AppServices {
+  scans: ScanService;
+  inboxes: InboxService;
+  account: AccountService;
+}
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    services?: AppServices;
+  }
 }
 
 export function buildApp(deps: AppDeps): FastifyInstance {
@@ -27,6 +70,21 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     logController: new LogController({ disableRequestLogging: true }),
     bodyLimit: 1_048_576,
     trustProxy: false,
+  });
+
+  // Strict CORS allow-list: only the web app may call the API with credentials (TRD 8.1).
+  app.addHook('onRequest', async (request, reply) => {
+    const origin = request.headers.origin;
+    if (origin !== deps.env.WEB_ORIGIN) return;
+    reply.header('access-control-allow-origin', origin);
+    reply.header('access-control-allow-credentials', 'true');
+    reply.header('vary', 'Origin');
+    if (request.method === 'OPTIONS') {
+      reply.header('access-control-allow-methods', 'GET, POST, PATCH, DELETE');
+      reply.header('access-control-allow-headers', 'content-type, x-csrf-token, idempotency-key');
+      reply.header('access-control-max-age', '600');
+      return reply.status(204).send();
+    }
   });
 
   app.addHook('onSend', async (request, reply, payload) => {
@@ -55,6 +113,39 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     app.log.warn({ check, err }, 'readiness check failed'),
   );
   void app.register(healthRoutes, { service: health });
+
+  const m = deps.modules;
+  if (m) {
+    app.decorateRequest('auth', null);
+    const now = m.now ?? (() => new Date());
+    const authRepo = createAuthRepository(m.db);
+    const audit = createAuditRepository(m.db);
+    const sessions = new SessionService(authRepo, now);
+    const vault = m.keys ? new TokenVault(m.keys) : undefined;
+    const gmailRepo = createGmailRepository(m.db);
+    const inboxes = new InboxService(gmailRepo, vault, m.google, audit, now);
+    const scans = new ScanService(gmailRepo, inboxes, m.gmail, m.queue, now, {
+      info: (o, msg) => app.log.info(o, msg),
+      warn: (o, msg) => app.log.warn(o, msg),
+    });
+    const auth = new AuthService({
+      repo: authRepo,
+      sessions,
+      audit,
+      google: m.google,
+      connect: (userId, result) => inboxes.connect(userId, result),
+      now,
+    });
+    const account = new AccountService(authRepo, sessions, inboxes, m.queue, audit, now);
+    m.queue.register(SCAN_JOB, (p) => scans.run(p.scanId ?? ''));
+    m.queue.register(DELETE_ACCOUNT_JOB, (p) => account.runDeletion(p.userId ?? ''));
+    app.decorate('services', { scans, inboxes, account });
+
+    const requireUser = createAuthGuard(sessions, deps.env.WEB_ORIGIN);
+    const limiter = createRateLimiter({ max: m.authRateLimitPerMinute ?? 30, windowMs: 60_000 });
+    void app.register(authRoutes, { env: deps.env, auth, account, sessions, requireUser, limiter });
+    void app.register(gmailRoutes, { env: deps.env, auth, inboxes, scans, requireUser });
+  }
 
   return app;
 }

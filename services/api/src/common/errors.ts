@@ -35,6 +35,9 @@ export const Problems = {
   notFound: (detail?: string) => new AppError(404, 'not_found', 'Not found', detail),
   unauthorized: () => new AppError(401, 'unauthorized', 'Sign in required'),
   forbidden: () => new AppError(403, 'forbidden', 'Not allowed'),
+  tooManyRequests: () => new AppError(429, 'rate_limited', 'Too many requests'),
+  badRequest: (code: string, title: string, detail?: string) => new AppError(400, code, title, detail),
+  unavailable: (code: string, title: string, detail?: string) => new AppError(503, code, title, detail),
   conflict: (code: string, title: string, detail?: string) => new AppError(409, code, title, detail),
   notReady: (checks: Record<string, 'ok' | 'fail'>) =>
     new AppError(503, 'not_ready', 'Service not ready', undefined, { checks }),

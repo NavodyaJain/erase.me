@@ -33,6 +33,10 @@ const EnvSchema = z
     AI_SERVICE_TOKEN: z.string().min(16, 'must be at least 16 characters').optional(),
     // base64 of 32 random bytes. Read through a KeyProvider; never logged, never committed.
     TOKEN_MASTER_KEY: z.string().optional(),
+    // Public base URL of this API. The Google redirect URI is API_PUBLIC_URL + /v1/auth/google/callback.
+    API_PUBLIC_URL: urlWith(['http:', 'https:'], 'http(s)').default('http://localhost:4000'),
+    // Set only when the web app and API sit on sibling subdomains (for example .erase.me). Empty = host-only cookie.
+    COOKIE_DOMAIN: z.string().min(1).optional(),
     GOOGLE_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
     // Real sends are off by default. Dev and test send only to the fake Gmail.
@@ -61,6 +65,7 @@ const EnvSchema = z
       if (env.TOKEN_MASTER_KEY === undefined) issue('TOKEN_MASTER_KEY', 'is required in staging and production');
       if (env.AI_SERVICE_TOKEN === undefined) issue('AI_SERVICE_TOKEN', 'is required in staging and production');
       if (!env.WEB_ORIGIN.startsWith('https:')) issue('WEB_ORIGIN', 'must be https in staging and production');
+      if (!env.API_PUBLIC_URL.startsWith('https:')) issue('API_PUBLIC_URL', 'must be https in staging and production');
     }
   });
 
@@ -89,6 +94,13 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     );
   }
   return parsed.data;
+}
+
+export const GOOGLE_CALLBACK_PATH = '/v1/auth/google/callback';
+
+/** The exact redirect URI registered in Google Cloud. */
+export function googleRedirectUri(env: Pick<Env, 'API_PUBLIC_URL'>): string {
+  return new URL(GOOGLE_CALLBACK_PATH, env.API_PUBLIC_URL).toString();
 }
 
 /** A real send needs ALLOW_REAL_SEND=true, a positive per-user daily cap, and a non-test environment. */

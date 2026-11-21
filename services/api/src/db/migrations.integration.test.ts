@@ -23,11 +23,13 @@ const EXPECTED_TABLES = [
   'audit_log',
   'companies',
   'inboxes',
+  'oauth_states',
   'reply_labels',
   'request_drafts',
   'request_events',
   'requests',
   'scans',
+  'sessions',
   'user_companies',
   'users',
 ];

@@ -35,10 +35,17 @@ It has no DELETE anywhere in Phase 1. Purging and account deletion (Phase 2) run
 - A connected inbox has an encrypted token. A disconnected one has none and has `purge_after` set (retention field; the purge job is Phase 2).
 - No column stores received email content. Only `request_drafts.subject` and `.body` hold text, and that is the draft the user approves.
 
+## Auth tables (migrations 0003 and 0004)
+
+- `sessions`: server-side sessions. Only the SHA-256 of the cookie token is stored. 30-day sliding expiry; a new row at every sign-in.
+- `oauth_states`: one row per Google authorization attempt (state hash, PKCE verifier, nonce). Single use, 10 minutes.
+- Both are mutable (revoke, consume) with no DELETE for the app role. Expired rows are removed by the Phase 2 owner-role purge job.
+
 ## Differences from TRD 6.4
 
 - `companies.grievance_verified_on` is a `date` (was `grievance_verified_at`); added `is_fictional`.
 - `request_events.draft_hash` is a column, not a payload field, so the approval guard can query it.
 - `request_drafts.created_by` also allows `template` (Phase 1 drafts come from a fixed template, not the AI service).
 - `inboxes.purge_after` added for the retention field.
+- Sessions and OAuth state are tables of their own (TRD 8.1 says Redis or Postgres; Postgres keeps Phase 1 to one store).
 - `audit_log.ip` is personal data. Decide its retention before admin ships.
