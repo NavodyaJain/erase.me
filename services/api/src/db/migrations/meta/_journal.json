@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1795285504659,
+      "tag": "0000_core_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795285509442,
+      "tag": "0001_roles_and_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795285513834,
+      "tag": "0002_send_requires_approval",
+      "breakpoints": true
+    }
+  ]
+}
