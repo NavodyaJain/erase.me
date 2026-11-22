@@ -46,6 +46,8 @@ export interface DetectedCompany {
   mustKeep: boolean;
   category: string;
   inboxId: string;
+  /** The company's own account-deletion page, from the catalog. */
+  selfServeUrl: string | null;
 }
 
 const inboxColumns = {
@@ -333,6 +335,7 @@ export function createGmailRepository(db: Db) {
           mustKeep: companies.mustKeep,
           category: companies.category,
           inboxId: userCompanies.inboxId,
+          selfServeUrl: companies.selfServeUrl,
         })
         .from(userCompanies)
         .innerJoin(companies, eq(companies.id, userCompanies.companyId))

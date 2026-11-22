@@ -13,6 +13,8 @@ export interface DetectionView {
   /** Needed to keep an account working (for example the account provider). No deletion request is offered. */
   mustKeep: boolean;
   category: string;
+  /** The company's own account-deletion page, shown before a request by email. Never set for a must-keep company. */
+  selfServeUrl: string | null;
 }
 
 const day = (d: Date): string => d.toISOString().slice(0, 10);
@@ -40,6 +42,7 @@ export function toDetectionViews(rows: DetectedCompany[], exclude: ExcludeList):
       confidence: confidenceFor(r.signals),
       mustKeep: r.mustKeep,
       category: r.category,
+      selfServeUrl: r.mustKeep ? null : r.selfServeUrl,
     }))
     .sort(
       (a, b) =>

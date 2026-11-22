@@ -14,10 +14,12 @@ export const MAX_DRAFTS_PER_CALL = 10;
 
 /** Something that stops a request from being drafted, approved or sent, with words a person can act on. */
 export interface Blocker {
-  code: 'company_excluded' | 'must_keep' | 'no_contact' | 'contact_bounced' | 'contact_changed' | 'draft_integrity' | 'draft_unsafe';
+  code: 'company_excluded' | 'must_keep' | 'no_contact' | 'contact_bounced' | 'contact_changed' | 'use_form' | 'draft_integrity' | 'draft_unsafe';
   status: number;
   message: string;
   findings?: SafetyFinding[];
+  /** Extra fields for the error and the view, for example the form link. */
+  extra?: Record<string, unknown>;
 }
 
 export const mustKeepMessage = (company: string): string =>
@@ -27,18 +29,36 @@ const noContactMessage = (company: string): string =>
 const bouncedMessage = (company: string): string =>
   `The grievance contact we have for ${company} did not accept earlier mail, so this request is blocked until the contact is checked.`;
 
-const isExampleAddress = (email: string): boolean => /@example\.com$/i.test(email);
+const useFormMessage = (company: string): string =>
+  `${company} takes requests through a web form, so Erase.me cannot send this by email. Copy the draft into the form. It is shown here for that.`;
 
-/** The contact must be verified: an address, the page it came from and the date it was checked. Fictional ones are @example.com only. */
+const isExampleAddress = (email: string): boolean => /@example\.com$/i.test(email);
+const isExampleUrl = (url: string): boolean => /^https:\/\/([a-z0-9-]+\.)*example\.com(\/|$)/i.test(url);
+
+/** Where the draft goes: the verified address, or the form URL for a web-form company. Stored in the draft's `to_email`. */
+export const destinationOf = (c: CompanyContext): string | null => (c.grievanceChannel === 'web_form' ? c.grievanceFormUrl : c.grievanceEmail);
+
+/**
+ * The contact must be verified: an address (or a form), the page it came from and the date it was checked.
+ * Fictional entries use example.com only, real ones never do.
+ */
 function contactBlocker(c: CompanyContext): Blocker | null {
   if (c.grievanceStatus === 'bounced') return { code: 'contact_bounced', status: 409, message: bouncedMessage(c.companyName) };
+  const destination = destinationOf(c);
+  const onExample = destination === null ? false : c.grievanceChannel === 'web_form' ? isExampleUrl(destination) : isExampleAddress(destination);
   const verified =
     c.grievanceStatus === 'verified' &&
-    c.grievanceEmail !== null &&
+    destination !== null &&
     c.grievanceSource !== null &&
     c.grievanceVerifiedOn !== null &&
-    (c.isFictional ? isExampleAddress(c.grievanceEmail) : !isExampleAddress(c.grievanceEmail));
+    (c.isFictional ? onExample : !onExample);
   return verified ? null : { code: 'no_contact', status: 409, message: noContactMessage(c.companyName) };
+}
+
+/** A web-form company cannot be reached by email: approving or sending stops, and the form link is given instead. */
+function formBlocker(c: CompanyContext): Blocker | null {
+  if (c.grievanceChannel !== 'web_form' || c.grievanceFormUrl === null) return null;
+  return { code: 'use_form', status: 409, message: useFormMessage(c.companyName), extra: { formUrl: c.grievanceFormUrl, ...(c.selfServeUrl ? { selfServeUrl: c.selfServeUrl } : {}) } };
 }
 
 /** Company-level reasons a request must not move forward. */
@@ -56,10 +76,13 @@ function companyBlockers(c: CompanyContext): Blocker[] {
 /** Everything that can block this exact draft. The same list drives the "can send" flag and the errors. */
 export function draftBlockers(c: CompanyContext, d: DraftRow): Blocker[] {
   const out = companyBlockers(c);
+  const form = formBlocker(c);
+  if (form) out.push(form);
   if (hashDraft({ to: d.toEmail, subject: d.subject, body: d.body }) !== d.draftHash) {
     out.push({ code: 'draft_integrity', status: 409, message: 'This draft does not match its saved fingerprint. Create a new request.' });
   }
-  if (c.grievanceEmail !== null && d.toEmail.toLowerCase() !== c.grievanceEmail.toLowerCase()) {
+  const destination = destinationOf(c);
+  if (destination !== null && d.toEmail.toLowerCase() !== destination.toLowerCase()) {
     out.push({ code: 'contact_changed', status: 409, message: `The grievance contact for ${c.companyName} changed since this draft was made. Close this request and create a new one.` });
   }
   const findings = findSafetyIssues(d.subject, d.body);
@@ -68,7 +91,7 @@ export function draftBlockers(c: CompanyContext, d: DraftRow): Blocker[] {
 }
 
 const throwBlocker = (b: Blocker): never => {
-  throw new AppError(b.status, b.code, titleFor(b.code), b.message, b.findings ? { findings: b.findings } : {});
+  throw new AppError(b.status, b.code, titleFor(b.code), b.message, { ...(b.findings ? { findings: b.findings } : {}), ...(b.extra ?? {}) });
 };
 
 function titleFor(code: Blocker['code']): string {
@@ -80,6 +103,8 @@ function titleFor(code: Blocker['code']): string {
       return 'No verified contact for this company';
     case 'company_excluded':
       return 'Company excluded';
+    case 'use_form':
+      return 'Use the company\u2019s web form';
     case 'draft_unsafe':
       return 'The draft cannot be used yet';
     default:
@@ -87,22 +112,38 @@ function titleFor(code: Blocker['code']): string {
   }
 }
 
+/** Company-level blockers first (must keep, no contact), then the web-form stop with the link. */
+function assertEmailRequest(c: CompanyContext): void {
+  const blocker = companyBlockers(c)[0] ?? formBlocker(c);
+  if (blocker) throwBlocker(blocker);
+}
+
 export interface DraftOutcome {
   userCompanyId: string;
-  outcome: 'created' | 'existing' | 'blocked';
+  /**
+   * `created` and `existing`: an email request. `use_form`: the company takes requests through a web form, so the
+   * request holds a draft to copy and `formUrl` says where to paste it. `blocked`: see `reason` and `message`.
+   */
+  outcome: 'created' | 'existing' | 'use_form' | 'blocked';
   requestId?: string;
   reason?: Blocker['code'] | 'not_found';
   message?: string;
+  formUrl?: string;
+  /** The company's own account-deletion page, when it has one, to show before a request by email. */
+  selfServeUrl?: string;
 }
 
 export interface RequestView {
   request: { id: string; status: RequestStatus; createdAt: Date; updatedAt: Date; sentAt: Date | null; dueAt: Date | null };
-  company: { id: string; name: string; mustKeep: boolean };
+  company: { id: string; name: string; mustKeep: boolean; selfServeUrl: string | null };
+  /** How the company takes requests. For `web_form` the draft is for copy and paste and cannot be sent by email. */
+  contact: { channel: 'email' | 'web_form'; formUrl: string | null };
+  useForm: boolean;
   draft: { version: number; to: string; subject: string; body: string; hash: string; createdBy: string; createdAt: Date };
   approved: boolean;
   events: Array<{ type: string; actor: string; at: Date; payload: Record<string, unknown> }>;
   canSend: boolean;
-  blockers: Array<{ code: string; message: string; findings?: SafetyFinding[] }>;
+  blockers: Array<{ code: string; message: string; findings?: SafetyFinding[]; formUrl?: string }>;
 }
 
 export interface SendResponse {
@@ -151,6 +192,15 @@ export class RequestsService {
     const repo = this.deps.repo;
     const ctx = await repo.contextForUserCompany(userId, userCompanyId);
     if (!ctx) return { userCompanyId, outcome: 'blocked', reason: 'not_found', message: 'We could not find that company.' };
+    const selfServe = ctx.selfServeUrl && !(ctx.mustKeep || ctx.riskLevel === 'must_keep') ? { selfServeUrl: ctx.selfServeUrl } : {};
+    const isForm = ctx.grievanceChannel === 'web_form';
+    const done = (outcome: 'created' | 'existing', requestId: string | undefined): DraftOutcome => ({
+      userCompanyId,
+      outcome: isForm ? 'use_form' : outcome,
+      ...(requestId ? { requestId } : {}),
+      ...(isForm && ctx.grievanceFormUrl ? { formUrl: ctx.grievanceFormUrl, message: useFormMessage(ctx.companyName) } : {}),
+      ...selfServe,
+    });
 
     const blocker = companyBlockers(ctx)[0];
     if (blocker) {
@@ -158,24 +208,24 @@ export class RequestsService {
         // Stands in for the admin task of finding the contact (F6-AC4) until the admin module exists.
         await this.deps.audit.record({ actorType: 'user', actorId: userId, action: 'company.contact_missing', targetType: 'company', targetId: ctx.companyId, requestId: httpRequestId });
       }
-      return { userCompanyId, outcome: 'blocked', reason: blocker.code, message: blocker.message };
+      return { userCompanyId, outcome: 'blocked', reason: blocker.code, message: blocker.message, ...selfServe };
     }
 
     return repo.transaction(async (tx) => {
       const existing = await tx.findOpenRequest(userCompanyId);
-      if (existing) return { userCompanyId, outcome: 'existing' as const, requestId: existing.id };
+      if (existing) return done('existing', existing.id);
       const created = await tx.insertRequest(userId, userCompanyId);
       if (!created) {
         const raced = await tx.findOpenRequest(userCompanyId);
-        return { userCompanyId, outcome: 'existing' as const, ...(raced ? { requestId: raced.id } : {}) };
+        return done('existing', raced?.id);
       }
-      const text = renderDraft({ userName: profile.name, userEmail: profile.email, companyName: ctx.companyName, signals: ctx.signals });
-      const to = ctx.grievanceEmail as string; // contactBlocker guarantees a verified address
+      const text = renderDraft({ userName: profile.name, userEmail: profile.email, companyName: ctx.companyName, signals: ctx.signals, channel: ctx.grievanceChannel });
+      const to = destinationOf(ctx) as string; // contactBlocker guarantees a verified address or form URL
       const hash = hashDraft({ to, subject: text.subject, body: text.body });
       await tx.insertDraft({ requestId: created.id, version: 1, to, subject: text.subject, body: text.body, hash, createdBy: 'template' });
       await tx.insertEvent({ requestId: created.id, type: 'drafted', actorType: 'system', draftHash: hash, payload: { version: 1, createdBy: 'template' } });
       this.log.info({ requestId: created.id }, 'request drafted');
-      return { userCompanyId, outcome: 'created' as const, requestId: created.id };
+      return done('created', created.id);
     });
   }
 
@@ -206,12 +256,19 @@ export class RequestsService {
     const events = await r.events(requestId);
     const approved = await r.hasUserApproval(requestId, draft.draftHash, draft.createdAt);
 
-    const blockers: RequestView['blockers'] = draftBlockers(ctx, draft).map((b) => ({ code: b.code, message: b.message, ...(b.findings ? { findings: b.findings } : {}) }));
+    const blockers: RequestView['blockers'] = draftBlockers(ctx, draft).map((b) => ({
+      code: b.code,
+      message: b.message,
+      ...(b.findings ? { findings: b.findings } : {}),
+      ...(typeof b.extra?.formUrl === 'string' ? { formUrl: b.extra.formUrl } : {}),
+    }));
     if (this.deps.sender.kind === 'unavailable') blockers.push({ code: this.deps.sender.code, message: this.deps.sender.detail });
     const canSend = req.status === 'approved' && approved && blockers.length === 0;
     return {
       request: { id: req.id, status: req.status, createdAt: req.createdAt, updatedAt: req.updatedAt, sentAt: req.sentAt, dueAt: req.dueAt },
-      company: { id: ctx.companyId, name: ctx.companyName, mustKeep: ctx.mustKeep || ctx.riskLevel === 'must_keep' },
+      company: { id: ctx.companyId, name: ctx.companyName, mustKeep: ctx.mustKeep || ctx.riskLevel === 'must_keep', selfServeUrl: ctx.selfServeUrl },
+      contact: { channel: ctx.grievanceChannel, formUrl: ctx.grievanceChannel === 'web_form' ? ctx.grievanceFormUrl : null },
+      useForm: ctx.grievanceChannel === 'web_form',
       draft: { version: draft.version, to: draft.toEmail, subject: draft.subject, body: draft.body, hash: draft.draftHash, createdBy: draft.createdBy, createdAt: draft.createdAt },
       approved,
       events: events.map((e: EventRow) => ({ type: e.type, actor: e.actorType, at: e.createdAt, payload: e.payload })),
@@ -270,6 +327,7 @@ export class RequestsService {
       const latest = await tx.latestDraft(req.id);
       const ctx = await tx.contextForRequest(userId, requestId);
       if (!latest || !ctx) throw Problems.notFound();
+      assertEmailRequest(ctx);
 
       if (!isDraftHash(draftHash) || draftHash !== latest.draftHash) {
         throw new AppError(409, 'draft_changed', 'The draft changed', 'The text you approved is not the latest version. Review it again.');
@@ -342,6 +400,11 @@ export class RequestsService {
           throw new AppError(409, 'send_in_progress', 'This request is being sent', 'A send with this key is already running or its result is unknown. Check the Sent folder in Gmail.');
         }
       }
+
+      // A web-form company cannot be sent by email, whatever state the request is in.
+      const formCtx = await tx.contextForRequest(userId, requestId);
+      if (!formCtx) throw Problems.notFound();
+      assertEmailRequest(formCtx);
 
       if (req.status === 'sent') throw new AppError(409, 'already_sent', 'Already sent', 'This request was already sent.');
       if (req.status !== 'approved') {

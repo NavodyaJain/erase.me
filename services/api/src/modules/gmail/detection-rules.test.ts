@@ -42,6 +42,7 @@ describe('toDetectionViews', () => {
     mustKeep: false,
     category: 'other',
     inboxId: 'inb_x',
+    selfServeUrl: null,
     ...over,
   });
   const none = new ExcludeList([], [], registrableDomain);
@@ -57,6 +58,7 @@ describe('toDetectionViews', () => {
       confidence: 'high',
       mustKeep: true,
       category: 'other',
+      selfServeUrl: null,
     });
   });
 
@@ -72,6 +74,13 @@ describe('toDetectionViews', () => {
       new ExcludeList(['employer.example'], [], registrableDomain),
     );
     expect(views.map((v) => v.company)).toEqual(['Keep']);
+  });
+
+  it('carries the self-serve link, but never for a must-keep company', () => {
+    const link = 'https://brand.example/account/delete';
+    const [a, b] = toDetectionViews([row({ company: 'A', selfServeUrl: link }), row({ company: 'B', domain: 'b.example', selfServeUrl: link, mustKeep: true })], none);
+    expect(a?.selfServeUrl).toBe(link);
+    expect(b?.selfServeUrl).toBeNull();
   });
 
   it('lists likely companies before possible ones, then newest first', () => {

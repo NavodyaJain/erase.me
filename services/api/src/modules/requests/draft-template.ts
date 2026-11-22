@@ -7,6 +7,8 @@ export interface DraftInput {
   companyName: string;
   /** Signal names the scan recorded for this company. Used only to word what the company likely holds. */
   signals: readonly string[];
+  /** How the draft will reach the company. A web form changes only the closing line. Default email. */
+  channel?: 'email' | 'web_form';
 }
 
 export interface RenderedDraft {
@@ -83,7 +85,9 @@ export function renderDraft(input: DraftInput, citation: StatuteCitation = STATU
     '',
     'I am also making this request under any erasure process described in your privacy policy.',
     '',
-    'I am sending this from the email address above. Please reply to it.',
+    input.channel === 'web_form'
+      ? 'I am submitting this through your web form. Please reply to the email address above.'
+      : 'I am sending this from the email address above. Please reply to it.',
     '',
     'Thank you.',
     name,

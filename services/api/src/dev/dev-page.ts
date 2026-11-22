@@ -157,6 +157,14 @@ export function renderDevPage(nonce: string): string {
       var tr = document.createElement('tr');
       var c = el('td', r.company);
       c.appendChild(el('div', r.domain, 'dom'));
+      if (typeof r.selfServeUrl === 'string' && r.selfServeUrl.indexOf('https://') === 0) {
+        var link = el('a', 'Delete it yourself (company page)');
+        link.href = r.selfServeUrl;
+        link.rel = 'noopener noreferrer';
+        link.target = '_blank';
+        link.className = 'dom';
+        c.appendChild(link);
+      }
       tr.appendChild(c);
       tr.appendChild(el('td', r.confidence === 'high' ? 'Likely' : 'Possible', r.confidence === 'high' ? 'high' : ''));
       tr.appendChild(el('td', r.firstSeen));

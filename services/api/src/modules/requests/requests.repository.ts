@@ -55,6 +55,10 @@ export interface CompanyContext {
   grievanceSource: string | null;
   grievanceVerifiedOn: string | null;
   grievanceStatus: 'unknown' | 'verified' | 'bounced';
+  /** `email` (grievanceEmail) or `web_form` (grievanceFormUrl). */
+  grievanceChannel: 'email' | 'web_form';
+  grievanceFormUrl: string | null;
+  selfServeUrl: string | null;
 }
 
 export interface ClaimRow {
@@ -103,6 +107,9 @@ const contextColumns = {
   grievanceSource: companies.grievanceSource,
   grievanceVerifiedOn: companies.grievanceVerifiedOn,
   grievanceStatus: companies.grievanceStatus,
+  grievanceChannel: companies.grievanceChannel,
+  grievanceFormUrl: companies.grievanceFormUrl,
+  selfServeUrl: companies.selfServeUrl,
 };
 
 const claimColumns = {
