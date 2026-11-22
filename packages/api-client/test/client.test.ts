@@ -10,8 +10,8 @@ import {
   isStaleDraft,
   isUseForm,
   type RequestView,
-} from '../src/index.js';
-import { fakeApi, ME, problem, REQUEST_ID } from './fake-api.js';
+} from '../src/index';
+import { fakeApi, ME, problem, REQUEST_ID } from './fake-api';
 
 const BASE = 'http://localhost:4000';
 const HASH = 'ab'.repeat(32);

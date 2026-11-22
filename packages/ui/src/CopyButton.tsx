@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button } from './Button.js';
+import { Button } from './Button';
 
 /**
  * Copies text to the clipboard and says so. The text is passed in and never stored. Falls back to selecting a

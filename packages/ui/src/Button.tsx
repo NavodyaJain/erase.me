@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
-import { cx } from './cx.js';
+import { cx } from './cx';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'quiet';
 

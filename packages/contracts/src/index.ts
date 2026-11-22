@@ -1,6 +1,6 @@
-import type { components } from './schema.js';
+import type { components } from './schema';
 
-export type { components, operations, paths } from './schema.js';
+export type { components, operations, paths } from './schema';
 
 /** Every schema of the API contract, by name. */
 export type Schemas = components['schemas'];

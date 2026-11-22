@@ -19,3 +19,7 @@ __pycache__/
 
 # Personal catalog additions (service names from the owner's own inbox)
 services/api/catalog/catalog.local.json
+
+# Brand assets are copied from packages/ui by scripts/sync-brand.mjs
+apps/web/public/brand/
+apps/web/next-env.d.ts

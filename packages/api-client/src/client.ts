@@ -1,6 +1,6 @@
 import type { CompanyItem, DraftOutcome, Inbox, Me, paths, RequestListItem, RequestView, Scan, SendResponse } from '@erase/contracts';
 import createClient from 'openapi-fetch';
-import { ApiError, isApiError } from './errors.js';
+import { ApiError, isApiError } from './errors';
 
 export interface ApiClientOptions {
   /** The API origin, for example `http://localhost:4000`. */

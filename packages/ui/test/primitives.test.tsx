@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'vitest-axe';
 import { describe, expect, it, vi } from 'vitest';
-import { Alert, Button, Card, Checkbox, Chip, CopyButton, ProgressBar, Skeleton, Switch, TextArea, TextField } from '../src/index.js';
+import { Alert, Button, Card, Checkbox, Chip, CopyButton, ProgressBar, Skeleton, Switch, TextArea, TextField } from '../src/index';
 
 describe('Button', () => {
   it('defaults to type=button, and ignores clicks while loading', async () => {
