@@ -4,6 +4,7 @@ import { GmailApiError, type GmailClient } from './gmail.client.js';
 import type { GmailRepository, ScanRow } from './gmail.repository.js';
 import type { InboxService } from './inbox.service.js';
 import { ExcludeList, parseExcludeList } from './detection-rules.js';
+import { toDetectionViews } from './detections.js';
 import { aggregate, readSighting, registrableDomain, type Sighting } from './signals.js';
 
 export const SCAN_JOB = 'scan-inbox';
@@ -143,9 +144,17 @@ export class ScanService {
       let estimate: number | undefined;
       let ignored = 0; // not a company signal: a person, a code, an excluded or unattributable sender
       let hitCap = false;
-      let found = await this.repo.countDetected(inbox.userId, inbox.id);
       const exclude = new ExcludeList(this.opts.exclude, await this.repo.listOwnAddresses(inbox.userId), registrableDomain);
       const query = buildScanQuery(this.opts.windowYears, scan.createdAt);
+      // The count a person sees: only companies that are shown. Delivery services, mailbox providers, own and
+      // employer domains are hidden, and companies marked "not mine" are left out, so none of them are counted.
+      const counts = async () => {
+        const rows = await this.repo.listDetections(inbox.userId, inbox.id);
+        const shown = toDetectionViews(rows, exclude).length;
+        const notMine = rows.filter((r) => r.status === 'not_mine').length;
+        return { shown, notMine, hidden: rows.length - shown - notMine };
+      };
+      let c = await counts();
 
       do {
         // Re-read every page: a disconnect during the scan must stop further Gmail calls (F1-AC3).
@@ -173,10 +182,10 @@ export class ScanService {
 
         scanned += page.ids.length;
         cursor = page.nextPageToken;
-        found = await this.repo.countDetected(inbox.userId, inbox.id);
+        c = await counts();
         // Gmail gives only a rough total, so progress is capped below 100 until the scan really finishes.
         const pct = cursor && estimate && estimate > 0 ? Math.min(99, Math.floor((scanned / estimate) * 100)) : 0;
-        await this.repo.saveScanProgress(scan.id, { cursor: cursor ?? null, progressPct: pct, foundCount: found });
+        await this.repo.saveScanProgress(scan.id, { cursor: cursor ?? null, progressPct: pct, foundCount: c.shown });
         if (cursor && scanned >= this.opts.maxMessages) {
           hitCap = true;
           break;
@@ -184,10 +193,11 @@ export class ScanService {
       } while (cursor);
 
       const now = this.now();
-      await this.repo.finishScan(scan.id, found, now);
+      await this.repo.finishScan(scan.id, c.shown, now);
       await this.repo.setLastScan(inbox.id, now);
       // hitCap means mail beyond SCAN_MAX_MESSAGES was not read; windowYears shows whether a date window applied.
-      this.log.info({ scanned, skipped, ignored, found, hitCap, windowYears: this.opts.windowYears ?? null }, 'scan finished');
+      // Counts only: how many companies are shown, hidden (delivery, own, employer, mailbox providers) and marked not mine.
+      this.log.info({ scanned, skipped, ignored, found: c.shown, hidden: c.hidden, notMine: c.notMine, hitCap, windowYears: this.opts.windowYears ?? null }, 'scan finished');
     } catch (err) {
       const code = err instanceof GmailApiError ? `gmail_${err.code}` : 'internal_error';
       await this.repo.failScan(scan.id, code, this.now());

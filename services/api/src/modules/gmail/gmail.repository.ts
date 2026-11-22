@@ -45,6 +45,7 @@ export interface DetectedCompany {
   status: 'active' | 'not_mine' | 'requested';
   mustKeep: boolean;
   category: string;
+  inboxId: string;
 }
 
 const inboxColumns = {
@@ -320,7 +321,7 @@ export function createGmailRepository(db: Db) {
     },
 
     /** Detected companies for a user, newest activity first. Company fields and dates only. */
-    async listDetections(userId: string): Promise<DetectedCompany[]> {
+    async listDetections(userId: string, inboxId?: string): Promise<DetectedCompany[]> {
       return db
         .select({
           company: companies.name,
@@ -331,21 +332,12 @@ export function createGmailRepository(db: Db) {
           status: userCompanies.status,
           mustKeep: companies.mustKeep,
           category: companies.category,
+          inboxId: userCompanies.inboxId,
         })
         .from(userCompanies)
         .innerJoin(companies, eq(companies.id, userCompanies.companyId))
-        .where(eq(userCompanies.userId, userId))
+        .where(inboxId ? and(eq(userCompanies.userId, userId), eq(userCompanies.inboxId, inboxId)) : eq(userCompanies.userId, userId))
         .orderBy(desc(userCompanies.lastSeen), companies.name);
-    },
-
-    async countDetected(userId: string, inboxId: string): Promise<number> {
-      const [row] = await db
-        .select({ n: sql<number>`count(*)::int` })
-        .from(userCompanies)
-        .where(
-          and(eq(userCompanies.userId, userId), eq(userCompanies.inboxId, inboxId), ne(userCompanies.status, 'not_mine')),
-        );
-      return row?.n ?? 0;
     },
   };
 }

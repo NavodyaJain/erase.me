@@ -41,6 +41,7 @@ describe('toDetectionViews', () => {
     status: 'active',
     mustKeep: false,
     category: 'other',
+    inboxId: 'inb_x',
     ...over,
   });
   const none = new ExcludeList([], [], registrableDomain);

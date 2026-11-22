@@ -4,6 +4,7 @@ import { createTestDb, type TestDb } from '../../../test/db-helper.js';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { Db } from '../../db/client.js';
 import * as schema from '../../db/schema/index.js';
+import { newId } from '../../common/ids.js';
 import { loadCatalog } from '../companies/catalog.js';
 import { createCompaniesRepository } from '../companies/companies.repository.js';
 import { buildScanQuery, SCAN_QUERY } from './scan.service.js';
@@ -185,6 +186,43 @@ describe('scan window and cap (item 6)', () => {
     await scanWith(h, 'full', [msg('1', 'hi@full.example', 'Welcome'), msg('2', 'friend@gmail.com', 'Welcome'), msg('3', 'x@em.sendgrid.net', 'Welcome')]);
     const line = h.logs.lines().filter((l) => l.msg === 'scan finished').at(-1);
     expect(line).toMatchObject({ scanned: 3, ignored: 2, found: 1, hitCap: false });
+  });
+});
+
+describe('found count matches what is shown', () => {
+  it('counts only shown companies; hidden and not-mine rows are logged as counts, never named', async () => {
+    const harness = await buildHarness(t, { envOverrides: { SCAN_EXCLUDE: 'employer-found.example' } });
+    try {
+      const s = await signIn(harness, { email: 'found@example.test', sub: 'g-found' });
+      const { inboxId } = await connectInbox(harness, s, { email: 'found-mail@example.test', sub: 'g-found-mail' });
+      // Rows from earlier scans: a delivery service, an employer domain and a company marked "not mine".
+      for (const [domain, status] of [
+        ['elasticemail.com', 'active'],
+        ['employer-found.example', 'active'],
+        ['notmine-found.example', 'not_mine'],
+      ] as const) {
+        const companyId = newId('company');
+        await t.owner.query("INSERT INTO companies (id, slug, name, domains) VALUES ($1, $2, $3, ARRAY[$4])", [companyId, domain.replace(/\./g, '-'), domain, domain]);
+        await t.owner.query(
+          "INSERT INTO user_companies (id, user_id, company_id, inbox_id, first_seen, last_seen, signal_types, status) VALUES ($1, $2, $3, $4, now(), now(), ARRAY['welcome'], $5)",
+          [newId('userCompany'), s.userId, companyId, inboxId, status],
+        );
+      }
+      harness.gmail.messages = [msg('1', 'hi@shown-a.example', 'Welcome'), msg('2', 'hi@shown-b.example', 'Your receipt'), msg('3', 'x@em.sendgrid.net', 'Welcome')];
+      await harness.app.inject({ method: 'POST', url: `/v1/inboxes/${inboxId}/scan`, headers: authed(s) });
+      await harness.queue.drain();
+
+      const scan = (await harness.app.inject({ method: 'GET', url: `/v1/inboxes/${inboxId}/scan`, headers: { cookie: s.cookie } })).json<{ scan: { status: string; foundCount: number } }>().scan;
+      expect(scan).toMatchObject({ status: 'done', foundCount: 2 }); // two shown, not five stored
+      const { rows } = await t.owner.query<{ n: string }>('SELECT count(*) AS n FROM user_companies WHERE user_id = $1', [s.userId]);
+      expect(rows[0]?.n).toBe('5');
+
+      const line = harness.logs.lines().find((l) => l.msg === 'scan finished');
+      expect(line).toMatchObject({ found: 2, hidden: 2, notMine: 1 });
+      expect(harness.logs.text()).not.toMatch(/elasticemail|employer-found|notmine-found|shown-a|shown-b/);
+    } finally {
+      await harness.app.close();
+    }
   });
 });
 
