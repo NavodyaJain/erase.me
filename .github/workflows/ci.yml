@@ -30,6 +30,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint        # eslint plus the banned-word lint
       - run: pnpm typecheck
+      - run: pnpm --filter @erase/api openapi:check   # fails if services/api/openapi/openapi.json is out of date
       - run: pnpm test
   ai:
     runs-on: ubuntu-latest

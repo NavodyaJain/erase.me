@@ -16,7 +16,9 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file=../../.env src/db/migrate.ts",
-    "dev:coverage": "tsx --env-file=../../.env src/dev/coverage.ts"
+    "dev:coverage": "tsx --env-file=../../.env src/dev/coverage.ts",
+    "openapi:generate": "tsx src/contract/cli.ts",
+    "openapi:check": "tsx src/contract/cli.ts --check"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.4",
@@ -28,8 +30,11 @@
   },
   "devDependencies": {
     "@erase/config": "workspace:^",
+    "@seriousme/openapi-schema-validator": "2.12.0",
     "@types/node": "20",
     "@types/pg": "^8.23.1",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
     "drizzle-kit": "^0.31.11",
     "eslint": "^10.15.0",
     "tsx": "^4.23.15",

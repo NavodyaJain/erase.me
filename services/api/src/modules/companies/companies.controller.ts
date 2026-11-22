@@ -1,10 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
-import { z } from 'zod';
 import { Problems } from '../../common/errors.js';
-import { isId } from '../../common/ids.js';
+import { CompanyParams } from '../../contract/schemas.js';
 import type { CompaniesService } from './companies.service.js';
-
-const Params = z.object({ id: z.string().refine((v) => isId('userCompany', v), 'invalid company id') });
 
 export interface CompaniesRoutesDeps {
   companies: CompaniesService;
@@ -21,12 +18,12 @@ export const companiesRoutes: FastifyPluginAsync<CompaniesRoutesDeps> = async (a
 
   // PUT and DELETE are idempotent: setting a kept company again, or clearing one that is not kept, changes nothing.
   app.put('/v1/companies/:id/keep', { preHandler: requireUser }, async (request) => {
-    const { id } = Params.parse(request.params);
+    const { id } = CompanyParams.parse(request.params);
     return { company: await companies.setKeep(userId(request), id, true, request.id) };
   });
 
   app.delete('/v1/companies/:id/keep', { preHandler: requireUser }, async (request) => {
-    const { id } = Params.parse(request.params);
+    const { id } = CompanyParams.parse(request.params);
     return { company: await companies.setKeep(userId(request), id, false, request.id) };
   });
 };

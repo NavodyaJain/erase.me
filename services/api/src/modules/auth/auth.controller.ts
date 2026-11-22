@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
-import { z } from 'zod';
 import { parseCookies, serializeCookie } from '../../common/cookies.js';
 import { Problems } from '../../common/errors.js';
+import { CallbackQuery } from '../../contract/schemas.js';
 import type { RateLimiter } from '../../common/rate-limit.js';
 import type { Env } from '../../config/env.js';
 import type { AccountService } from './account.service.js';
@@ -11,12 +11,6 @@ import type { SessionService } from './session.service.js';
 
 export const OAUTH_STATE_COOKIE = 'erase_oauth_state';
 const OAUTH_COOKIE_PATH = '/v1/auth/google';
-
-const CallbackQuery = z.object({
-  code: z.string().max(2048).optional(),
-  state: z.string().max(256).optional(),
-  error: z.string().max(256).optional(),
-});
 
 export interface AuthRoutesDeps {
   env: Env;

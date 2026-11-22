@@ -1,0 +1,4647 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Erase.me core API",
+    "version": "0.1.0",
+    "description": "The Erase.me core API. Every call is under `/v1`.\n\n**Sign-in and sessions.** Sign in with `GET /v1/auth/google/start`. The `erase_session` cookie (HttpOnly) identifies the user. Send requests with credentials included.\n\n**CSRF.** Every POST, PUT, PATCH and DELETE needs the `x-csrf-token` header from `GET /v1/me`, and a browser `Origin` that is the web app.\n\n**Errors.** Failures are RFC 9457 problem details (`application/problem+json`) with a stable `code`. Branch on `code`, not on the text. The `detail` is a sentence a person can act on and never contains draft text, addresses or tokens.\n\n**Outcomes that are not errors.** Creating draft requests answers 200 with one outcome per company: `created`, `existing`, `use_form` (a web-form company: the draft is for copy and paste), `kept` (the user chose to keep it) or `blocked` (with a `reason`, for example `must_keep` or `no_contact`).\n\n**Wording.** Results are hints from header metadata, never statements of fact. The API makes no promise about what a company does with a request.\n\n**Idempotency.** `POST /v1/requests/{id}/send` needs an `Idempotency-Key` header."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4000",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "Google sign-in and sign-out. Browser redirects, not JSON."
+    },
+    {
+      "name": "Account",
+      "description": "The signed-in user and account deletion."
+    },
+    {
+      "name": "Inboxes",
+      "description": "Connecting a Gmail inbox and scanning it for companies. Header metadata only."
+    },
+    {
+      "name": "Companies",
+      "description": "Companies that may hold the user’s data, and \"keep this\"."
+    },
+    {
+      "name": "Requests",
+      "description": "Draft, edit, approve and send erasure requests. Nothing is sent without the user’s approval."
+    }
+  ],
+  "paths": {
+    "/v1/auth/google/callback": {
+      "get": {
+        "operationId": "finishGoogleAuth",
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Google redirects back here",
+        "description": "The one callback registered with Google, for both sign-in and inbox connect (told apart by server-side state). Always answers with a redirect to the web app: on success to the app, on failure to `/?auth_error=<reason>` (reasons: `access_denied`, `invalid_state`, `exchange_failed`, `scopes_missing`, `no_refresh_token`, `inbox_limit`, `account_unavailable`) and, after connecting an inbox, `/?inbox=connected`. A successful sign-in sets the `erase_session` cookie.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to the web app",
+            "headers": {
+              "Location": {
+                "description": "Where the browser goes next",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "The `erase_oauth_state` cookie (start, connect) or the `erase_session` cookie (after sign-in)",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "rate_limited": {
+                    "summary": "Too many requests",
+                    "value": {
+                      "type": "urn:erase:problem:rate_limited",
+                      "title": "Too many requests",
+                      "status": 429,
+                      "code": "rate_limited",
+                      "detail": "Slow down and try again shortly.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Token encryption is not configured (inbox connect only)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "encryption_not_configured": {
+                    "summary": "Token encryption is not configured",
+                    "value": {
+                      "type": "urn:erase:problem:encryption_not_configured",
+                      "title": "Token encryption is not configured",
+                      "status": 503,
+                      "code": "encryption_not_configured",
+                      "detail": "Inboxes cannot be connected in this environment.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/auth/google/start": {
+      "get": {
+        "operationId": "startSignIn",
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Start Google sign-in",
+        "description": "Redirects the browser to Google (scopes `openid email profile`, PKCE, a one-time state). Sets a short-lived `erase_oauth_state` cookie that the callback checks. Sign-in only identifies the user: connecting an inbox is a separate consent.",
+        "responses": {
+          "302": {
+            "description": "Redirect to Google",
+            "headers": {
+              "Location": {
+                "description": "Where the browser goes next",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "The `erase_oauth_state` cookie (start, connect) or the `erase_session` cookie (after sign-in)",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "rate_limited": {
+                    "summary": "Too many requests",
+                    "value": {
+                      "type": "urn:erase:problem:rate_limited",
+                      "title": "Too many requests",
+                      "status": 429,
+                      "code": "rate_limited",
+                      "detail": "Slow down and try again shortly.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Google sign-in is not configured",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "auth_not_configured": {
+                    "summary": "Google sign-in is not configured",
+                    "value": {
+                      "type": "urn:erase:problem:auth_not_configured",
+                      "title": "Google sign-in is not configured",
+                      "status": 503,
+                      "code": "auth_not_configured",
+                      "detail": "Sign-in is switched off in this environment.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Sign out",
+        "description": "Revokes the session on the server and clears the cookie.",
+        "responses": {
+          "204": {
+            "description": "Signed out"
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/companies": {
+      "get": {
+        "operationId": "listCompanies",
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Companies that may hold the user’s data",
+        "description": "The user’s detected companies, as shown to them: sending services, mailbox providers, the user’s own and employer domains, and companies marked \"not mine\" are left out. Every result is a hint from header metadata (company, dates and signal names), never a statement of fact. No pagination yet.",
+        "responses": {
+          "200": {
+            "description": "Detected companies, likely ones first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyList"
+                },
+                "example": {
+                  "companies": [
+                    {
+                      "id": "ucm_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                      "company": "Sample Shop",
+                      "domain": "sampleshop.example",
+                      "firstSeen": "2025-01-11",
+                      "lastSeen": "2026-11-18",
+                      "signals": [
+                        "receipt",
+                        "welcome"
+                      ],
+                      "confidence": "high",
+                      "mustKeep": false,
+                      "category": "ecommerce",
+                      "selfServeUrl": "https://example.com/account/delete",
+                      "kept": false,
+                      "activity": "looks_in_use",
+                      "openRequest": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/companies/{id}/keep": {
+      "put": {
+        "operationId": "keepCompany",
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Keep this company",
+        "description": "Marks a company as one the user wants to keep. No request is offered for it: creating one answers outcome `kept`, and a drafted or approved request is refused at approve and send (409 `kept`) until this is cleared. Editing and closing still work, and a request already sent is unaffected. Idempotent.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`ucm_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^ucm_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kept",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyResponse"
+                },
+                "example": {
+                  "company": {
+                    "id": "ucm_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "company": "Sample Shop",
+                    "domain": "sampleshop.example",
+                    "firstSeen": "2025-01-11",
+                    "lastSeen": "2026-11-18",
+                    "signals": [
+                      "receipt",
+                      "welcome"
+                    ],
+                    "confidence": "high",
+                    "mustKeep": false,
+                    "category": "ecommerce",
+                    "selfServeUrl": "https://example.com/account/delete",
+                    "kept": true,
+                    "activity": "looks_in_use",
+                    "openRequest": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such company for this user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Keeping makes no sense for this company",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "must_keep": {
+                    "summary": "Already kept",
+                    "value": {
+                      "type": "urn:erase:problem:must_keep",
+                      "title": "Already kept",
+                      "status": 409,
+                      "code": "must_keep",
+                      "detail": "This company is needed to keep your account working, so it is already kept: no deletion request is offered for it.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "company_excluded": {
+                    "summary": "Company excluded",
+                    "value": {
+                      "type": "urn:erase:problem:company_excluded",
+                      "title": "Company excluded",
+                      "status": 409,
+                      "code": "company_excluded",
+                      "detail": "You marked this company as not yours, so there is nothing to keep.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "unkeepCompany",
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Undo \"keep this\"",
+        "description": "Clears the flag, so requests can be made for the company again and a refused request can go on. Idempotent.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`ucm_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^ucm_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "No longer kept",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyResponse"
+                },
+                "example": {
+                  "company": {
+                    "id": "ucm_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "company": "Sample Shop",
+                    "domain": "sampleshop.example",
+                    "firstSeen": "2025-01-11",
+                    "lastSeen": "2026-11-18",
+                    "signals": [
+                      "receipt",
+                      "welcome"
+                    ],
+                    "confidence": "high",
+                    "mustKeep": false,
+                    "category": "ecommerce",
+                    "selfServeUrl": "https://example.com/account/delete",
+                    "kept": false,
+                    "activity": "looks_in_use",
+                    "openRequest": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such company for this user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not applicable to this company",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "must_keep": {
+                    "summary": "Already kept",
+                    "value": {
+                      "type": "urn:erase:problem:must_keep",
+                      "title": "Already kept",
+                      "status": 409,
+                      "code": "must_keep",
+                      "detail": "This company is needed to keep your account working, so it is already kept: no deletion request is offered for it.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "company_excluded": {
+                    "summary": "Company excluded",
+                    "value": {
+                      "type": "urn:erase:problem:company_excluded",
+                      "title": "Company excluded",
+                      "status": 409,
+                      "code": "company_excluded",
+                      "detail": "You marked this company as not yours, so there is nothing to keep.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/inboxes": {
+      "get": {
+        "operationId": "listInboxes",
+        "tags": [
+          "Inboxes"
+        ],
+        "summary": "The user’s inboxes",
+        "responses": {
+          "200": {
+            "description": "Inboxes, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxList"
+                },
+                "example": {
+                  "inboxes": [
+                    {
+                      "id": "inb_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                      "email": "asha.mail@example.com",
+                      "status": "connected",
+                      "connectedAt": "2026-11-20T09:30:00.000Z",
+                      "lastScanAt": "2026-11-22T10:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/inboxes/connect/start": {
+      "post": {
+        "operationId": "startInboxConnect",
+        "tags": [
+          "Inboxes"
+        ],
+        "summary": "Start connecting an inbox",
+        "description": "Show the \"what we read, what we keep, what we never do\" panel first, then call this and send the browser to `authorizationUrl`. Asks Google for Gmail read-only (header metadata for the scan) and send (used only after the user approves a request). Sets the `erase_oauth_state` cookie. Up to 5 inboxes per user.",
+        "responses": {
+          "200": {
+            "description": "Where to send the browser",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectStart"
+                },
+                "example": {
+                  "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth?client_id=example&state=example"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Inbox limit reached",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "inbox_limit": {
+                    "summary": "Inbox limit reached",
+                    "value": {
+                      "type": "urn:erase:problem:inbox_limit",
+                      "title": "Inbox limit reached",
+                      "status": 409,
+                      "code": "inbox_limit",
+                      "detail": "You can connect up to 5 inboxes.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/inboxes/{id}": {
+      "delete": {
+        "operationId": "disconnectInbox",
+        "tags": [
+          "Inboxes"
+        ],
+        "summary": "Disconnect an inbox",
+        "description": "Revokes the Google token, drops the stored token, stops scans and starts the 30-day retention clock.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`inb_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^inb_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Disconnected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxDisconnected"
+                },
+                "example": {
+                  "status": "disconnected",
+                  "revokedAtGoogle": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such inbox",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/inboxes/{id}/scan": {
+      "post": {
+        "operationId": "startScan",
+        "tags": [
+          "Inboxes"
+        ],
+        "summary": "Scan an inbox for companies",
+        "description": "Reads message headers only (never bodies) in the background. Idempotent: while a scan is active, the same call returns it (200) instead of starting another (202). Poll `GET /v1/inboxes/{id}/scan` for progress.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`inb_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^inb_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A scan is already running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResponse"
+                },
+                "example": {
+                  "scan": {
+                    "id": "scn_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "inboxId": "inb_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "status": "running",
+                    "progressPct": 40,
+                    "foundCount": 12,
+                    "startedAt": "2026-11-22T10:00:00.000Z",
+                    "finishedAt": null,
+                    "errorCode": null
+                  }
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Scan started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResponse"
+                },
+                "example": {
+                  "scan": {
+                    "id": "scn_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "inboxId": "inb_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "status": "queued",
+                    "progressPct": 0,
+                    "foundCount": 0,
+                    "startedAt": null,
+                    "finishedAt": null,
+                    "errorCode": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such inbox",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The inbox is not connected",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "inbox_not_connected": {
+                    "summary": "Inbox is not connected",
+                    "value": {
+                      "type": "urn:erase:problem:inbox_not_connected",
+                      "title": "Inbox is not connected",
+                      "status": 409,
+                      "code": "inbox_not_connected",
+                      "detail": "Reconnect this inbox to scan it.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "getScan",
+        "tags": [
+          "Inboxes"
+        ],
+        "summary": "The latest scan of an inbox",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`inb_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^inb_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The latest scan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResponse"
+                },
+                "example": {
+                  "scan": {
+                    "id": "scn_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "inboxId": "inb_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "status": "done",
+                    "progressPct": 100,
+                    "foundCount": 28,
+                    "startedAt": "2026-11-20T09:30:00.000Z",
+                    "finishedAt": "2026-11-22T10:00:00.000Z",
+                    "errorCode": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such inbox, or no scan yet",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "operationId": "getMe",
+        "tags": [
+          "Account"
+        ],
+        "summary": "The signed-in user, and the CSRF token",
+        "description": "Call this after sign-in and keep `csrfToken`: every state-changing call must send it in `x-csrf-token`.",
+        "responses": {
+          "200": {
+            "description": "The user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                },
+                "example": {
+                  "id": "usr_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                  "email": "asha@example.com",
+                  "name": "Asha Rao",
+                  "csrfToken": "example-csrf-token-not-a-real-token"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteMe",
+        "tags": [
+          "Account"
+        ],
+        "summary": "Delete the account",
+        "description": "Starts account deletion: every session ends at once, Gmail access is revoked and dropped, and the personal fields are replaced. Rows that refer to the user are removed by a later purge job.",
+        "responses": {
+          "202": {
+            "description": "Deletion started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeleting"
+                },
+                "example": {
+                  "status": "deleting"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/requests": {
+      "get": {
+        "operationId": "listRequests",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "The user’s requests",
+        "responses": {
+          "200": {
+            "description": "Requests, most recently changed first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestList"
+                },
+                "example": {
+                  "requests": [
+                    {
+                      "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                      "status": "drafted",
+                      "company": {
+                        "name": "Sample Shop",
+                        "mustKeep": false
+                      },
+                      "createdAt": "2026-11-22T10:00:00.000Z",
+                      "updatedAt": "2026-11-22T10:00:00.000Z",
+                      "sentAt": null,
+                      "dueAt": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/requests/drafts": {
+      "post": {
+        "operationId": "createRequestDrafts",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Draft requests for companies",
+        "description": "Makes a draft request for each company, from a fixed template. Always 200: each company has its own outcome. `created` and `existing` are email requests; `use_form` is a web-form company (the draft is for copy and paste, with `formUrl`); `kept` means the user chose to keep it; `blocked` has a `reason` (`must_keep`, `no_contact`, `company_excluded`, `not_found`...). Nothing is sent and no deletion is promised: a draft is a polite request.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userCompanyIds": {
+                    "minItems": 1,
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^ucm_[0-9A-HJKMNP-TV-Z]{26}$",
+                      "description": "Prefixed ULID (`ucm_` followed by 26 characters)"
+                    }
+                  }
+                },
+                "required": [
+                  "userCompanyIds"
+                ],
+                "additionalProperties": false
+              },
+              "example": {
+                "userCompanyIds": [
+                  "ucm_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                  "ucm_01J8Z3K9M2Q7R6T5V4W3X2Y1ZB",
+                  "ucm_01J8Z3K9M2Q7R6T5V4W3X2Y1ZC"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One outcome per company",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateDraftsResponse"
+                },
+                "example": {
+                  "results": [
+                    {
+                      "userCompanyId": "ucm_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                      "outcome": "created",
+                      "requestId": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                      "selfServeUrl": "https://example.com/account/delete"
+                    },
+                    {
+                      "userCompanyId": "ucm_01J8Z3K9M2Q7R6T5V4W3X2Y1ZB",
+                      "outcome": "use_form",
+                      "requestId": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZB",
+                      "formUrl": "https://example.com/privacy/request",
+                      "message": "Sample Forms Co takes requests through a web form, so Erase.me cannot send this by email. Copy the draft into the form. It is shown here for that."
+                    },
+                    {
+                      "userCompanyId": "ucm_01J8Z3K9M2Q7R6T5V4W3X2Y1ZC",
+                      "outcome": "kept",
+                      "message": "You chose to keep Sample Shop, so Erase.me makes no request for it. Undo \"keep\" to continue."
+                    },
+                    {
+                      "userCompanyId": "ucm_01J8Z3K9M2Q7R6T5V4W3X2Y1ZD",
+                      "outcome": "blocked",
+                      "reason": "must_keep",
+                      "message": "Sample Account Provider is needed to keep your account working, so Erase.me does not offer a deletion request for it. If you stop using it, you can close the account with the company directly."
+                    },
+                    {
+                      "userCompanyId": "ucm_01J8Z3K9M2Q7R6T5V4W3X2Y1ZE",
+                      "outcome": "blocked",
+                      "reason": "no_contact",
+                      "message": "We do not have a verified grievance contact for Sample Bank yet, so this request is blocked. We have noted it so the contact can be found. Nothing is sent without one."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/requests/{id}": {
+      "get": {
+        "operationId": "getRequest",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "A request with its current draft",
+        "description": "Includes the draft the user would approve, the event history, whether it can be sent, and everything blocking it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`req_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestView"
+                },
+                "example": {
+                  "request": {
+                    "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "status": "drafted",
+                    "createdAt": "2026-11-22T10:00:00.000Z",
+                    "updatedAt": "2026-11-22T10:00:00.000Z",
+                    "sentAt": null,
+                    "dueAt": null
+                  },
+                  "company": {
+                    "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "name": "Sample Shop",
+                    "mustKeep": false,
+                    "kept": false,
+                    "selfServeUrl": "https://example.com/account/delete"
+                  },
+                  "contact": {
+                    "channel": "email",
+                    "formUrl": null
+                  },
+                  "useForm": false,
+                  "draft": {
+                    "version": 1,
+                    "to": "grievance@example.com",
+                    "subject": "Request to erase my personal data",
+                    "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                    "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                    "createdBy": "template",
+                    "createdAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "approved": false,
+                  "events": [
+                    {
+                      "type": "drafted",
+                      "actor": "system",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1,
+                        "createdBy": "template"
+                      }
+                    }
+                  ],
+                  "canSend": false,
+                  "blockers": [
+                    {
+                      "code": "draft_unsafe",
+                      "message": "The text still has an [OPEN] placeholder. Replace it with the wording you want to send, or remove the line.",
+                      "findings": [
+                        "open_placeholder"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such request for this user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/requests/{id}/approve": {
+      "post": {
+        "operationId": "approveRequest",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Approve the draft",
+        "description": "Records the user’s approval of exactly the draft version they were shown (`draftHash`). The guards run again: a must-keep or kept company, a missing contact, a web-form company, an ID-like number or an unresolved [OPEN] placeholder all refuse it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`req_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "draftHash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "description": "The hash of the version the user was shown"
+                  }
+                },
+                "required": [
+                  "draftHash"
+                ],
+                "additionalProperties": false
+              },
+              "example": {
+                "draftHash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approved (or already approved)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestView"
+                },
+                "example": {
+                  "request": {
+                    "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "status": "approved",
+                    "createdAt": "2026-11-22T10:00:00.000Z",
+                    "updatedAt": "2026-11-22T10:00:00.000Z",
+                    "sentAt": null,
+                    "dueAt": null
+                  },
+                  "company": {
+                    "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "name": "Sample Shop",
+                    "mustKeep": false,
+                    "kept": false,
+                    "selfServeUrl": "https://example.com/account/delete"
+                  },
+                  "contact": {
+                    "channel": "email",
+                    "formUrl": null
+                  },
+                  "useForm": false,
+                  "draft": {
+                    "version": 1,
+                    "to": "grievance@example.com",
+                    "subject": "Request to erase my personal data",
+                    "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                    "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                    "createdBy": "template",
+                    "createdAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "approved": true,
+                  "events": [
+                    {
+                      "type": "drafted",
+                      "actor": "system",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1,
+                        "createdBy": "template"
+                      }
+                    }
+                  ],
+                  "canSend": true,
+                  "blockers": []
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such request for this user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not approvable now",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "draft_changed": {
+                    "summary": "The draft changed",
+                    "value": {
+                      "type": "urn:erase:problem:draft_changed",
+                      "title": "The draft changed",
+                      "status": 409,
+                      "code": "draft_changed",
+                      "detail": "The text you approved is not the latest version. Review it again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "must_keep": {
+                    "summary": "No deletion request is offered for this company",
+                    "value": {
+                      "type": "urn:erase:problem:must_keep",
+                      "title": "No deletion request is offered for this company",
+                      "status": 409,
+                      "code": "must_keep",
+                      "detail": "Sample Account Provider is needed to keep your account working, so Erase.me does not offer a deletion request for it. If you stop using it, you can close the account with the company directly.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "kept": {
+                    "summary": "You chose to keep this company",
+                    "value": {
+                      "type": "urn:erase:problem:kept",
+                      "title": "You chose to keep this company",
+                      "status": 409,
+                      "code": "kept",
+                      "detail": "You chose to keep Sample Shop, so Erase.me makes no request for it. Undo \"keep\" to continue.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "no_contact": {
+                    "summary": "No verified contact for this company",
+                    "value": {
+                      "type": "urn:erase:problem:no_contact",
+                      "title": "No verified contact for this company",
+                      "status": 409,
+                      "code": "no_contact",
+                      "detail": "We do not have a verified grievance contact for Sample Bank yet, so this request is blocked. We have noted it so the contact can be found. Nothing is sent without one.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "use_form": {
+                    "summary": "Use the company’s web form",
+                    "value": {
+                      "type": "urn:erase:problem:use_form",
+                      "title": "Use the company’s web form",
+                      "status": 409,
+                      "code": "use_form",
+                      "detail": "Sample Forms Co takes requests through a web form, so Erase.me cannot send this by email. Copy the draft into the form. It is shown here for that.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "formUrl": "https://example.com/privacy/request",
+                      "selfServeUrl": "https://example.com/account/delete"
+                    }
+                  },
+                  "invalid_transition": {
+                    "summary": "This request cannot move to that state",
+                    "value": {
+                      "type": "urn:erase:problem:invalid_transition",
+                      "title": "This request cannot move to that state",
+                      "status": 409,
+                      "code": "invalid_transition",
+                      "detail": "A request that is closed cannot become approved.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemUseForm"
+            ]
+          },
+          "422": {
+            "description": "The draft cannot be used yet",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "draft_unsafe": {
+                    "summary": "The draft cannot be used yet",
+                    "value": {
+                      "type": "urn:erase:problem:draft_unsafe",
+                      "title": "The draft cannot be used yet",
+                      "status": 422,
+                      "code": "draft_unsafe",
+                      "detail": "The text looks like it contains a PAN-like number. Erase.me does not put ID numbers in requests. Remove it and try again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "findings": [
+                        "pan"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemDraftUnsafe"
+            ]
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/requests/{id}/close": {
+      "post": {
+        "operationId": "closeRequest",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Close a request before it is sent",
+        "description": "Discards a drafted or approved request and frees the company for a new one.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`req_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestView"
+                },
+                "example": {
+                  "request": {
+                    "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "status": "closed",
+                    "createdAt": "2026-11-22T10:00:00.000Z",
+                    "updatedAt": "2026-11-22T10:00:00.000Z",
+                    "sentAt": null,
+                    "dueAt": null
+                  },
+                  "company": {
+                    "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "name": "Sample Shop",
+                    "mustKeep": false,
+                    "kept": false,
+                    "selfServeUrl": "https://example.com/account/delete"
+                  },
+                  "contact": {
+                    "channel": "email",
+                    "formUrl": null
+                  },
+                  "useForm": false,
+                  "draft": {
+                    "version": 1,
+                    "to": "grievance@example.com",
+                    "subject": "Request to erase my personal data",
+                    "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                    "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                    "createdBy": "template",
+                    "createdAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "approved": false,
+                  "events": [
+                    {
+                      "type": "drafted",
+                      "actor": "system",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1,
+                        "createdBy": "template"
+                      }
+                    }
+                  ],
+                  "canSend": false,
+                  "blockers": [
+                    {
+                      "code": "draft_unsafe",
+                      "message": "The text still has an [OPEN] placeholder. Replace it with the wording you want to send, or remove the line.",
+                      "findings": [
+                        "open_placeholder"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such request for this user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Cannot be closed now",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "request_not_closable": {
+                    "summary": "This request cannot be closed here",
+                    "value": {
+                      "type": "urn:erase:problem:request_not_closable",
+                      "title": "This request cannot be closed here",
+                      "status": 409,
+                      "code": "request_not_closable",
+                      "detail": "A request that is sent cannot be closed before sending.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "send_in_progress": {
+                    "summary": "This request is being sent",
+                    "value": {
+                      "type": "urn:erase:problem:send_in_progress",
+                      "title": "This request is being sent",
+                      "status": 409,
+                      "code": "send_in_progress",
+                      "detail": "It cannot be closed while it is being sent.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/requests/{id}/draft": {
+      "patch": {
+        "operationId": "editRequestDraft",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Edit the draft",
+        "description": "Creates a new draft version with a new hash and puts an approved request back to `drafted`: the earlier approval no longer counts. The recipient cannot be edited. Text containing an ID-like number is refused and not stored. Refused while a send is running or after it was sent.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`req_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "baseHash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "description": "The hash of the version being edited. If it is no longer the latest the edit is refused (409 `draft_changed`)."
+                  },
+                  "subject": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "pattern": "^[^\\r\\n]+$"
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  }
+                },
+                "required": [
+                  "baseHash",
+                  "subject",
+                  "body"
+                ],
+                "additionalProperties": false
+              },
+              "example": {
+                "baseHash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                "subject": "Request to erase my personal data",
+                "body": "I would like to ask Sample Shop to erase the personal data it holds about me."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request with its new draft version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestView"
+                },
+                "example": {
+                  "request": {
+                    "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "status": "drafted",
+                    "createdAt": "2026-11-22T10:00:00.000Z",
+                    "updatedAt": "2026-11-22T10:00:00.000Z",
+                    "sentAt": null,
+                    "dueAt": null
+                  },
+                  "company": {
+                    "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "name": "Sample Shop",
+                    "mustKeep": false,
+                    "kept": false,
+                    "selfServeUrl": "https://example.com/account/delete"
+                  },
+                  "contact": {
+                    "channel": "email",
+                    "formUrl": null
+                  },
+                  "useForm": false,
+                  "draft": {
+                    "version": 2,
+                    "to": "grievance@example.com",
+                    "subject": "Request to erase my personal data",
+                    "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                    "hash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                    "createdBy": "user",
+                    "createdAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "approved": false,
+                  "events": [
+                    {
+                      "type": "drafted",
+                      "actor": "system",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1,
+                        "createdBy": "template"
+                      }
+                    }
+                  ],
+                  "canSend": false,
+                  "blockers": [
+                    {
+                      "code": "draft_unsafe",
+                      "message": "The text still has an [OPEN] placeholder. Replace it with the wording you want to send, or remove the line.",
+                      "findings": [
+                        "open_placeholder"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such request for this user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The draft cannot be edited now",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "draft_changed": {
+                    "summary": "The draft changed",
+                    "value": {
+                      "type": "urn:erase:problem:draft_changed",
+                      "title": "The draft changed",
+                      "status": 409,
+                      "code": "draft_changed",
+                      "detail": "The text you approved is not the latest version. Review it again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "request_not_editable": {
+                    "summary": "This request can no longer be edited",
+                    "value": {
+                      "type": "urn:erase:problem:request_not_editable",
+                      "title": "This request can no longer be edited",
+                      "status": 409,
+                      "code": "request_not_editable",
+                      "detail": "A request that is sent cannot be edited.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "send_in_progress": {
+                    "summary": "This request is being sent",
+                    "value": {
+                      "type": "urn:erase:problem:send_in_progress",
+                      "title": "This request is being sent",
+                      "status": 409,
+                      "code": "send_in_progress",
+                      "detail": "It cannot be edited while it is being sent or after it was sent.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The text looks like it contains an ID number",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "draft_unsafe": {
+                    "summary": "The draft cannot be used yet",
+                    "value": {
+                      "type": "urn:erase:problem:draft_unsafe",
+                      "title": "The draft cannot be used yet",
+                      "status": 422,
+                      "code": "draft_unsafe",
+                      "detail": "The text looks like it contains a PAN-like number. Erase.me does not put ID numbers in requests. Remove it and try again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "findings": [
+                        "pan"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemDraftUnsafe"
+            ]
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/requests/{id}/send": {
+      "post": {
+        "operationId": "sendRequest",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Send an approved request from the user’s Gmail",
+        "description": "Needs an `Idempotency-Key` header: a repeat with the same key returns the first answer and never sends twice. Needs a user approval of the exact current draft (also enforced in the database), a verified contact, a company that is neither must-keep nor kept, and text without ID-like numbers or an [OPEN] placeholder. In development and test the sender is fake and the response says so (`delivery: \"fake\"`, with a `notice`); real sending stays off until it is explicitly enabled. If Gmail does not confirm, the request is left unsent and the user is told to check the Sent folder: it is never retried automatically (`send_outcome_unknown`).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`req_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "A client-chosen key, 8 to 128 characters (letters, digits and . _ : -). Reuse the same key to retry the same send.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sent (or the stored answer for a repeated key)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendResponse"
+                },
+                "example": {
+                  "request": {
+                    "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "status": "sent",
+                    "sentAt": "2026-11-22T10:00:00.000Z",
+                    "dueAt": "2026-12-22T10:00:00.000Z"
+                  },
+                  "delivery": "fake",
+                  "notice": "No email was sent. This is a development send to the fake sender."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "idempotency_key_required": {
+                    "summary": "Idempotency-Key required",
+                    "value": {
+                      "type": "urn:erase:problem:idempotency_key_required",
+                      "title": "Idempotency-Key required",
+                      "status": 400,
+                      "code": "idempotency_key_required",
+                      "detail": "Send an Idempotency-Key header so a retry cannot send twice.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such request for this user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not sendable now",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "approval_required": {
+                    "summary": "Approval needed",
+                    "value": {
+                      "type": "urn:erase:problem:approval_required",
+                      "title": "Approval needed",
+                      "status": 409,
+                      "code": "approval_required",
+                      "detail": "Review the draft and approve it before sending. Nothing is sent without your approval.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "use_form": {
+                    "summary": "Use the company’s web form",
+                    "value": {
+                      "type": "urn:erase:problem:use_form",
+                      "title": "Use the company’s web form",
+                      "status": 409,
+                      "code": "use_form",
+                      "detail": "Sample Forms Co takes requests through a web form, so Erase.me cannot send this by email. Copy the draft into the form. It is shown here for that.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "formUrl": "https://example.com/privacy/request",
+                      "selfServeUrl": "https://example.com/account/delete"
+                    }
+                  },
+                  "must_keep": {
+                    "summary": "No deletion request is offered for this company",
+                    "value": {
+                      "type": "urn:erase:problem:must_keep",
+                      "title": "No deletion request is offered for this company",
+                      "status": 409,
+                      "code": "must_keep",
+                      "detail": "Sample Account Provider is needed to keep your account working, so Erase.me does not offer a deletion request for it. If you stop using it, you can close the account with the company directly.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "kept": {
+                    "summary": "You chose to keep this company",
+                    "value": {
+                      "type": "urn:erase:problem:kept",
+                      "title": "You chose to keep this company",
+                      "status": 409,
+                      "code": "kept",
+                      "detail": "You chose to keep Sample Shop, so Erase.me makes no request for it. Undo \"keep\" to continue.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "no_contact": {
+                    "summary": "No verified contact for this company",
+                    "value": {
+                      "type": "urn:erase:problem:no_contact",
+                      "title": "No verified contact for this company",
+                      "status": 409,
+                      "code": "no_contact",
+                      "detail": "We do not have a verified grievance contact for Sample Bank yet, so this request is blocked. We have noted it so the contact can be found. Nothing is sent without one.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "already_sent": {
+                    "summary": "Already sent",
+                    "value": {
+                      "type": "urn:erase:problem:already_sent",
+                      "title": "Already sent",
+                      "status": 409,
+                      "code": "already_sent",
+                      "detail": "This request was already sent.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "send_in_progress": {
+                    "summary": "This request is being sent",
+                    "value": {
+                      "type": "urn:erase:problem:send_in_progress",
+                      "title": "This request is being sent",
+                      "status": 409,
+                      "code": "send_in_progress",
+                      "detail": "A send with this key is already running or its result is unknown. Check the Sent folder in Gmail.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "inbox_not_connected": {
+                    "summary": "Inbox not connected",
+                    "value": {
+                      "type": "urn:erase:problem:inbox_not_connected",
+                      "title": "Inbox not connected",
+                      "status": 409,
+                      "code": "inbox_not_connected",
+                      "detail": "The inbox this company was found in is not connected. Reconnect it to send.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemUseForm"
+            ]
+          },
+          "422": {
+            "description": "Unsafe draft, or a reused key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "draft_unsafe": {
+                    "summary": "The draft cannot be used yet",
+                    "value": {
+                      "type": "urn:erase:problem:draft_unsafe",
+                      "title": "The draft cannot be used yet",
+                      "status": 422,
+                      "code": "draft_unsafe",
+                      "detail": "The text looks like it contains a PAN-like number. Erase.me does not put ID numbers in requests. Remove it and try again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "findings": [
+                        "pan"
+                      ]
+                    }
+                  },
+                  "idempotency_key_reuse": {
+                    "summary": "Idempotency key already used",
+                    "value": {
+                      "type": "urn:erase:problem:idempotency_key_reuse",
+                      "title": "Idempotency key already used",
+                      "status": 422,
+                      "code": "idempotency_key_reuse",
+                      "detail": "This key was used for a different request. Use a new key.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemDraftUnsafe"
+            ]
+          },
+          "429": {
+            "description": "Daily limit reached",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "daily_cap_reached": {
+                    "summary": "Daily limit reached",
+                    "value": {
+                      "type": "urn:erase:problem:daily_cap_reached",
+                      "title": "Daily limit reached",
+                      "status": 429,
+                      "code": "daily_cap_reached",
+                      "detail": "You have reached the daily limit for sent requests. Try again tomorrow.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The message was not sent, or the outcome is unknown",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "send_failed": {
+                    "summary": "The message was not sent",
+                    "value": {
+                      "type": "urn:erase:problem:send_failed",
+                      "title": "The message was not sent",
+                      "status": 502,
+                      "code": "send_failed",
+                      "detail": "Gmail did not accept the message, so nothing was sent. You can try again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "send_outcome_unknown": {
+                    "summary": "We could not confirm the message was sent",
+                    "value": {
+                      "type": "urn:erase:problem:send_outcome_unknown",
+                      "title": "We could not confirm the message was sent",
+                      "status": 502,
+                      "code": "send_outcome_unknown",
+                      "detail": "Check the Sent folder in Gmail before doing anything else. Erase.me has not marked this request as sent and will not retry it on its own.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sending is not available",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "real_send_blocked": {
+                    "summary": "Sending is not available",
+                    "value": {
+                      "type": "urn:erase:problem:real_send_blocked",
+                      "title": "Sending is not available",
+                      "status": 503,
+                      "code": "real_send_blocked",
+                      "detail": "Real sending stays off until the statute citation in the draft template has been verified.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "send_disabled": {
+                    "summary": "Sending is not available",
+                    "value": {
+                      "type": "urn:erase:problem:send_disabled",
+                      "title": "Sending is not available",
+                      "status": 503,
+                      "code": "send_disabled",
+                      "detail": "Sending is not switched on in this environment.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "erase_session",
+        "description": "Set by the sign-in callback. HttpOnly. Send with credentials included."
+      },
+      "csrfToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-csrf-token",
+        "description": "The `csrfToken` from `GET /v1/me`. Required on every state-changing call."
+      }
+    },
+    "schemas": {
+      "AccountDeleting": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "deleting"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "CompanyItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^ucm_[0-9A-HJKMNP-TV-Z]{26}$",
+            "description": "The detected-company id. Use it for keep and for creating a request."
+          },
+          "company": {
+            "type": "string",
+            "description": "Display name, from the catalog or cleaned from the sender domain"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "firstSeen": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Calendar date, YYYY-MM-DD"
+          },
+          "lastSeen": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Calendar date, YYYY-MM-DD"
+          },
+          "signals": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "welcome",
+                "receipt",
+                "verify",
+                "transactional",
+                "list_unsubscribe",
+                "newsletter"
+              ]
+            },
+            "description": "The header signals this result is based on"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "low"
+            ],
+            "description": "`high` means the company likely holds data about the user; `low` means it may. Never certainty."
+          },
+          "mustKeep": {
+            "type": "boolean",
+            "description": "Needed to keep an account working (for example the account provider). No deletion request is offered."
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "loan_app",
+              "wallet_payments",
+              "broker_investing",
+              "credit",
+              "ecommerce",
+              "travel",
+              "streaming",
+              "education",
+              "social",
+              "saas",
+              "other"
+            ]
+          },
+          "selfServeUrl": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The company’s own account-deletion page, shown before a request by email. Never set for a must-keep company."
+          },
+          "kept": {
+            "type": "boolean",
+            "description": "The user chose \"keep\": no request is offered, and a drafted or approved one is refused at approve and send until cleared"
+          },
+          "activity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "looks_in_use",
+                  "looks_unused"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A hint from message dates: a receipt or similar lately, or nothing for a long time. Null when neither. A hint, never a decision."
+          },
+          "openRequest": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$",
+                    "description": "Prefixed ULID (`req_` followed by 26 characters)"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "drafted",
+                      "approved",
+                      "sent",
+                      "replied_deleted",
+                      "replied_info_requested",
+                      "replied_refused",
+                      "no_reply",
+                      "closed",
+                      "bounced"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request that is not yet closed or bounced, if any"
+          }
+        },
+        "required": [
+          "id",
+          "company",
+          "domain",
+          "firstSeen",
+          "lastSeen",
+          "signals",
+          "confidence",
+          "mustKeep",
+          "category",
+          "selfServeUrl",
+          "kept",
+          "activity",
+          "openRequest"
+        ],
+        "additionalProperties": false
+      },
+      "CompanyList": {
+        "type": "object",
+        "properties": {
+          "companies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompanyItem"
+            }
+          }
+        },
+        "required": [
+          "companies"
+        ],
+        "additionalProperties": false
+      },
+      "CompanyResponse": {
+        "type": "object",
+        "properties": {
+          "company": {
+            "$ref": "#/components/schemas/CompanyItem"
+          }
+        },
+        "required": [
+          "company"
+        ],
+        "additionalProperties": false
+      },
+      "ConnectStart": {
+        "type": "object",
+        "properties": {
+          "authorizationUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Send the browser here. It is Google’s consent screen for Gmail read and send access."
+          }
+        },
+        "required": [
+          "authorizationUrl"
+        ],
+        "additionalProperties": false
+      },
+      "CreateDraftsResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DraftOutcome"
+            }
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "additionalProperties": false
+      },
+      "DraftOutcome": {
+        "type": "object",
+        "properties": {
+          "userCompanyId": {
+            "type": "string",
+            "pattern": "^ucm_[0-9A-HJKMNP-TV-Z]{26}$",
+            "description": "Prefixed ULID (`ucm_` followed by 26 characters)"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "created",
+              "existing",
+              "use_form",
+              "kept",
+              "blocked"
+            ],
+            "description": "`created` and `existing`: an email request. `use_form`: the company takes requests through a web form, so the request holds a draft to copy and `formUrl` says where to paste it. `kept`: the user chose to keep this company, so no request is made. `blocked`: see `reason`."
+          },
+          "requestId": {
+            "type": "string",
+            "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$",
+            "description": "Prefixed ULID (`req_` followed by 26 characters)"
+          },
+          "reason": {
+            "description": "Why a request was not made, when `outcome` is `blocked`",
+            "type": "string",
+            "enum": [
+              "company_excluded",
+              "must_keep",
+              "kept",
+              "no_contact",
+              "contact_bounced",
+              "contact_changed",
+              "use_form",
+              "draft_integrity",
+              "draft_unsafe",
+              "send_disabled",
+              "real_send_blocked",
+              "not_found"
+            ]
+          },
+          "message": {
+            "description": "A sentence for the person: why it was blocked, kept or needs the form. Makes no promise about deletion.",
+            "type": "string"
+          },
+          "formUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "selfServeUrl": {
+            "description": "The company’s own account-deletion page, when it has one",
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "userCompanyId",
+          "outcome"
+        ],
+        "additionalProperties": false
+      },
+      "Inbox": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^inb_[0-9A-HJKMNP-TV-Z]{26}$",
+            "description": "Prefixed ULID (`inb_` followed by 26 characters)"
+          },
+          "email": {
+            "type": "string",
+            "description": "The connected Gmail address"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "connected",
+              "disconnected",
+              "error"
+            ]
+          },
+          "connectedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp, ISO 8601"
+          },
+          "lastScanAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "status",
+          "connectedAt",
+          "lastScanAt"
+        ],
+        "additionalProperties": false
+      },
+      "InboxDisconnected": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "disconnected"
+          },
+          "revokedAtGoogle": {
+            "type": "boolean",
+            "description": "False when Google could not be reached: the inbox is still disconnected here, so no further calls are made"
+          }
+        },
+        "required": [
+          "status",
+          "revokedAtGoogle"
+        ],
+        "additionalProperties": false
+      },
+      "InboxList": {
+        "type": "object",
+        "properties": {
+          "inboxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Inbox"
+            }
+          }
+        },
+        "required": [
+          "inboxes"
+        ],
+        "additionalProperties": false
+      },
+      "Me": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$",
+            "description": "Prefixed ULID (`usr_` followed by 26 characters)"
+          },
+          "email": {
+            "type": "string",
+            "description": "The sign-in address"
+          },
+          "name": {
+            "type": "string"
+          },
+          "csrfToken": {
+            "type": "string",
+            "description": "Send this in the `x-csrf-token` header on every POST, PUT, PATCH and DELETE"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "csrfToken"
+        ],
+        "additionalProperties": false
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "`urn:erase:problem:<code>`"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "validation_failed",
+              "malformed_request",
+              "idempotency_key_required",
+              "idempotency_key_invalid",
+              "unauthorized",
+              "forbidden",
+              "not_found",
+              "inbox_limit",
+              "inbox_not_connected",
+              "already_sent",
+              "approval_required",
+              "draft_changed",
+              "fictional_company",
+              "invalid_transition",
+              "request_not_closable",
+              "request_not_editable",
+              "send_in_progress",
+              "company_excluded",
+              "must_keep",
+              "kept",
+              "no_contact",
+              "contact_bounced",
+              "contact_changed",
+              "use_form",
+              "draft_integrity",
+              "draft_unsafe",
+              "idempotency_key_reuse",
+              "rate_limited",
+              "daily_cap_reached",
+              "internal_error",
+              "send_failed",
+              "send_outcome_unknown",
+              "auth_not_configured",
+              "encryption_not_configured",
+              "send_disabled",
+              "real_send_blocked",
+              "not_ready"
+            ],
+            "description": "A stable machine-readable code. Branch on this, not on `title` or `detail`."
+          },
+          "detail": {
+            "description": "A sentence a person can act on. Never contains draft text, addresses or tokens.",
+            "type": "string"
+          },
+          "instance": {
+            "description": "The request path, without the query string",
+            "type": "string"
+          },
+          "requestId": {
+            "description": "The `x-request-id` of this call, for support",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "additionalProperties": {},
+        "description": "RFC 9457 problem details. Some codes add fields: `use_form` adds `formUrl` and `selfServeUrl` (see ProblemUseForm), `draft_unsafe` adds `findings` (ProblemDraftUnsafe), `validation_failed` adds `errors` (ProblemValidation)."
+      },
+      "ProblemDraftUnsafe": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "`urn:erase:problem:<code>`"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string",
+            "const": "draft_unsafe"
+          },
+          "detail": {
+            "description": "A sentence a person can act on. Never contains draft text, addresses or tokens.",
+            "type": "string"
+          },
+          "instance": {
+            "description": "The request path, without the query string",
+            "type": "string"
+          },
+          "requestId": {
+            "description": "The `x-request-id` of this call, for support",
+            "type": "string"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "aadhaar",
+                "pan",
+                "passport",
+                "voter_id",
+                "gstin",
+                "card",
+                "open_placeholder"
+              ]
+            },
+            "description": "Kinds of problem found, never the text itself"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "findings"
+        ],
+        "additionalProperties": {}
+      },
+      "ProblemUseForm": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "`urn:erase:problem:<code>`"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string",
+            "const": "use_form"
+          },
+          "detail": {
+            "description": "A sentence a person can act on. Never contains draft text, addresses or tokens.",
+            "type": "string"
+          },
+          "instance": {
+            "description": "The request path, without the query string",
+            "type": "string"
+          },
+          "requestId": {
+            "description": "The `x-request-id` of this call, for support",
+            "type": "string"
+          },
+          "formUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "The company’s web form. Copy the draft and submit it there."
+          },
+          "selfServeUrl": {
+            "description": "The company’s own account-deletion page, if the catalog has one",
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "formUrl"
+        ],
+        "additionalProperties": {}
+      },
+      "ProblemValidation": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "`urn:erase:problem:<code>`"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string",
+            "const": "validation_failed"
+          },
+          "detail": {
+            "description": "A sentence a person can act on. Never contains draft text, addresses or tokens.",
+            "type": "string"
+          },
+          "instance": {
+            "description": "The request path, without the query string",
+            "type": "string"
+          },
+          "requestId": {
+            "description": "The `x-request-id` of this call, for support",
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "message"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Where and which rule failed. Submitted values are never echoed."
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "errors"
+        ],
+        "additionalProperties": {}
+      },
+      "RequestList": {
+        "type": "object",
+        "properties": {
+          "requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequestListItem"
+            }
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "additionalProperties": false
+      },
+      "RequestListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$",
+            "description": "Prefixed ULID (`req_` followed by 26 characters)"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "drafted",
+              "approved",
+              "sent",
+              "replied_deleted",
+              "replied_info_requested",
+              "replied_refused",
+              "no_reply",
+              "closed",
+              "bounced"
+            ]
+          },
+          "company": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "mustKeep": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "mustKeep"
+            ],
+            "additionalProperties": false
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp, ISO 8601"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp, ISO 8601"
+          },
+          "sentAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dueAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "company",
+          "createdAt",
+          "updatedAt",
+          "sentAt",
+          "dueAt"
+        ],
+        "additionalProperties": false
+      },
+      "RequestView": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$",
+                "description": "Prefixed ULID (`req_` followed by 26 characters)"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "drafted",
+                  "approved",
+                  "sent",
+                  "replied_deleted",
+                  "replied_info_requested",
+                  "replied_refused",
+                  "no_reply",
+                  "closed",
+                  "bounced"
+                ]
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              },
+              "sentAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "UTC timestamp, ISO 8601"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "dueAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "UTC timestamp, ISO 8601"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "createdAt",
+              "updatedAt",
+              "sentAt",
+              "dueAt"
+            ],
+            "additionalProperties": false
+          },
+          "company": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^cmp_[0-9A-HJKMNP-TV-Z]{26}$",
+                "description": "Prefixed ULID (`cmp_` followed by 26 characters)"
+              },
+              "name": {
+                "type": "string"
+              },
+              "mustKeep": {
+                "type": "boolean"
+              },
+              "kept": {
+                "type": "boolean"
+              },
+              "selfServeUrl": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "mustKeep",
+              "kept",
+              "selfServeUrl"
+            ],
+            "additionalProperties": false
+          },
+          "contact": {
+            "type": "object",
+            "properties": {
+              "channel": {
+                "type": "string",
+                "enum": [
+                  "email",
+                  "web_form"
+                ]
+              },
+              "formUrl": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "channel",
+              "formUrl"
+            ],
+            "additionalProperties": false,
+            "description": "How the company takes requests. For `web_form` the draft is for copy and paste and cannot be sent by email."
+          },
+          "useForm": {
+            "type": "boolean"
+          },
+          "draft": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "to": {
+                "type": "string",
+                "description": "The verified grievance address, or the form URL for a web-form company. Fixed: it cannot be edited."
+              },
+              "subject": {
+                "type": "string"
+              },
+              "body": {
+                "type": "string"
+              },
+              "hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$",
+                "description": "sha256 (hex) of the recipient, subject and body of a draft, exactly as shown"
+              },
+              "createdBy": {
+                "type": "string",
+                "enum": [
+                  "template",
+                  "ai",
+                  "user"
+                ]
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              }
+            },
+            "required": [
+              "version",
+              "to",
+              "subject",
+              "body",
+              "hash",
+              "createdBy",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          },
+          "approved": {
+            "type": "boolean",
+            "description": "True when the user has approved exactly this version of the draft"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "drafted",
+                    "edited",
+                    "approved",
+                    "sent",
+                    "bounced",
+                    "reply_label",
+                    "followup_drafted",
+                    "closed"
+                  ]
+                },
+                "actor": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "system",
+                    "admin"
+                  ]
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "UTC timestamp, ISO 8601"
+                },
+                "payload": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {},
+                  "description": "Codes and counts only: never draft text or addresses"
+                }
+              },
+              "required": [
+                "type",
+                "actor",
+                "at",
+                "payload"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "canSend": {
+            "type": "boolean"
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "company_excluded",
+                    "must_keep",
+                    "kept",
+                    "no_contact",
+                    "contact_bounced",
+                    "contact_changed",
+                    "use_form",
+                    "draft_integrity",
+                    "draft_unsafe",
+                    "send_disabled",
+                    "real_send_blocked"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "aadhaar",
+                      "pan",
+                      "passport",
+                      "voter_id",
+                      "gstin",
+                      "card",
+                      "open_placeholder"
+                    ]
+                  }
+                },
+                "formUrl": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Everything stopping this draft from being approved or sent right now"
+          }
+        },
+        "required": [
+          "request",
+          "company",
+          "contact",
+          "useForm",
+          "draft",
+          "approved",
+          "events",
+          "canSend",
+          "blockers"
+        ],
+        "additionalProperties": false
+      },
+      "Scan": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$",
+            "description": "Prefixed ULID (`scn_` followed by 26 characters)"
+          },
+          "inboxId": {
+            "type": "string",
+            "pattern": "^inb_[0-9A-HJKMNP-TV-Z]{26}$",
+            "description": "Prefixed ULID (`inb_` followed by 26 characters)"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed"
+            ]
+          },
+          "progressPct": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "foundCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Companies shown to the user, not counting hidden or \"not mine\" ones"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorCode": {
+            "description": "For a failed scan, for example `gmail_quota`, `gmail_auth`, `inbox_disconnected`",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "inboxId",
+          "status",
+          "progressPct",
+          "foundCount",
+          "startedAt",
+          "finishedAt",
+          "errorCode"
+        ],
+        "additionalProperties": false
+      },
+      "ScanResponse": {
+        "type": "object",
+        "properties": {
+          "scan": {
+            "$ref": "#/components/schemas/Scan"
+          }
+        },
+        "required": [
+          "scan"
+        ],
+        "additionalProperties": false
+      },
+      "SendResponse": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$",
+                "description": "Prefixed ULID (`req_` followed by 26 characters)"
+              },
+              "status": {
+                "type": "string",
+                "const": "sent"
+              },
+              "sentAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              },
+              "dueAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "sentAt",
+              "dueAt"
+            ],
+            "additionalProperties": false
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "fake",
+              "real"
+            ],
+            "description": "`fake` in development and test: nothing left the machine"
+          },
+          "notice": {
+            "description": "Present when nothing really left the machine",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request",
+          "delivery"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

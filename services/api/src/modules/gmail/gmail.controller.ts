@@ -1,15 +1,12 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
-import { z } from 'zod';
 import { serializeCookie } from '../../common/cookies.js';
 import { Problems } from '../../common/errors.js';
-import { isId } from '../../common/ids.js';
+import { InboxParams } from '../../contract/schemas.js';
 import type { Env } from '../../config/env.js';
 import { OAUTH_STATE_COOKIE } from '../auth/auth.controller.js';
 import type { AuthService } from '../auth/auth.service.js';
 import type { InboxService } from './inbox.service.js';
 import type { ScanService } from './scan.service.js';
-
-const InboxParams = z.object({ id: z.string().refine((v) => isId('inbox', v), 'invalid inbox id') });
 
 export interface GmailRoutesDeps {
   env: Env;
