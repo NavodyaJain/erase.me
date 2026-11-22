@@ -85,3 +85,5 @@ The boards state "leaked" as fact. PRD 4.4 says use "may have shared". Boards ar
 - `Main.dc.html:341` landing hero: "Spot who leaked your email"
 - `DesktopLeak.dc.html:31`: "so you can see who leaked it"
 - `Leak.dc.html:89`: status chip "Leaked"
+
+Status after the web build (task 7): the app does not copy this wording. Phase 1 builds no Leak screen, and the landing hero is not built, so the three lines above are flagged, not fixed in the boards. The Home and Desktop boards also say a company "may have leaked" an address; the app uses the hedged "may hold your data" instead. When the Leak screen is built (Phase 2), take its wording from PRD 4.4, not from the board.
