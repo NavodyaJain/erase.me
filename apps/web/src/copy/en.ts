@@ -27,6 +27,22 @@ export const copy = {
     sampleData: 'Sample data',
   },
 
+  pwa: {
+    updateTitle: 'Update available',
+    updateBody: 'A new version of Erase.me is ready.',
+    updateAction: 'Update now',
+    installTitle: 'Add Erase.me to your home screen',
+    installBody: 'Tap Share, then Add to Home Screen.',
+    dismiss: 'Got it',
+  },
+
+  offline: {
+    title: 'You are offline',
+    body: 'Erase.me needs a connection to show your companies and requests. Reconnect and try again.',
+    note: 'Erase.me does not keep your companies or requests on this device.',
+    retry: 'Try again',
+  },
+
   labels: {
     confidence: { high: 'Likely', low: 'Possible' },
     confidenceHelp: {

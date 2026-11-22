@@ -4,6 +4,7 @@ import '@erase/ui/tokens.css';
 import '@erase/ui/styles.css';
 import '@fontsource-variable/inter/wght.css';
 import './globals.css';
+import { PwaChrome } from '@/components/PwaChrome';
 import { AppProviders } from '@/lib/providers';
 
 export const metadata: Metadata = {
@@ -26,7 +27,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <AppProviders>{children}</AppProviders>
+        <AppProviders>
+          {children}
+          <PwaChrome />
+        </AppProviders>
       </body>
     </html>
   );
