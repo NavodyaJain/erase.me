@@ -10,13 +10,32 @@ export const CATALOG_DIR = path.resolve(here, '../../../catalog');
 
 const DOMAIN = /^[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}$/;
 
-const Grievance = z.object({
-  email: z.string().email(),
-  /** The company's published privacy or grievance page. */
-  source_url: z.string().url(),
+const httpsUrl = z
+  .string()
+  .max(2000)
+  .refine((v) => {
+    try {
+      const u = new URL(v);
+      return u.protocol === 'https:' && !/\s/.test(v);
+    } catch {
+      return false;
+    }
+  }, 'must be an https URL');
+
+const provenance = {
+  /** The company's published privacy or grievance page the contact came from. */
+  source_url: httpsUrl,
   /** When a person last checked the contact against that page. */
   verified_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-});
+};
+
+/** A grievance address. The default channel, so existing entries need no `channel`. */
+const EmailContact = z.object({ channel: z.literal('email').default('email'), email: z.string().email(), ...provenance }).strict();
+/** A web form: it cannot be sent by email, so requests show the draft for copy and paste and link to the form. */
+const FormContact = z.object({ channel: z.literal('web_form'), form_url: httpsUrl, ...provenance }).strict();
+const Grievance = z.union([FormContact, EmailContact]);
+
+const isExampleHost = (url: string): boolean => /^https:\/\/([a-z0-9-]+\.)*example\.com(\/|$)/i.test(url);
 
 const Entry = z
   .object({
@@ -28,19 +47,27 @@ const Entry = z
     must_keep: z.boolean().default(false),
     fictional: z.boolean().default(false),
     note: z.string().optional(),
+    /** The company's own account-deletion page, shown before a request by email. Optional. */
+    self_serve_url: httpsUrl.optional(),
     grievance: Grievance.optional(),
   })
   .superRefine((e, ctx) => {
-    const example = e.grievance && /@example\.com$/i.test(e.grievance.email);
-    if (e.fictional && e.grievance && !example) {
-      ctx.addIssue({ code: 'custom', path: ['grievance', 'email'], message: 'fictional entries may only use @example.com' });
+    const issue = (p: string[], message: string) => ctx.addIssue({ code: 'custom', path: p, message });
+    const g = e.grievance;
+    const address = g?.channel === 'email' ? g.email : undefined;
+    const form = g?.channel === 'web_form' ? g.form_url : undefined;
+
+    if (e.fictional) {
+      if (address && !/@example\.com$/i.test(address)) issue(['grievance', 'email'], 'fictional entries may only use @example.com');
+      if (form && !isExampleHost(form)) issue(['grievance', 'form_url'], 'fictional entries may only use a form on example.com');
+      if (e.self_serve_url && !isExampleHost(e.self_serve_url)) issue(['self_serve_url'], 'fictional entries may only use a URL on example.com');
+    } else {
+      if (address && /@example\.com$/i.test(address)) issue(['grievance', 'email'], '@example.com is for fictional entries only');
+      if (form && isExampleHost(form)) issue(['grievance', 'form_url'], 'example.com is for fictional entries only');
+      if (e.self_serve_url && isExampleHost(e.self_serve_url)) issue(['self_serve_url'], 'example.com is for fictional entries only');
     }
-    if (!e.fictional && example) {
-      ctx.addIssue({ code: 'custom', path: ['grievance', 'email'], message: '@example.com is for fictional entries only' });
-    }
-    if (e.must_keep && e.grievance) {
-      ctx.addIssue({ code: 'custom', path: ['grievance'], message: 'a must-keep company gets no grievance contact (no deletion request is offered)' });
-    }
+    if (e.must_keep && g) issue(['grievance'], 'a must-keep company gets no grievance contact (no deletion request is offered)');
+    if (e.must_keep && e.self_serve_url) issue(['self_serve_url'], 'a must-keep company gets no self-serve deletion link (no deletion is offered)');
   });
 
 const CatalogFile = z.object({ version: z.literal(1), companies: z.array(Entry) }).passthrough();

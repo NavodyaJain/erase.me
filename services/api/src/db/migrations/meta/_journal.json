@@ -50,6 +50,13 @@
       "when": 1795355079010,
       "tag": "0006_grant_idempotency_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795357026255,
+      "tag": "0007_contact_channels",
+      "breakpoints": true
     }
   ]
 }

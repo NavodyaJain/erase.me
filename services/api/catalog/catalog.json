@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "Reviewed company catalog. Every entry needs slug, name, domains and category. A grievance contact needs email, source_url (the company's published privacy or grievance page) and verified_on; never add an address that was not checked against its source. Fictional entries use @example.com, carry fictional: true and are loaded outside production only. Personal additions go in catalog.local.json (not committed).",
+  "_comment": "Reviewed company catalog. Every entry needs slug, name, domains and category. A grievance contact is either an email (email, source_url, verified_on) or a web form (channel web_form, form_url, source_url, verified_on); source_url is the company's published privacy or grievance page, and a contact is added only after a person checked it against that page. self_serve_url is the company's own account-deletion page, optional. Fictional entries use example.com, carry fictional: true and are loaded outside production only. Real contacts and links are added by hand from each company's own page, in this file or in catalog.local.json (not committed).",
   "companies": [
     {
       "slug": "google",
@@ -34,9 +34,23 @@
       "domains": ["sampleshop.example"],
       "category": "ecommerce",
       "fictional": true,
+      "self_serve_url": "https://example.com/account/delete",
       "grievance": {
         "email": "grievance@example.com",
         "source_url": "https://example.com/grievance",
+        "verified_on": "2026-01-01"
+      }
+    },
+    {
+      "slug": "sample-forms",
+      "name": "Sample Forms Co",
+      "domains": ["sampleforms.example"],
+      "category": "saas",
+      "fictional": true,
+      "grievance": {
+        "channel": "web_form",
+        "form_url": "https://example.com/privacy/request",
+        "source_url": "https://example.com/privacy",
         "verified_on": "2026-01-01"
       }
     }

@@ -46,6 +46,13 @@ It has no DELETE anywhere in Phase 1. Purging and account deletion (Phase 2) run
 - `idempotency_keys`: one claim per send (`scope = 'send'`). Unique per `(user_id, scope, key)`, and a partial unique index allows only one `in_progress` or `completed` send per request, whatever key it used. `failed` frees the request for another attempt; an unknown outcome stays `in_progress` on purpose.
 - Holds ids, status codes and the response to replay. Never draft text or addresses. Mutable (INSERT, SELECT, UPDATE), no DELETE.
 
+## Contact channels and the self-serve link (migration 0007)
+
+- `companies.grievance_channel` is `email` (default) or `web_form`. An email contact has `grievance_email`; a web form has `grievance_form_url` and no address. Never both (`companies_channel_fields`).
+- Either kind needs `grievance_source` (the company's own page) and `grievance_verified_on` (`companies_grievance_provenance`). A `verified` contact needs the field its channel uses (`companies_verified_has_contact`).
+- `grievance_form_url` and `self_serve_url` must be `https` (`companies_urls_https`). Fictional entries may only point at example.com (addresses, forms and links alike), and real entries never do.
+- `self_serve_url` is the company's own account-deletion page, shown to the user before a request by email. Optional.
+
 ## Differences from TRD 6.4
 
 - `companies.grievance_verified_on` is a `date` (was `grievance_verified_at`); added `is_fictional`.

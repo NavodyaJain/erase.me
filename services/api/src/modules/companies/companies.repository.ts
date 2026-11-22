@@ -10,21 +10,27 @@ export function createCompaniesRepository(db: Db) {
     /**
      * Makes the companies table match the catalog: the display name, category, domains and must-keep flag.
      * A company the scan already created from a bare domain is updated in place (matched by domain), so a
-     * placeholder name becomes the proper one. Idempotent. A grievance contact is written only when the
-     * catalog entry has one, with its source and verification date.
+     * placeholder name becomes the proper one. Idempotent. A grievance contact (an address or a web form) is
+     * written only when the catalog entry has one, with its source and verification date. The self-serve link
+     * follows the catalog on every sync.
      */
     async syncCatalog(entries: CatalogEntry[]): Promise<{ inserted: number; updated: number }> {
       let inserted = 0;
       let updated = 0;
       for (const e of entries) {
-        const contact = e.grievance
+        const g = e.grievance;
+        // Both fields are always written together, so a switch of channel never leaves the old one behind.
+        const contact = g
           ? {
-              grievanceEmail: e.grievance.email,
-              grievanceSource: e.grievance.source_url,
-              grievanceVerifiedOn: e.grievance.verified_on,
+              grievanceChannel: g.channel,
+              grievanceEmail: g.channel === 'email' ? g.email : null,
+              grievanceFormUrl: g.channel === 'web_form' ? g.form_url : null,
+              grievanceSource: g.source_url,
+              grievanceVerifiedOn: g.verified_on,
               grievanceStatus: 'verified' as const,
             }
           : {};
+        const selfServe = { selfServeUrl: e.self_serve_url ?? null };
         const [existing] = await db
           .select({ id: companies.id, domains: companies.domains })
           .from(companies)
@@ -42,6 +48,7 @@ export function createCompaniesRepository(db: Db) {
               isFictional: e.fictional,
               domains: merged,
               ...contact,
+              ...selfServe,
               updatedAt: sql`now()`,
             })
             .where(eq(companies.id, existing.id));
@@ -59,10 +66,11 @@ export function createCompaniesRepository(db: Db) {
             mustKeep: e.must_keep,
             isFictional: e.fictional,
             ...contact,
+            ...selfServe,
           })
           .onConflictDoUpdate({
             target: companies.slug,
-            set: { name: e.name, category: e.category, mustKeep: e.must_keep, domains: e.domains, updatedAt: sql`now()` },
+            set: { name: e.name, category: e.category, mustKeep: e.must_keep, domains: e.domains, ...selfServe, updatedAt: sql`now()` },
             setWhere: and(eq(companies.slug, e.slug)),
           })
           .returning({ id: companies.id });

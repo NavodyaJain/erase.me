@@ -43,7 +43,11 @@ describe('the committed catalog', () => {
   it('keeps fictional entries on @example.com and out of production', () => {
     const fictional = all.filter((e) => e.fictional);
     expect(fictional.length).toBeGreaterThan(0);
-    for (const e of fictional) expect(e.grievance?.email).toMatch(/@example\.com$/);
+    for (const e of fictional) {
+      const g = e.grievance;
+      if (g?.channel === 'email') expect(g.email).toMatch(/@example\.com$/);
+      if (g?.channel === 'web_form') expect(g.form_url).toMatch(/^https:\/\/example\.com\//);
+    }
     expect(loadCatalog({ includeFictional: false }).some((e) => e.fictional)).toBe(false);
   });
 
@@ -98,5 +102,58 @@ describe('loadCatalog', () => {
   it('refuses a domain claimed by two companies', () => {
     const dir = dirWith({ 'catalog.json': file(entry({ slug: 'a', domains: ['same.example'] }), entry({ slug: 'b', domains: ['same.example'] })) });
     expect(() => loadCatalog({ dir, includeFictional: true })).toThrow(/claimed by two/);
+  });
+});
+
+describe('contact channels and the self-serve link', () => {
+  const form = { channel: 'web_form', form_url: 'https://brand.example/privacy/request', source_url: 'https://brand.example/privacy', verified_on: '2026-01-01' };
+  const email = { email: 'privacy@brand.example', source_url: 'https://brand.example/privacy', verified_on: '2026-01-01' };
+
+  it('treats a contact without a channel as email, and accepts a web form', () => {
+    expect(parseCatalog(file(entry({ grievance: email })), 'x')[0]?.grievance).toMatchObject({ channel: 'email', email: 'privacy@brand.example' });
+    expect(parseCatalog(file(entry({ grievance: form })), 'x')[0]?.grievance).toMatchObject({ channel: 'web_form', form_url: 'https://brand.example/privacy/request' });
+  });
+
+  it.each([
+    ['a form without a form URL', { channel: 'web_form', source_url: form.source_url, verified_on: form.verified_on }],
+    ['a form without a source page', { channel: 'web_form', form_url: form.form_url, verified_on: form.verified_on }],
+    ['a form without a date', { channel: 'web_form', form_url: form.form_url, source_url: form.source_url }],
+    ['a form with an email address too', { ...form, email: 'privacy@brand.example' }],
+    ['an email contact with a form URL too', { ...email, form_url: form.form_url }],
+    ['a form on http', { ...form, form_url: 'http://brand.example/form' }],
+    ['a form that is not a URL', { ...form, form_url: 'not a url' }],
+    ['an unknown channel', { ...email, channel: 'fax' }],
+  ])('rejects %s', (_label, grievance) => {
+    expect(() => parseCatalog(file(entry({ grievance })), 'x')).toThrow(/Invalid catalog/);
+  });
+
+  it('keeps fictional forms and links on example.com and example.com out of real entries', () => {
+    const fictionalForm = { ...form, form_url: 'https://example.com/request', source_url: 'https://example.com/privacy' };
+    expect(parseCatalog(file(entry({ fictional: true, grievance: fictionalForm, self_serve_url: 'https://example.com/delete' })), 'x')).toHaveLength(1);
+    expect(() => parseCatalog(file(entry({ fictional: true, grievance: form })), 'x')).toThrow(/example\.com/);
+    expect(() => parseCatalog(file(entry({ grievance: fictionalForm })), 'x')).toThrow(/fictional entries only/);
+    expect(() => parseCatalog(file(entry({ fictional: true, self_serve_url: 'https://brand.example/delete' })), 'x')).toThrow(/example\.com/);
+    expect(() => parseCatalog(file(entry({ self_serve_url: 'https://example.com/delete' })), 'x')).toThrow(/fictional entries only/);
+  });
+
+  it('accepts an optional self-serve URL, only over https', () => {
+    expect(parseCatalog(file(entry({ self_serve_url: 'https://brand.example/account/delete' })), 'x')[0]?.self_serve_url).toBe('https://brand.example/account/delete');
+    expect(parseCatalog(file(entry()), 'x')[0]?.self_serve_url).toBeUndefined();
+    expect(() => parseCatalog(file(entry({ self_serve_url: 'http://brand.example/delete' })), 'x')).toThrow(/https/);
+  });
+
+  it('gives a must-keep company neither a contact nor a self-serve deletion link', () => {
+    expect(() => parseCatalog(file(entry({ must_keep: true, self_serve_url: 'https://brand.example/delete' })), 'x')).toThrow(/no self-serve deletion link/);
+    expect(() => parseCatalog(file(entry({ must_keep: true, grievance: form })), 'x')).toThrow(/no grievance contact/);
+  });
+
+  it('carries one fictional web form and one fictional self-serve link, and no real contact or link', () => {
+    const all = loadCatalog({ includeFictional: true });
+    expect(all.some((e) => e.fictional && e.grievance?.channel === 'web_form')).toBe(true);
+    expect(all.some((e) => e.fictional && e.self_serve_url)).toBe(true);
+    for (const e of all.filter((x) => !x.fictional)) {
+      expect(e.grievance, e.slug).toBeUndefined();
+      expect(e.self_serve_url, e.slug).toBeUndefined();
+    }
   });
 });

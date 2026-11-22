@@ -341,9 +341,62 @@ describe('constraints', () => {
       await insertCompany({ ...provenance, grievance_email: 'privacy@example.com', is_fictional: true });
     });
 
-    it('require an address for a verified contact and a well-formed slug', async () => {
-      expect((await pgError(insertCompany({ grievance_status: 'verified' }))).constraint).toBe('companies_verified_has_email');
+    it('require a contact for a verified entry and a well-formed slug', async () => {
+      expect((await pgError(insertCompany({ grievance_status: 'verified' }))).constraint).toBe('companies_verified_has_contact');
       expect((await pgError(insertCompany({ slug: 'Not A Slug' }))).constraint).toBe('companies_slug_format');
+    });
+    describe('contact channels (email or web form) and the self-serve link', () => {
+      const form = { grievance_channel: 'web_form', grievance_form_url: 'https://real-co.in/privacy/request', grievance_source: 'https://real-co.in/privacy', grievance_verified_on: '2026-01-01' };
+
+      it('accept a verified web form with no email address', async () => {
+        await insertCompany({ ...form, grievance_status: 'verified' });
+      });
+
+      it('need a source page and a date for a form, as for an address', async () => {
+        const noSource = await pgError(insertCompany({ ...form, grievance_source: null }));
+        expect(noSource.constraint).toBe('companies_grievance_provenance');
+        const noDate = await pgError(insertCompany({ ...form, grievance_verified_on: null }));
+        expect(noDate.constraint).toBe('companies_grievance_provenance');
+      });
+
+      it('keep one channel at a time', async () => {
+        const both = await pgError(insertCompany({ ...form, grievance_email: 'privacy@real-co.in' }));
+        expect(both.constraint).toBe('companies_channel_fields');
+        const emailWithForm = await pgError(insertCompany({ ...form, grievance_channel: 'email', grievance_email: 'privacy@real-co.in' }));
+        expect(emailWithForm.constraint).toBe('companies_channel_fields');
+        const badChannel = await pgError(insertCompany({ grievance_channel: 'fax' }));
+        expect(badChannel.code).toBe(CHECK_VIOLATION); // refused by the channel checks (Postgres reports the first that fails)
+        expect(['companies_channel_fields', 'companies_channel_valid']).toContain(badChannel.constraint);
+      });
+
+      it('need the form URL for a verified web form, and an address for a verified email contact', async () => {
+        const noUrl = await pgError(insertCompany({ grievance_channel: 'web_form', grievance_status: 'verified' }));
+        expect(noUrl.constraint).toBe('companies_verified_has_contact');
+        const noEmail = await pgError(insertCompany({ grievance_status: 'verified' }));
+        expect(noEmail.constraint).toBe('companies_verified_has_contact');
+      });
+
+      it('allow only https URLs', async () => {
+        expect((await pgError(insertCompany({ ...form, grievance_form_url: 'http://real-co.in/form' }))).constraint).toBe('companies_urls_https');
+        expect((await pgError(insertCompany({ self_serve_url: 'http://real-co.in/delete' }))).constraint).toBe('companies_urls_https');
+        expect((await pgError(insertCompany({ self_serve_url: 'https://real-co.in/delete me' }))).constraint).toBe('companies_urls_https');
+        await insertCompany({ self_serve_url: 'https://real-co.in/account/delete' });
+      });
+
+      it('keep fictional forms and links on example.com, and example.com out of real entries', async () => {
+        const fictionalForm = { ...form, grievance_form_url: 'https://example.com/privacy/request', grievance_source: 'https://example.com/privacy' };
+        expect((await pgError(insertCompany({ ...form, is_fictional: true }))).constraint).toBe('companies_fictional_example_only');
+        expect((await pgError(insertCompany({ ...fictionalForm, is_fictional: false }))).constraint).toBe('companies_real_not_example');
+        expect((await pgError(insertCompany({ self_serve_url: 'https://real-co.in/delete', is_fictional: true }))).constraint).toBe('companies_fictional_example_only');
+        expect((await pgError(insertCompany({ self_serve_url: 'https://www.example.com/delete', is_fictional: false }))).constraint).toBe('companies_real_not_example');
+        await insertCompany({ ...fictionalForm, is_fictional: true, grievance_status: 'verified', self_serve_url: 'https://www.example.com/delete' });
+      });
+
+      it('do not treat a look-alike host as example.com', async () => {
+        // notexample.com is a real-looking host: allowed for a real entry, refused for a fictional one.
+        await insertCompany({ self_serve_url: 'https://notexample.com/delete', is_fictional: false });
+        expect((await pgError(insertCompany({ self_serve_url: 'https://notexample.com/delete', is_fictional: true }))).constraint).toBe('companies_fictional_example_only');
+      });
     });
   });
 

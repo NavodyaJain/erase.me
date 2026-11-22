@@ -5,6 +5,9 @@ import { companyCategory, grievanceStatus, riskLevel, userCompanyStatus } from '
 import { createdAt, emptyTextArray, idCheck, ts, updatedAt } from './_shared.js';
 
 const EXAMPLE_ADDRESS = sql.raw(`'@example\\.com$'`);
+/** A URL on example.com or one of its subdomains: the only place fictional entries may point. */
+const EXAMPLE_URL = sql.raw(`'^https://([a-z0-9-]+\\.)*example\\.com(/|$)'`);
+export const GRIEVANCE_CHANNELS = ['email', 'web_form'] as const;
 
 /**
  * Canonical company record (F2). The grievance contact comes only from the reviewed catalog:
@@ -25,6 +28,14 @@ export const companies = pgTable(
     /** When a person last checked the contact against its source (catalog `verified_on`). */
     grievanceVerifiedOn: date('grievance_verified_on', { mode: 'string' }),
     grievanceStatus: grievanceStatus('grievance_status').notNull().default('unknown'),
+    /**
+     * How the company takes requests: `email` (grievance_email) or `web_form` (grievance_form_url). A web form
+     * cannot be sent by email: the request shows the draft for copy and paste and links to the form.
+     */
+    grievanceChannel: text('grievance_channel').notNull().default('email'),
+    grievanceFormUrl: text('grievance_form_url'),
+    /** The company's own account-deletion page, shown to the user before a request by email. Optional. */
+    selfServeUrl: text('self_serve_url'),
     /** Catalog `fictional: true`. Development data only. */
     isFictional: boolean('is_fictional').notNull().default(false),
     cancelUrl: text('cancel_url'),
@@ -39,19 +50,30 @@ export const companies = pgTable(
     idCheck(t, 'companies', 'cmp'),
     check('companies_slug_format', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
     check('companies_grievance_email_format', sql`${t.grievanceEmail} IS NULL OR ${t.grievanceEmail} ~ '^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$'`),
-    // Unknown contact blocks the draft; a known contact must say where it came from and when it was checked.
+    // Unknown contact blocks the draft; a known contact (an address or a form) must say where it came from and when it was checked.
     check(
       'companies_grievance_provenance',
-      sql`${t.grievanceEmail} IS NULL OR (${t.grievanceSource} IS NOT NULL AND ${t.grievanceVerifiedOn} IS NOT NULL)`,
+      sql`(${t.grievanceEmail} IS NULL AND ${t.grievanceFormUrl} IS NULL) OR (${t.grievanceSource} IS NOT NULL AND ${t.grievanceVerifiedOn} IS NOT NULL)`,
     ),
-    check('companies_verified_has_email', sql`${t.grievanceStatus} <> 'verified' OR ${t.grievanceEmail} IS NOT NULL`),
+    check('companies_channel_valid', sql`${t.grievanceChannel} in ('email', 'web_form')`),
+    // One channel at a time: an email contact has no form URL, a web form has no email address.
+    check(
+      'companies_channel_fields',
+      sql`(${t.grievanceChannel} = 'email' AND ${t.grievanceFormUrl} IS NULL) OR (${t.grievanceChannel} = 'web_form' AND ${t.grievanceEmail} IS NULL)`,
+    ),
+    check(
+      'companies_verified_has_contact',
+      sql`${t.grievanceStatus} <> 'verified' OR (${t.grievanceChannel} = 'email' AND ${t.grievanceEmail} IS NOT NULL) OR (${t.grievanceChannel} = 'web_form' AND ${t.grievanceFormUrl} IS NOT NULL)`,
+    ),
+    check('companies_urls_https', sql`(${t.grievanceFormUrl} IS NULL OR ${t.grievanceFormUrl} ~ '^https://[^[:space:]]+$') AND (${t.selfServeUrl} IS NULL OR ${t.selfServeUrl} ~ '^https://[^[:space:]]+$')`),
+    // Fictional entries point only at example.com; real ones never do.
     check(
       'companies_fictional_example_only',
-      sql`NOT ${t.isFictional} OR ${t.grievanceEmail} IS NULL OR ${t.grievanceEmail} ~* ${EXAMPLE_ADDRESS}`,
+      sql`NOT ${t.isFictional} OR ((${t.grievanceEmail} IS NULL OR ${t.grievanceEmail} ~* ${EXAMPLE_ADDRESS}) AND (${t.grievanceFormUrl} IS NULL OR ${t.grievanceFormUrl} ~* ${EXAMPLE_URL}) AND (${t.selfServeUrl} IS NULL OR ${t.selfServeUrl} ~* ${EXAMPLE_URL}))`,
     ),
     check(
       'companies_real_not_example',
-      sql`${t.isFictional} OR ${t.grievanceEmail} IS NULL OR ${t.grievanceEmail} !~* ${EXAMPLE_ADDRESS}`,
+      sql`${t.isFictional} OR ((${t.grievanceEmail} IS NULL OR ${t.grievanceEmail} !~* ${EXAMPLE_ADDRESS}) AND (${t.grievanceFormUrl} IS NULL OR ${t.grievanceFormUrl} !~* ${EXAMPLE_URL}) AND (${t.selfServeUrl} IS NULL OR ${t.selfServeUrl} !~* ${EXAMPLE_URL}))`,
     ),
   ],
 );
