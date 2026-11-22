@@ -372,7 +372,7 @@ export interface components {
             /** @description Needed to keep an account working (for example the account provider). No deletion request is offered. */
             mustKeep: boolean;
             /** @enum {string} */
-            category: "loan_app" | "wallet_payments" | "broker_investing" | "credit" | "ecommerce" | "travel" | "streaming" | "education" | "social" | "saas" | "other";
+            category: "loan_app" | "wallet_payments" | "broker_investing" | "credit" | "ecommerce" | "travel" | "streaming" | "education" | "social" | "saas" | "account_provider" | "games" | "other";
             /** @description The company’s own account-deletion page, shown before a request by email. Never set for a must-keep company. */
             selfServeUrl: string | null;
             /** @description The user chose "keep": no request is offered, and a drafted or approved one is refused at approve and send until cleared */

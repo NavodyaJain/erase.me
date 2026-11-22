@@ -6,7 +6,7 @@
       "slug": "google",
       "name": "Google",
       "domains": ["google.com"],
-      "category": "other",
+      "category": "account_provider",
       "must_keep": true,
       "note": "Account provider. Needed for sign-in and for this inbox, so no deletion request is offered."
     },

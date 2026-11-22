@@ -3537,6 +3537,8 @@
               "education",
               "social",
               "saas",
+              "account_provider",
+              "games",
               "other"
             ]
           },

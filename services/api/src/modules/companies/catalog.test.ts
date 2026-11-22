@@ -29,9 +29,14 @@ describe('the committed catalog', () => {
 
   it('marks Google as must-keep with no grievance contact (item 5)', () => {
     const google = all.find((e) => e.slug === 'google');
-    expect(google).toMatchObject({ name: 'Google', must_keep: true });
+    expect(google).toMatchObject({ name: 'Google', must_keep: true, category: 'account_provider' });
     expect(google?.grievance).toBeUndefined();
     expect(google?.domains).toContain('google.com');
+  });
+
+  it('accepts the account_provider and games categories', () => {
+    expect(parseCatalog(file(entry({ category: 'games' })), 'x')[0]?.category).toBe('games');
+    expect(parseCatalog(file(entry({ category: 'account_provider' })), 'x')[0]?.category).toBe('account_provider');
   });
 
   it('maps the Happn domains to a proper name (item 2)', () => {

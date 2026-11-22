@@ -14,6 +14,8 @@ export const COMPANY_CATEGORIES = [
   'education',
   'social',
   'saas',
+  'account_provider',
+  'games',
   'other',
 ] as const;
 export const GRIEVANCE_STATUSES = ['unknown', 'verified', 'bounced'] as const;
