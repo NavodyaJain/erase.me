@@ -1,0 +1,109 @@
+/* Component styles for @erase/ui. Built only from tokens.css variables. */
+
+.ui-visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Focus: one visible ring everywhere. */
+.ui-btn:focus-visible, .ui-switch:focus-visible, .ui-field-control:focus-visible, .ui-check-input:focus-visible + .ui-check-box,
+.ui-link:focus-visible, .ui-copy:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Buttons */
+.ui-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: var(--touch-target-min); padding: 0 var(--space-5);
+  border: var(--border-width) solid transparent; border-radius: var(--radius-control);
+  font: inherit; font-size: var(--fs-14); font-weight: var(--fw-semibold); line-height: 1.2;
+  cursor: pointer; text-decoration: none; transition: background var(--motion-hover), box-shadow var(--motion-hover);
+}
+.ui-btn[disabled], .ui-btn[aria-disabled='true'] { opacity: 0.5; cursor: not-allowed; }
+.ui-btn-primary { background: var(--color-accent); color: #fff; box-shadow: var(--shadow-accent-button); }
+.ui-btn-primary:hover:not([disabled]) { background: #2547d8; }
+.ui-btn-secondary { background: var(--color-surface); color: var(--color-ink); border-color: var(--color-input-border); }
+.ui-btn-secondary:hover:not([disabled]) { background: var(--color-surface-hover); }
+.ui-btn-quiet { background: var(--color-accent-soft); color: var(--color-accent); }
+.ui-btn-quiet:hover:not([disabled]) { background: #dfe7ff; }
+.ui-btn-block { width: 100%; }
+
+/* Chips: always a text label, never colour alone. */
+.ui-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px;
+  border-radius: var(--radius-chip); font-size: var(--fs-12); font-weight: var(--fw-semibold); white-space: nowrap;
+}
+.ui-chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.ui-chip-bad { color: var(--status-bad-fg); background: var(--status-bad-bg); }
+.ui-chip-good { color: var(--status-good-fg); background: var(--status-good-bg); }
+.ui-chip-warn { color: var(--status-warn-fg); background: var(--status-warn-bg); }
+.ui-chip-neutral { color: var(--status-neutral-fg); background: var(--status-neutral-bg); }
+.ui-chip-info { color: var(--status-info-fg); background: var(--status-info-bg); }
+
+/* Cards */
+.ui-card { background: var(--color-surface); border: var(--border-width) solid var(--color-line); border-radius: var(--radius-card); }
+.ui-card-pad { padding: var(--space-5); }
+.ui-card-title { margin: 0 0 var(--space-3); font-size: var(--fs-15); font-weight: var(--fw-semibold); letter-spacing: var(--ls-tight); }
+
+/* Progress */
+.ui-progress { display: grid; gap: var(--space-1); }
+.ui-progress-label { display: flex; justify-content: space-between; font-size: var(--fs-12); color: var(--color-muted); }
+.ui-progress-track { height: 6px; border-radius: var(--radius-chip); background: var(--color-line); overflow: hidden; }
+.ui-progress-bar { height: 100%; background: var(--color-accent); border-radius: var(--radius-chip); transition: width var(--motion-hover); }
+
+/* Switch */
+.ui-switch-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: var(--touch-target-min); }
+.ui-switch {
+  position: relative; flex: none; width: 44px; height: 26px; border-radius: var(--radius-chip);
+  border: var(--border-width) solid var(--color-input-border); background: var(--color-tile); cursor: pointer; padding: 0;
+  transition: background var(--motion-hover);
+}
+.ui-switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(11,18,32,.25); transition: transform var(--motion-hover);
+}
+.ui-switch[aria-checked='true'] { background: var(--color-accent); border-color: var(--color-accent); }
+.ui-switch[aria-checked='true']::after { transform: translateX(18px); }
+.ui-switch[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* Alerts */
+.ui-alert { display: grid; gap: var(--space-1); padding: var(--space-3) var(--space-4); border-radius: var(--radius-card); font-size: var(--fs-14); border: var(--border-width) solid transparent; }
+.ui-alert-title { font-weight: var(--fw-semibold); }
+.ui-alert-info { background: var(--status-info-bg); color: #1d3bb8; border-color: #cfdaff; }
+.ui-alert-good { background: var(--status-good-bg); color: var(--status-good-fg); border-color: #c4e6d3; }
+.ui-alert-warn { background: var(--status-warn-bg); color: var(--status-warn-fg); border-color: #f0dca3; }
+.ui-alert-bad { background: var(--status-bad-bg); color: var(--status-bad-fg); border-color: #f5c2c2; }
+
+/* Fields */
+.ui-field { display: grid; gap: var(--space-1); }
+.ui-field-label { font-size: var(--fs-13); font-weight: var(--fw-semibold); }
+.ui-field-hint { font-size: var(--fs-12); color: var(--color-muted); }
+.ui-field-error { font-size: var(--fs-12); color: var(--status-bad-fg); }
+.ui-field-control {
+  width: 100%; padding: var(--space-3); border: var(--border-width) solid var(--color-input-border); border-radius: var(--radius-control);
+  font: inherit; font-size: var(--fs-14); color: var(--color-ink); background: var(--color-surface);
+}
+textarea.ui-field-control { min-height: 220px; resize: vertical; line-height: 1.5; }
+.ui-field-control[aria-invalid='true'] { border-color: var(--status-bad-fg); }
+
+/* Checkbox */
+.ui-check { display: inline-flex; align-items: center; gap: var(--space-3); min-height: var(--touch-target-min); cursor: pointer; }
+.ui-check-input { position: absolute; opacity: 0; width: 24px; height: 24px; margin: 0; }
+.ui-check-box {
+  display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 6px;
+  border: 2px solid var(--color-input-border); background: var(--color-surface); color: #fff;
+}
+.ui-check-input:checked + .ui-check-box { background: var(--color-accent); border-color: var(--color-accent); }
+.ui-check-input:checked + .ui-check-box::after { content: ''; width: 6px; height: 11px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
+.ui-check-input:disabled + .ui-check-box { opacity: 0.45; }
+
+.ui-link { color: var(--color-accent); font-weight: var(--fw-medium); text-underline-offset: 2px; }
+
+/* Loading placeholder */
+.ui-skeleton { display: block; border-radius: var(--radius-control); background: linear-gradient(90deg, var(--color-line-soft), var(--color-line), var(--color-line-soft)); background-size: 200% 100%; animation: ui-shimmer 1.4s linear infinite; }
+@keyframes ui-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .ui-skeleton { animation: none; }
+  .ui-btn, .ui-switch, .ui-switch::after, .ui-progress-bar { transition: none; }
+}

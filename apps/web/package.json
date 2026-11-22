@@ -5,23 +5,38 @@
   "description": "erase.me landing and app.erase.me (PWA)",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/sync-brand.mjs",
     "dev": "next dev --port 3000",
+    "prebuild": "node scripts/sync-brand.mjs",
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@erase/api-client": "workspace:^",
+    "@erase/contracts": "workspace:^",
+    "@erase/ui": "workspace:^",
+    "@fontsource-variable/inter": "5.3.0",
+    "@tanstack/react-query": "5.108.2",
     "next": "^16.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@erase/config": "workspace:^",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.13",
     "@types/node": "20",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "axe-core": "4.14.1",
     "eslint": "^10.15.0",
-    "typescript": "~5.9"
+    "happy-dom": "21.0.4",
+    "typescript": "~5.9",
+    "vitest": "5.1.1",
+    "vitest-axe": "0.1.0"
   }
 }
