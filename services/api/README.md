@@ -17,3 +17,10 @@ Rules: validate every input, no business logic in controllers, every admin/suppo
 - `catalog/catalog.json` is the reviewed company catalog: display name, domains, category, `must_keep`, and (only when checked against its source) a grievance contact. `catalog/catalog.local.json` is optional, gitignored, and overrides by slug. Both are validated at start-up and synced into `companies`.
 - `src/modules/gmail/detection-rules.ts`: delivery-service domains, exclusions and the confidence rule. `signals.ts`: what a message's headers say. Header metadata only; no bodies.
 - Scan limits are set in `.env`: `SCAN_WINDOW_YEARS`, `SCAN_MAX_MESSAGES`, `SCAN_EXCLUDE`. `pnpm --filter @erase/api dev:coverage` prints message counts (no content) to show whether a cap, a window or the search itself limits a scan.
+
+## Requests (drafts, approval, send)
+`src/modules/requests`: state machine (`state-machine.ts`), draft template and hash, ID-number guard, service with the approval and send guards, routes.
+- `POST /v1/requests/drafts` (batch), `GET /v1/requests`, `GET /v1/requests/:id`, `PATCH /v1/requests/:id/draft`, `POST /v1/requests/:id/approve`, `POST /v1/requests/:id/close`, `POST /v1/requests/:id/send` (needs `Idempotency-Key`).
+- An approval is bound to the sha256 of recipient, subject and body. An edit makes a new version and a new hash, and puts the request back to `drafted`.
+- Send needs a user approval of the current hash (application guard; migration 0002 enforces it again), a verified contact, a company that is not must-keep, and text without ID numbers or an `[OPEN]` placeholder.
+- Real sending is off until the owner verifies the statute citation (`draft-citation.ts`) and sets `ALLOW_REAL_SEND=true`. In development and test the fake sender is used and every response says so.

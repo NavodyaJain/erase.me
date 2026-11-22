@@ -44,6 +44,21 @@ Items marked **[OPEN]** in the PRD and TRD, with the owner's answers (2026-11-21
 - Scan limits are configurable: `SCAN_WINDOW_YEARS` (default whole mailbox), `SCAN_MAX_MESSAGES` (default 50000), `SCAN_EXCLUDE` (employer domains or addresses). Gmail request pacing is unchanged (15 per second in the scan).
 - Rows recorded before these rules (for example a sending service stored as a company) are not deleted, since the app role cannot delete; they are filtered out when results are read.
 
+## Requests, drafts and sending (Phase 1, task 5)
+
+Decided by the owner (2026-11-22):
+- **Statute citation.** Drafts carry a visible `[OPEN: ...]` line until the owner verifies the wording and replaces `STATUTE_CITATION` in `services/api/src/modules/requests/draft-citation.ts` (set `verified: true` and check `line`). Approval and sending refuse any text that still contains `[OPEN`, so the marker has to be edited out or replaced. **Real sending stays off until then**, whatever `ALLOW_REAL_SEND` says: the sender is `real_send_blocked`, not a quiet fallback to the fake.
+- **Sender selection.** `ALLOW_REAL_SEND=true` (not in a test run) and a verified citation: real Gmail send, capped per user per day by `REAL_SEND_DAILY_CAP`. Otherwise development and test use the fake sender, labelled `delivery: "fake"` with a notice in the response and in the `sent` event payload, and nothing leaves the machine. Staging and production with the flag off answer 503 `send_disabled`.
+- **ID numbers.** Rules only. A 12-digit run counts as an Aadhaar number only if it passes Verhoeff and starts with 2-9. PAN, passport, voter ID (EPIC), GSTIN and Luhn-valid card numbers are blocked too. They are refused when a draft is edited, and checked again at approval and at send. Reports kind only, never the text.
+- **Recipient.** Fixed from the verified contact; the user edits subject and body only. If the contact changes after the draft was made, sending is refused (`contact_changed`) and the request must be closed and recreated.
+- **Missing contact.** The draft is blocked with an explanation, and `audit_log` gets `company.contact_missing` as a stand-in for the admin task (F6-AC4) until the admin module exists.
+- **Close before sending** is included (`POST /v1/requests/:id/close`), so a request can be discarded and the company freed for a new one.
+- **Gmail label.** `Erase.me/Requests` is skipped: creating labels needs a scope (`gmail.labels` or `gmail.modify`) we did not request. Replies will be tracked by the stored thread id.
+- **Unknown send outcome.** If Gmail times out or answers unreadably after we may have handed it the message, the idempotency claim stays `in_progress`, the request is not marked sent, nothing is retried automatically, and the user is told to check the Sent folder. Nothing in Phase 1 resolves such a request after that: it needs a manual fix by the owner (mark it sent, or fail the claim so it can be tried again). Decide how this should work in the admin module.
+- **OpenAPI** for these routes is skipped until the contracts task.
+
+Left for later: `must_keep` is enforced at create, approve and send. The reply states, follow-up and proof pack stay unbuilt, and no job moves a request past `sent`.
+
 ## Design drift found by the banned-word lint
 
 The boards state "leaked" as fact. PRD 4.4 says use "may have shared". Boards are unedited; fix when those screens are built.
