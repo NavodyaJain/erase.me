@@ -1,7 +1,7 @@
 'use client';
 
 import type { CompanyItem } from '@erase/contracts';
-import { Checkbox, Chip, Switch } from '@erase/ui';
+import { Checkbox, Chip, Switch, VisuallyHidden } from '@erase/ui';
 import Link from 'next/link';
 import { copy } from '@/copy/en';
 import { formatMonth } from '@/lib/format';
@@ -27,6 +27,8 @@ export function CompanyRow({
   const c = copy.overview.company;
   const blocked = company.mustKeep || company.kept || company.openRequest !== null;
   const name = company.company;
+  const reason = company.mustKeep ? c.reasonMustKeep : company.kept ? c.reasonKept : null;
+  const reasonId = `reason-${company.id}`;
 
   return (
     <li>
@@ -37,10 +39,12 @@ export function CompanyRow({
             aria-label={c.select(name)}
             checked={selected && !blocked}
             disabled={blocked}
+            {...(reason ? { 'aria-describedby': reasonId, title: reason } : {})}
             onChange={(e) => onSelect(company.id, e.target.checked)}
           />
+          {reason ? <VisuallyHidden><span id={reasonId}>{reason}</span></VisuallyHidden> : null}
           <div className="muted" style={{ marginLeft: 'calc(22px + var(--space-3))' }}>
-            {company.domain} · {copy.labels.category[company.category]} · {c.firstLast(formatMonth(company.firstSeen), formatMonth(company.lastSeen))}
+            {company.domain} · {(copy.labels.category as Record<string, string>)[company.category] ?? copy.labels.category.other} · {c.firstLast(formatMonth(company.firstSeen), formatMonth(company.lastSeen))}
           </div>
           <div className="chips" style={{ marginLeft: 'calc(22px + var(--space-3))' }}>
             <Chip tone={company.confidence === 'high' ? 'info' : 'neutral'}>{copy.labels.confidence[company.confidence]}</Chip>
@@ -76,7 +80,7 @@ export function CompanyRow({
         </div>
         {company.mustKeep ? null : (
           <div style={{ minWidth: 220 }}>
-            <Switch label={c.keepLabel} description={c.keepNote} checked={company.kept} busy={keepBusy} onChange={(next) => onKeep(company.id, next)} />
+            <Switch label={c.keepLabel} {...(company.kept ? { description: c.keepNote } : {})} checked={company.kept} busy={keepBusy} onChange={(next) => onKeep(company.id, next)} />
           </div>
         )}
       </div>

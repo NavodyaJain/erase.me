@@ -167,3 +167,57 @@ describe('Overview: create drafts and every outcome', () => {
     expect((await screen.findByRole('alert')).textContent).toBe(ERROR_MESSAGES.rate_limited);
   });
 });
+
+describe('Overview: disabled rows, Keep helper text and category labels', () => {
+  it.each([
+    ['a must-keep company', { mustKeep: true }, copy.overview.company.reasonMustKeep],
+    ['a kept company', { kept: true }, copy.overview.company.reasonKept],
+  ])('%s: the checkbox looks disabled, says why, and cannot be ticked by click or keyboard', async (_name, over, reason) => {
+    renderApp(<OverviewScreen />, base([company(1, over)]));
+    const box = (await screen.findByRole('checkbox', { name: copy.overview.company.select('Examplo 1') })) as HTMLInputElement;
+    expect(box.disabled).toBe(true);
+    expect(box.getAttribute('title')).toBe(reason);
+    expect(box.getAttribute('aria-describedby')).toBeTruthy();
+    expect(document.getElementById(box.getAttribute('aria-describedby') as string)?.textContent).toBe(reason);
+    await userEvent.click(box);
+    expect(box.checked).toBe(false);
+    box.focus();
+    await userEvent.keyboard(' ');
+    expect(box.checked).toBe(false);
+    expect(document.activeElement).not.toBe(box); // a disabled input is skipped by Tab as well
+    expect(screen.queryByRole('button', { name: /Draft \d/ })).toBeNull();
+  });
+
+  it('an ordinary company has no reason text and can be ticked by keyboard', async () => {
+    renderApp(<OverviewScreen />, base([company(1)]));
+    const box = (await screen.findByRole('checkbox', { name: copy.overview.company.select('Examplo 1') })) as HTMLInputElement;
+    expect(box.getAttribute('aria-describedby')).toBeNull();
+    box.focus();
+    await userEvent.keyboard(' ');
+    expect(box.checked).toBe(true);
+  });
+
+  it('shows the Keep helper text only while the switch is on', async () => {
+    renderApp(<OverviewScreen />, base([company(1), company(2, { kept: true })]));
+    await screen.findByText('Examplo 1');
+    const switches = screen.getAllByRole('switch');
+    expect(switches.map((x) => x.getAttribute('aria-checked'))).toEqual(['false', 'true']);
+    expect(screen.getAllByText(copy.overview.company.keepNote)).toHaveLength(1);
+    expect(screen.getAllByText(copy.overview.company.keepLabel)).toHaveLength(2);
+  });
+
+  it('labels the new categories and keeps the others', async () => {
+    renderApp(<OverviewScreen />, base([company(1, { category: 'account_provider', mustKeep: true }), company(2, { category: 'games' }), company(3, { category: 'saas' }), company(4, { category: 'other' })]));
+    await screen.findByText('Examplo 1');
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('Account provider');
+    expect(text).toContain('Games');
+    expect(text).toContain('Software');
+    expect(text).toContain('Other');
+  });
+
+  it('shows a plain fallback for a category this version does not know', async () => {
+    renderApp(<OverviewScreen />, base([company(1, { category: 'banking' })]));
+    expect(await screen.findByText(/examplo1\.example · Other/)).toBeTruthy();
+  });
+});

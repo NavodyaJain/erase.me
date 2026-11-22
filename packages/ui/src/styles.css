@@ -97,6 +97,7 @@ textarea.ui-field-control { min-height: 220px; resize: vertical; line-height: 1.
 .ui-check-input:checked + .ui-check-box { background: var(--color-accent); border-color: var(--color-accent); }
 .ui-check-input:checked + .ui-check-box::after { content: ''; width: 6px; height: 11px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
 .ui-check-input:disabled + .ui-check-box { opacity: 0.45; }
+.ui-check:has(.ui-check-input:disabled) { cursor: not-allowed; color: var(--color-muted); }
 
 .ui-link { color: var(--color-accent); font-weight: var(--fw-medium); text-underline-offset: 2px; }
 
