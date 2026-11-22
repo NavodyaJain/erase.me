@@ -27,6 +27,66 @@ export const copy = {
     sampleData: 'Sample data',
   },
 
+  signIn: {
+    title: 'See which companies may hold your data',
+    intro:
+      'Sign in with Google, then connect the Gmail inboxes you have used to sign up for things. Erase.me finds the companies that may hold your data, and you choose which ones to ask. Nothing is sent without your approval.',
+    button: 'Continue with Google',
+    shares: 'Signing in shares your name and email address with Erase.me. Connecting an inbox is a separate step with its own permission.',
+    checking: 'Checking your session',
+    errorTitle: 'Sign-in did not complete',
+    standaloneTitle: 'Signing in from the installed app',
+    standaloneBody: 'If the Google page does not open here, open sign-in in your browser instead, then come back to the app.',
+    openInBrowser: 'Open sign-in in your browser',
+  },
+
+  consent: {
+    title: 'Your data stays yours',
+    read: {
+      heading: 'What we read',
+      body: 'Message headers: the sender, the date, the subject line, and whether a message comes from a mailing list. We use them as they pass through to spot sign-up, receipt and account emails. We do not open message bodies or attachments.',
+    },
+    keep: {
+      heading: 'What we keep',
+      body: 'Company names and domains, the dates of the first and last message, and the kind of email seen, such as a receipt. We do not keep email text, subject lines or sender names.',
+    },
+    later: {
+      heading: 'What we use later',
+      body: 'Google also asks you to allow sending, so a request can go out from your own address. That permission is used only after you review and approve a request. Nothing is sent without your approval.',
+    },
+    never: {
+      heading: 'What we never do',
+      body: 'Send anything you have not approved, or delete or change anything in your Gmail.',
+    },
+    disconnect: 'You can disconnect any inbox at any time.',
+  },
+
+  connect: {
+    title: 'Connect your inboxes',
+    sub: 'Add every Gmail you have used to sign up for things. Older accounts may hold the most forgotten companies.',
+    connected: 'Inbox connected. The scan reads message headers only.',
+    add: 'Connect a Gmail',
+    addAnother: 'Connect another Gmail',
+    redirecting: 'Taking you to Google',
+    empty: 'No inbox connected yet. Connect a Gmail to find the companies that may hold your data.',
+    listTitle: 'Your inboxes',
+    scan: 'Scan',
+    scanAgain: 'Scan again',
+    scanProgress: 'Scanning',
+    scanFailed: 'The scan did not finish. Try again.',
+    needsReconnect: 'Google no longer allows access to this inbox. Disconnect it and connect it again.',
+    seeWhatWeFound: 'See what we found',
+    disconnect: 'Disconnect',
+    disconnectTitle: 'Disconnect this inbox?',
+    disconnectBody: 'Erase.me will stop reading it and remove its access. Companies already found stay in your list for 30 days.',
+    disconnectConfirm: 'Disconnect inbox',
+    disconnected: 'Inbox disconnected.',
+    notRevoked:
+      'Erase.me stopped using this inbox, but Google could not be reached to remove its access. You can also remove it at myaccount.google.com/permissions.',
+    howTitle: 'How it works',
+    steps: ['Connect a Gmail. Reading headers only takes a few minutes.', 'We find the companies that may hold your data. Older inboxes are included.', 'You review each draft and approve it. Nothing is sent until you say so.'],
+  },
+
   pwa: {
     updateTitle: 'Update available',
     updateBody: 'A new version of Erase.me is ready.',
@@ -99,3 +159,6 @@ export const copy = {
     },
   },
 } as const;
+
+/** `1 company`, `2 companies`. */
+export const plural = (n: number, one: string, other: string): string => `${n} ${n === 1 ? one : other}`;
