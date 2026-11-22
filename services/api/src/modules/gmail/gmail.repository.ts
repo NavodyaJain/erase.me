@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { and, arrayOverlaps, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { newId } from '../../common/ids.js';
 import type { Db } from '../../db/client.js';
-import { companies, inboxes, scans, userCompanies } from '../../db/schema/index.js';
+import { companies, inboxes, scans, userCompanies, users } from '../../db/schema/index.js';
 
 export interface InboxRow {
   id: string;
@@ -43,6 +43,8 @@ export interface DetectedCompany {
   lastSeen: Date;
   signals: string[];
   status: 'active' | 'not_mine' | 'requested';
+  mustKeep: boolean;
+  category: string;
 }
 
 const inboxColumns = {
@@ -88,6 +90,13 @@ export function nameFor(domain: string): string {
 /** The only code that touches inboxes, scans and detected companies. */
 export function createGmailRepository(db: Db) {
   return {
+    /** The user's sign-in address and every inbox address: senders that are the user themselves. */
+    async listOwnAddresses(userId: string): Promise<string[]> {
+      const [u] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId));
+      const boxes = await db.select({ email: inboxes.email }).from(inboxes).where(eq(inboxes.userId, userId));
+      return [...new Set([u?.email, ...boxes.map((b) => b.email)].filter((e): e is string => Boolean(e)).map((e) => e.toLowerCase()))];
+    },
+
     async listInboxes(userId: string): Promise<InboxRow[]> {
       return db.select(inboxColumns).from(inboxes).where(eq(inboxes.userId, userId)).orderBy(inboxes.connectedAt);
     },
@@ -277,17 +286,19 @@ export function createGmailRepository(db: Db) {
       if (detections.length === 0) return;
       const companyIds = await resolveCompanies(db, detections.map((d) => d.domain));
       const rows = detections.flatMap((d) => {
-        const companyId = companyIds.get(d.domain);
-        return companyId
+        const company = companyIds.get(d.domain);
+        return company
           ? [
               {
                 id: newId('userCompany'),
                 userId,
-                companyId,
+                companyId: company.id,
                 inboxId,
                 firstSeen: d.firstSeen,
                 lastSeen: d.lastSeen,
                 signalTypes: d.signals,
+                // A must-keep company (for example the account provider) is flagged so no deletion is offered.
+                ...(company.mustKeep ? { riskLevel: 'must_keep' as const } : {}),
               },
             ]
           : [];
@@ -302,6 +313,7 @@ export function createGmailRepository(db: Db) {
             firstSeen: sql`least(${userCompanies.firstSeen}, excluded.first_seen)`,
             lastSeen: sql`greatest(${userCompanies.lastSeen}, excluded.last_seen)`,
             signalTypes: sql`array(select distinct unnest(${userCompanies.signalTypes} || excluded.signal_types) order by 1)`,
+            riskLevel: sql`coalesce(excluded.risk_level, ${userCompanies.riskLevel})`,
             updatedAt: sql`now()`,
           },
         });
@@ -317,6 +329,8 @@ export function createGmailRepository(db: Db) {
           lastSeen: userCompanies.lastSeen,
           signals: userCompanies.signalTypes,
           status: userCompanies.status,
+          mustKeep: companies.mustKeep,
+          category: companies.category,
         })
         .from(userCompanies)
         .innerJoin(companies, eq(companies.id, userCompanies.companyId))
@@ -342,13 +356,13 @@ export type GmailRepository = ReturnType<typeof createGmailRepository>;
  * Unknown domains get a placeholder company with no grievance contact, which blocks drafting until
  * the owner adds a reviewed catalog entry (docs/OPEN-QUESTIONS.md).
  */
-async function resolveCompanies(db: Db, domains: string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
+async function resolveCompanies(db: Db, domains: string[]): Promise<Map<string, { id: string; mustKeep: boolean }>> {
+  const out = new Map<string, { id: string; mustKeep: boolean }>();
   const known = await db
-    .select({ id: companies.id, domains: companies.domains })
+    .select({ id: companies.id, domains: companies.domains, mustKeep: companies.mustKeep })
     .from(companies)
     .where(arrayOverlaps(companies.domains, domains));
-  for (const c of known) for (const d of c.domains) if (domains.includes(d) && !out.has(d)) out.set(d, c.id);
+  for (const c of known) for (const d of c.domains) if (domains.includes(d) && !out.has(d)) out.set(d, { id: c.id, mustKeep: c.mustKeep });
 
   for (const domain of domains) {
     if (out.has(domain)) continue;
@@ -358,9 +372,12 @@ async function resolveCompanies(db: Db, domains: string[]): Promise<Map<string, 
         .insert(companies)
         .values({ id: newId('company'), slug, name: nameFor(domain), domains: [domain], category: 'other' })
         .onConflictDoNothing();
-      const [row] = await db.select({ id: companies.id, domains: companies.domains }).from(companies).where(eq(companies.slug, slug));
+      const [row] = await db
+        .select({ id: companies.id, domains: companies.domains, mustKeep: companies.mustKeep })
+        .from(companies)
+        .where(eq(companies.slug, slug));
       if (row?.domains.includes(domain)) {
-        out.set(domain, row.id);
+        out.set(domain, { id: row.id, mustKeep: row.mustKeep });
         break;
       }
       // The slug belongs to a different domain: disambiguate deterministically.

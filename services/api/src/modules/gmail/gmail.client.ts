@@ -5,7 +5,7 @@ const TIMEOUT_MS = 15_000;
 const MAX_ATTEMPTS = 6;
 /** The slowest pace the client falls back to when Gmail keeps throttling: one request per second. */
 const SLOWEST_INTERVAL_MS = 1000;
-const METADATA_HEADERS = ['From', 'Subject', 'Date', 'List-Unsubscribe', 'List-Id'] as const;
+const METADATA_HEADERS = ['From', 'Reply-To', 'Subject', 'Date', 'List-Unsubscribe', 'List-Id'] as const;
 
 export type GmailApiErrorCode = 'auth' | 'quota' | 'unavailable';
 
@@ -65,6 +65,13 @@ export interface GmailMessageMeta {
   subject: string | undefined;
   hasListUnsubscribe: boolean;
   hasListId: boolean;
+  /** Reply-To header text. Used only to name the brand behind an email-delivery service. */
+  replyTo: string | undefined;
+  /**
+   * Hostnames found in the List-Unsubscribe header (from its mailto: and https: targets). The header value
+   * itself, which can carry per-recipient tokens, never leaves the client.
+   */
+  listUnsubscribeHosts: string[];
 }
 
 export interface MessagePage {
@@ -94,6 +101,22 @@ const MessageResponse = z.object({
   internalDate: z.string().optional(),
   payload: z.object({ headers: z.array(z.object({ name: z.string(), value: z.string().optional() })).default([]) }).optional(),
 });
+
+/** Hostnames only: `<mailto:u@brand.example?subject=x>, <https://list.brand.example/u/TOKEN>` -> both hosts. */
+export function unsubscribeHosts(value: string | undefined): string[] {
+  const hosts = new Set<string>();
+  for (const m of (value ?? '').matchAll(/<\s*(mailto:|https?:\/\/)([^>\s]+)\s*>/gi)) {
+    const scheme = (m[1] ?? '').toLowerCase();
+    const rest = m[2] ?? '';
+    try {
+      const host = scheme === 'mailto:' ? (rest.split('?')[0] ?? '').split('@')[1] : new URL(`${scheme}//${rest}`).hostname;
+      if (host && /^[a-z0-9.-]+$/i.test(host)) hosts.add(host.toLowerCase());
+    } catch {
+      // An unparsable target is ignored.
+    }
+  }
+  return [...hosts];
+}
 
 const EARLIEST_PLAUSIBLE = Date.UTC(1995, 0, 1);
 const CLOCK_SKEW_MS = 2 * 24 * 60 * 60 * 1000;
@@ -185,6 +208,8 @@ export class HttpGmailClient implements GmailClient {
       subject: header('Subject'),
       hasListUnsubscribe: header('List-Unsubscribe') !== undefined,
       hasListId: header('List-Id') !== undefined,
+      replyTo: header('Reply-To'),
+      listUnsubscribeHosts: unsubscribeHosts(header('List-Unsubscribe')),
     };
   }
 

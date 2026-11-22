@@ -20,7 +20,7 @@ import type { GmailClient } from './modules/gmail/gmail.client.js';
 import { gmailRoutes } from './modules/gmail/gmail.controller.js';
 import { createGmailRepository } from './modules/gmail/gmail.repository.js';
 import { InboxService } from './modules/gmail/inbox.service.js';
-import { SCAN_JOB, ScanService } from './modules/gmail/scan.service.js';
+import { SCAN_JOB, ScanService, scanOptionsFromEnv } from './modules/gmail/scan.service.js';
 import { healthRoutes } from './modules/health/health.controller.js';
 import { HealthService } from './modules/health/health.service.js';
 
@@ -131,7 +131,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     const scans = new ScanService(gmailRepo, inboxes, m.gmail, m.queue, now, {
       info: (o, msg) => app.log.info(o, msg),
       warn: (o, msg) => app.log.warn(o, msg),
-    });
+    }, scanOptionsFromEnv(deps.env));
     const auth = new AuthService({
       repo: authRepo,
       sessions,

@@ -82,6 +82,17 @@ describe('loadEnv', () => {
     });
   });
 
+  it('reads the scan limits: window and cap are optional, the cap defaults to 50000', () => {
+    const defaults = loadEnv(base);
+    expect(defaults.SCAN_WINDOW_YEARS).toBeUndefined();
+    expect(defaults.SCAN_MAX_MESSAGES).toBe(50_000);
+    const set = loadEnv({ ...base, SCAN_WINDOW_YEARS: '5', SCAN_MAX_MESSAGES: '2000', SCAN_EXCLUDE: 'employer.example' });
+    expect(set).toMatchObject({ SCAN_WINDOW_YEARS: 5, SCAN_MAX_MESSAGES: 2000, SCAN_EXCLUDE: 'employer.example' });
+    expect(loadEnv({ ...base, SCAN_WINDOW_YEARS: '', SCAN_MAX_MESSAGES: '' }).SCAN_MAX_MESSAGES).toBe(50_000);
+    expect(failure({ ...base, SCAN_WINDOW_YEARS: '0' }).issues.map((i) => i.variable)).toEqual(['SCAN_WINDOW_YEARS']);
+    expect(failure({ ...base, SCAN_MAX_MESSAGES: '5' }).issues.map((i) => i.variable)).toEqual(['SCAN_MAX_MESSAGES']);
+  });
+
   it('derives the Google redirect URI from API_PUBLIC_URL with the registered callback path', () => {
     expect(googleRedirectUri(loadEnv(base))).toBe('http://localhost:4000/v1/auth/google/callback');
     expect(googleRedirectUri(loadEnv({ ...base, API_PUBLIC_URL: 'https://api.erase.me' }))).toBe(

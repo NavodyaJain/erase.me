@@ -39,6 +39,14 @@ const EnvSchema = z
     COOKIE_DOMAIN: z.string().min(1).optional(),
     GOOGLE_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+    // Scan limits. Neither raises Gmail request pacing, which is fixed in the client.
+    // How many years of mail to scan, counted back from the day the scan starts. Unset means the whole mailbox.
+    SCAN_WINDOW_YEARS: z.coerce.number().int().min(1).max(40).optional(),
+    // Stop after this many matching messages in one scan.
+    SCAN_MAX_MESSAGES: z.coerce.number().int().min(100).max(1_000_000).default(50_000),
+    // Senders to leave out of results: registrable domains (an employer) or full addresses, comma separated.
+    // The user's own addresses and the domain of a custom-domain inbox are always left out.
+    SCAN_EXCLUDE: z.string().optional(),
     // Real sends are off by default. Dev and test send only to the fake Gmail.
     ALLOW_REAL_SEND: bool,
     REAL_SEND_DAILY_CAP: z.coerce.number().int().min(0).default(5),

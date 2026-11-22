@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "_comment": "Reviewed company catalog. Every entry needs slug, name, domains and category. A grievance contact needs email, source_url (the company's published privacy or grievance page) and verified_on; never add an address that was not checked against its source. Fictional entries use @example.com, carry fictional: true and are loaded outside production only. Personal additions go in catalog.local.json (not committed).",
+  "companies": [
+    {
+      "slug": "google",
+      "name": "Google",
+      "domains": ["google.com"],
+      "category": "other",
+      "must_keep": true,
+      "note": "Account provider. Needed for sign-in and for this inbox, so no deletion request is offered."
+    },
+    {
+      "slug": "happn",
+      "name": "Happn",
+      "domains": ["happn.com", "happnmail.com"],
+      "category": "social"
+    },
+    {
+      "slug": "sample-bank",
+      "name": "Sample Bank",
+      "domains": ["samplebank.example"],
+      "category": "credit",
+      "fictional": true,
+      "grievance": {
+        "email": "privacy@example.com",
+        "source_url": "https://example.com/privacy",
+        "verified_on": "2026-01-01"
+      }
+    },
+    {
+      "slug": "sample-shop",
+      "name": "Sample Shop",
+      "domains": ["sampleshop.example"],
+      "category": "ecommerce",
+      "fictional": true,
+      "grievance": {
+        "email": "grievance@example.com",
+        "source_url": "https://example.com/grievance",
+        "verified_on": "2026-01-01"
+      }
+    }
+  ]
+}

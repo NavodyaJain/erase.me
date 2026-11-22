@@ -12,3 +12,8 @@ Rules: validate every input, no business logic in controllers, every admin/suppo
 - It refuses to start when `NODE_ENV` is `production` or `staging`, or when `API_HOST` is not a loopback address.
 - Needs `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `TOKEN_MASTER_KEY` in `.env`, and `make up` plus `db:migrate` first.
 - Its routes are under `/dev` and are not part of the OpenAPI contract.
+
+## Catalog and detection rules
+- `catalog/catalog.json` is the reviewed company catalog: display name, domains, category, `must_keep`, and (only when checked against its source) a grievance contact. `catalog/catalog.local.json` is optional, gitignored, and overrides by slug. Both are validated at start-up and synced into `companies`.
+- `src/modules/gmail/detection-rules.ts`: delivery-service domains, exclusions and the confidence rule. `signals.ts`: what a message's headers say. Header metadata only; no bodies.
+- Scan limits are set in `.env`: `SCAN_WINDOW_YEARS`, `SCAN_MAX_MESSAGES`, `SCAN_EXCLUDE`. `pnpm --filter @erase/api dev:coverage` prints message counts (no content) to show whether a cap, a window or the search itself limits a scan.

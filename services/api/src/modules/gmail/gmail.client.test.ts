@@ -64,11 +64,13 @@ describe('HttpGmailClient', () => {
       subject: 'Welcome',
       hasListUnsubscribe: true,
       hasListId: false,
+      replyTo: undefined,
+      listUnsubscribeHosts: ['shop.example'],
     });
     expect(JSON.stringify(m)).not.toContain('must be ignored');
     const url = new URL(requests[0]?.url ?? '');
     expect(url.searchParams.get('format')).toBe('metadata');
-    expect(url.searchParams.getAll('metadataHeaders').sort()).toEqual(['Date', 'From', 'List-Id', 'List-Unsubscribe', 'Subject']);
+    expect(url.searchParams.getAll('metadataHeaders').sort()).toEqual(['Date', 'From', 'List-Id', 'List-Unsubscribe', 'Reply-To', 'Subject']);
   });
 
   it('returns null for a message deleted since listing', async () => {

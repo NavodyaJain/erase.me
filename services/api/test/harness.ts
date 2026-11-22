@@ -82,6 +82,9 @@ export interface FakeMessage {
   subject: string;
   listUnsubscribe?: boolean;
   listId?: boolean;
+  replyTo?: string;
+  /** Hostnames of the List-Unsubscribe targets. */
+  unsubscribeHosts?: string[];
   /** Gmail returned a message that cannot be placed in time; the client skips it. */
   undatable?: boolean;
 }
@@ -90,6 +93,8 @@ export interface FakeMessage {
 export class FakeGmail implements GmailClient {
   messages: FakeMessage[] = [];
   readonly calls: string[] = [];
+  /** The Gmail search text of each list call. */
+  readonly queries: string[] = [];
   /** Throw this on the Nth list call (1-based), once. */
   failListOn: { call: number; error: GmailApiError } | undefined;
   /** Runs before the Nth list call (1-based). Lets a test act mid-scan, for example disconnect the inbox. */
@@ -99,6 +104,7 @@ export class FakeGmail implements GmailClient {
 
   async listMessageIds(accessToken: string, q: { query: string; pageToken?: string; maxResults: number }): Promise<MessagePage> {
     this.calls.push(`list:${accessToken}:${q.pageToken ?? ''}`);
+    this.queries.push(q.query);
     this.listCalls += 1;
     await this.beforeList?.(this.listCalls);
     if (this.failListOn?.call === this.listCalls) {
@@ -127,6 +133,8 @@ export class FakeGmail implements GmailClient {
       subject: m.subject,
       hasListUnsubscribe: m.listUnsubscribe ?? false,
       hasListId: m.listId ?? false,
+      replyTo: m.replyTo,
+      listUnsubscribeHosts: m.unsubscribeHosts ?? [],
     });
   }
 }

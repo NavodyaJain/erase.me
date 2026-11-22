@@ -6,6 +6,8 @@ import { createDb, type Db } from './db/client.js';
 import { LocalKeyProvider } from './crypto/key-provider.js';
 import { InProcessJobQueue } from './jobs/queue.js';
 import { HttpGoogleOAuthClient } from './modules/auth/google-oauth.js';
+import { loadCatalog } from './modules/companies/catalog.js';
+import { createCompaniesRepository } from './modules/companies/companies.repository.js';
 import { HttpGmailClient } from './modules/gmail/gmail.client.js';
 import { createHealthRepository } from './modules/health/health.repository.js';
 
@@ -51,6 +53,10 @@ export async function start(opts: StartOptions = {}): Promise<void> {
     },
   });
   pool.on('error', (err) => app.log.error({ err }, 'database pool error'));
+  // Company names, categories and the must-keep flag come from the reviewed catalog. Fictional entries only outside production.
+  const catalog = loadCatalog({ includeFictional: env.NODE_ENV !== 'production' && env.NODE_ENV !== 'staging' });
+  const synced = await createCompaniesRepository(db).syncCatalog(catalog);
+  app.log.info({ entries: catalog.length, ...synced }, 'catalog synced');
   for (const plugin of opts.plugins ?? []) await plugin({ env, app, db });
 
   const shutdown = async (signal: string): Promise<void> => {

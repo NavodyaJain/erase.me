@@ -16,3 +16,6 @@ __pycache__/
 .pnpm-store/
 *.tsbuildinfo
 *.egg-info/
+
+# Personal catalog additions (service names from the owner's own inbox)
+services/api/catalog/catalog.local.json

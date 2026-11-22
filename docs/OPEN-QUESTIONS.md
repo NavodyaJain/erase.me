@@ -37,6 +37,13 @@ Items marked **[OPEN]** in the PRD and TRD, with the owner's answers (2026-11-21
 - A scan creates a placeholder company (name from the domain, category `other`, no grievance contact) for any sender domain the catalog does not list. Placeholders cannot be drafted until a reviewed catalog entry exists. Decide whether the catalog task should merge or prune them.
 - The Google callback is shared: sign-in and inbox connect both use `/v1/auth/google/callback`, told apart by server-side state. This keeps one registered redirect URI. Post-login redirects (`/?auth_error=<code>`, `/?inbox=connected`) are provisional until the web routes exist.
 
+- Detection rules (scan tuning): a company is "likely" (high) with a welcome, receipt or transactional signal, or two different kinds of signal, and "possible" (low) with only bulk-mail headers (list-unsubscribe, newsletter) or only a verify prompt. `list_unsubscribe` plus `newsletter` count as one kind. Confirm this rule; it is in `detection-rules.ts` (`confidenceFor`).
+- Email-delivery services (SendGrid, Mailchimp, Elastic Email and so on) are never companies. The brand is taken from Reply-To, then from List-Unsubscribe hosts; otherwise the message is skipped. The list is `DELIVERY_DOMAINS` in `detection-rules.ts`.
+- `must_keep` lives in the catalog and on `companies.must_keep`. Google is must-keep. A must-keep company gets `risk_level = must_keep` for the user and no grievance contact, so the requests module must refuse to draft for it and the UI must not promise deletion. That refusal is not built yet (requests module).
+- Catalog: `services/api/catalog/catalog.json` (committed, reviewed) plus `catalog.local.json` (gitignored, for names of services seen in one person's own inbox, since committing those would publish which services they use). The catalog is synced into `companies` at start-up. Merging duplicate companies that share a brand (for example two domains already stored as two rows) belongs to the companies task.
+- Scan limits are configurable: `SCAN_WINDOW_YEARS` (default whole mailbox), `SCAN_MAX_MESSAGES` (default 50000), `SCAN_EXCLUDE` (employer domains or addresses). Gmail request pacing is unchanged (15 per second in the scan).
+- Rows recorded before these rules (for example a sending service stored as a company) are not deleted, since the app role cannot delete; they are filtered out when results are read.
+
 ## Design drift found by the banned-word lint
 
 The boards state "leaked" as fact. PRD 4.4 says use "may have shared". Boards are unedited; fix when those screens are built.

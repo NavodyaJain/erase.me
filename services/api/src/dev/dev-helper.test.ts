@@ -83,9 +83,9 @@ describe('state, connect, scan and results', () => {
     expect(body.signedIn).toBe(true);
     expect(body.scans[inboxId]).toMatchObject({ status: 'done', foundCount: 2 });
     expect(body.results).toEqual([
-      { company: 'Streamo', domain: 'streamo.example', firstSeen: '2021-01-01', lastSeen: '2021-01-01', signals: ['list_unsubscribe'] },
-      { company: 'Loanly', domain: 'loanly.example', firstSeen: '2019-03-04', lastSeen: '2024-07-09', signals: ['receipt', 'welcome'] },
-    ].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen)));
+      { company: 'Loanly', domain: 'loanly.example', firstSeen: '2019-03-04', lastSeen: '2024-07-09', signals: ['receipt', 'transactional', 'welcome'], confidence: 'high', mustKeep: false },
+      { company: 'Streamo', domain: 'streamo.example', firstSeen: '2021-01-01', lastSeen: '2021-01-01', signals: ['list_unsubscribe'], confidence: 'low', mustKeep: false },
+    ]);
     for (const secret of ['secret-id', 'Hidden Sender', 'noreply@', 'billing@', 'confidential', 'invoice 4411', 'Big sale']) {
       expect(state.body, secret).not.toContain(secret);
     }

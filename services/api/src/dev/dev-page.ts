@@ -25,11 +25,13 @@ export function renderDevPage(nonce: string): string {
   td.dom { opacity: .65; font-size: .8rem; }
   .chip { display: inline-block; padding: 0 6px; margin: 0 4px 2px 0; border: 1px solid color-mix(in srgb, currentColor 35%, transparent); border-radius: 10px; font-size: .78rem; }
   progress { width: 160px; }
+  .high { font-weight: 600; }
+  .keep { font-size: .8rem; }
 </style>
 </head>
 <body>
 <h1>Erase.me dev helper</h1>
-<p class="note">Development only. Reads header metadata of your mail (never bodies) and keeps only company, dates and signal names. No subjects or sender addresses are kept or shown. Nothing is sent.</p>
+<p class="note">Development only. Reads header metadata of your mail (never bodies) and keeps only company, dates and signal names. No subjects or sender addresses are kept or shown. Nothing is sent. Results are hints: these companies may hold data about you, and the signals show why.</p>
 <div id="msg" class="err" role="alert"></div>
 <div id="setup"></div>
 
@@ -50,7 +52,7 @@ export function renderDevPage(nonce: string): string {
   <h2>3. Results</h2>
   <div id="scan-status" class="row"></div>
   <table>
-    <thead><tr><th>Company</th><th>First seen</th><th>Last seen</th><th>Signals</th></tr></thead>
+    <thead><tr><th>Company</th><th>Confidence</th><th>First seen</th><th>Last seen</th><th>Signals used</th><th>Must keep</th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
   <p id="empty" class="note" hidden>No companies yet. Run a scan.</p>
@@ -156,11 +158,13 @@ export function renderDevPage(nonce: string): string {
       var c = el('td', r.company);
       c.appendChild(el('div', r.domain, 'dom'));
       tr.appendChild(c);
+      tr.appendChild(el('td', r.confidence === 'high' ? 'Likely' : 'Possible', r.confidence === 'high' ? 'high' : ''));
       tr.appendChild(el('td', r.firstSeen));
       tr.appendChild(el('td', r.lastSeen));
       var sig = el('td');
       r.signals.forEach(function (x) { sig.appendChild(el('span', x, 'chip')); });
       tr.appendChild(sig);
+      tr.appendChild(el('td', r.mustKeep ? 'Yes. Needed for your account, so no deletion request is offered.' : 'No', 'keep'));
       rows.appendChild(tr);
     });
     $('empty').hidden = s.results.length > 0;

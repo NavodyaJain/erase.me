@@ -8,7 +8,10 @@ import type { Env } from '../config/env.js';
 import type { Db } from '../db/client.js';
 import { OAUTH_STATE_COOKIE } from '../modules/auth/auth.controller.js';
 import { createAuthGuard, SESSION_COOKIE } from '../modules/auth/auth.guard.js';
+import { ExcludeList, parseExcludeList } from '../modules/gmail/detection-rules.js';
+import { toDetectionViews } from '../modules/gmail/detections.js';
 import { createGmailRepository } from '../modules/gmail/gmail.repository.js';
+import { registrableDomain } from '../modules/gmail/signals.js';
 import { renderDevPage } from './dev-page.js';
 
 /** Development only. This folder is excluded from the production build (tsconfig.build.json). */
@@ -25,8 +28,6 @@ export function assertDevHelperAllowed(env: Pick<Env, 'NODE_ENV' | 'API_HOST'>):
 }
 
 const ScanBody = z.object({ inboxId: z.string().refine((v) => isId('inbox', v), 'invalid inbox id') });
-
-const day = (d: Date): string => d.toISOString().slice(0, 10);
 
 /**
  * A small page at /dev/connect to sign in, connect a Gmail inbox, run a scan and read the results,
@@ -73,7 +74,12 @@ export async function registerDevHelper(app: FastifyInstance, ctx: { env: Env; d
         encryptionConfigured: env.TOKEN_MASTER_KEY !== undefined,
       };
       if (!auth) return { signedIn: false as const, setup };
-      const [inboxes, detections] = await Promise.all([services.inboxes.list(auth.user.id), repo.listDetections(auth.user.id)]);
+      const [inboxes, detections, own] = await Promise.all([
+        services.inboxes.list(auth.user.id),
+        repo.listDetections(auth.user.id),
+        repo.listOwnAddresses(auth.user.id),
+      ]);
+      const exclude = new ExcludeList(parseExcludeList(env.SCAN_EXCLUDE), own, registrableDomain);
       const scans: Record<string, unknown> = {};
       for (const inbox of inboxes) {
         scans[inbox.id] = await services.scans.latest(auth.user.id, inbox.id).catch(() => null);
@@ -84,10 +90,8 @@ export async function registerDevHelper(app: FastifyInstance, ctx: { env: Env; d
         csrfToken: auth.csrfToken,
         inboxes: inboxes.map((i) => ({ id: i.id, email: i.email, status: i.status, lastScanAt: i.lastScanAt })),
         scans,
-        // Company-level fields only.
-        results: detections
-          .filter((d) => d.status !== 'not_mine')
-          .map((d) => ({ company: d.company, domain: d.domain, firstSeen: day(d.firstSeen), lastSeen: day(d.lastSeen), signals: d.signals })),
+        // Company-level fields only: name, domain, dates, the signals used, confidence and the must-keep flag.
+        results: toDetectionViews(detections, exclude).map(({ category: _category, ...row }) => row),
       };
     });
 

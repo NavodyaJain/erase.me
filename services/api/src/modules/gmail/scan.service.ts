@@ -3,21 +3,48 @@ import type { JobQueue } from '../../jobs/queue.js';
 import { GmailApiError, type GmailClient } from './gmail.client.js';
 import type { GmailRepository, ScanRow } from './gmail.repository.js';
 import type { InboxService } from './inbox.service.js';
-import { aggregate, readSighting, type Sighting } from './signals.js';
+import { ExcludeList, parseExcludeList } from './detection-rules.js';
+import { aggregate, readSighting, registrableDomain, type Sighting } from './signals.js';
 
 export const SCAN_JOB = 'scan-inbox';
 
 /**
- * Targeted search for account and receipt mail (TRD 6.6). Gmail evaluates it server-side; we only ever
- * read header metadata of the matches.
+ * Targeted search for account, receipt and statement mail (TRD 6.6). Gmail evaluates it server-side; we only
+ * ever read header metadata of the matches. Beyond the Updates and Promotions tabs it covers mail Gmail files
+ * as purchases or reservations, and subjects that read like orders, payments, statements and bookings, which
+ * banks and shops often send to the Primary tab.
  */
 export const SCAN_QUERY =
-  'category:updates OR category:promotions OR subject:(welcome OR receipt OR invoice OR "verify your" OR "your order" OR "confirm your")';
+  'category:updates OR category:promotions OR category:purchases OR category:reservations OR subject:(welcome OR receipt OR invoice OR statement OR transaction OR payment OR order OR shipped OR delivered OR booking OR ticket OR "verify your" OR "confirm your")';
 
 const PAGE_SIZE = 100;
-const FETCH_CONCURRENCY = 5; // keeps us well inside per-user Gmail quota
-/** A hard stop so one very large inbox cannot run forever. */
-const MAX_MESSAGES_PER_SCAN = 50_000;
+const FETCH_CONCURRENCY = 5; // keeps us well inside per-user Gmail quota; request pacing lives in the client
+
+export interface ScanOptions {
+  /** Years of mail to scan, counted back from the day the scan was created. Undefined: the whole mailbox. */
+  windowYears?: number | undefined;
+  /** Stop after this many matching messages. */
+  maxMessages: number;
+  /** SCAN_EXCLUDE entries: domains or full addresses to leave out. */
+  exclude: string[];
+}
+
+export const DEFAULT_SCAN_OPTIONS: ScanOptions = { maxMessages: 50_000, exclude: [] };
+
+export function scanOptionsFromEnv(env: { SCAN_WINDOW_YEARS?: number | undefined; SCAN_MAX_MESSAGES: number; SCAN_EXCLUDE?: string | undefined }): ScanOptions {
+  return { windowYears: env.SCAN_WINDOW_YEARS, maxMessages: env.SCAN_MAX_MESSAGES, exclude: parseExcludeList(env.SCAN_EXCLUDE) };
+}
+
+/**
+ * The Gmail search for one scan. The window starts from the day the scan was created, not from today, so a
+ * scan resumed on a later day keeps the same query and its saved page token stays valid.
+ */
+export function buildScanQuery(windowYears: number | undefined, scanCreatedAt: Date): string {
+  if (!windowYears) return `(${SCAN_QUERY})`;
+  const from = new Date(Date.UTC(scanCreatedAt.getUTCFullYear() - windowYears, scanCreatedAt.getUTCMonth(), scanCreatedAt.getUTCDate()));
+  const ymd = `${from.getUTCFullYear()}/${String(from.getUTCMonth() + 1).padStart(2, '0')}/${String(from.getUTCDate()).padStart(2, '0')}`;
+  return `(${SCAN_QUERY}) after:${ymd}`;
+}
 
 export interface ScanView {
   id: string;
@@ -65,6 +92,7 @@ export class ScanService {
       info: () => undefined,
       warn: () => undefined,
     },
+    private readonly opts: ScanOptions = DEFAULT_SCAN_OPTIONS,
   ) {}
 
   /** Idempotent: a second start while one is active returns the active scan (F2-AC2). */
@@ -113,7 +141,11 @@ export class ScanService {
       let scanned = 0;
       let skipped = 0; // deleted since listing, or no usable date
       let estimate: number | undefined;
+      let ignored = 0; // not a company signal: a person, a code, an excluded or unattributable sender
+      let hitCap = false;
       let found = await this.repo.countDetected(inbox.userId, inbox.id);
+      const exclude = new ExcludeList(this.opts.exclude, await this.repo.listOwnAddresses(inbox.userId), registrableDomain);
+      const query = buildScanQuery(this.opts.windowYears, scan.createdAt);
 
       do {
         // Re-read every page: a disconnect during the scan must stop further Gmail calls (F1-AC3).
@@ -124,7 +156,7 @@ export class ScanService {
         }
         const accessToken = await this.inboxes.accessTokenFor(current);
         const page = await this.gmail.listMessageIds(accessToken, {
-          query: SCAN_QUERY,
+          query,
           maxResults: PAGE_SIZE,
           ...(cursor ? { pageToken: cursor } : {}),
         });
@@ -133,7 +165,8 @@ export class ScanService {
         const metas = await mapLimit(page.ids, FETCH_CONCURRENCY, (id) => this.gmail.getMessageMetadata(accessToken, id));
         skipped += metas.filter((m) => m === null).length;
         const sightings = metas.flatMap((m) => {
-          const s = m ? readSighting(m) : null;
+          const s = m ? readSighting(m, exclude) : null;
+          if (m && !s) ignored += 1;
           return s ? [s] : [];
         });
         await this.repo.upsertDetections(inbox.userId, inbox.id, toDetections(sightings));
@@ -144,13 +177,17 @@ export class ScanService {
         // Gmail gives only a rough total, so progress is capped below 100 until the scan really finishes.
         const pct = cursor && estimate && estimate > 0 ? Math.min(99, Math.floor((scanned / estimate) * 100)) : 0;
         await this.repo.saveScanProgress(scan.id, { cursor: cursor ?? null, progressPct: pct, foundCount: found });
-        if (scanned >= MAX_MESSAGES_PER_SCAN) break;
+        if (cursor && scanned >= this.opts.maxMessages) {
+          hitCap = true;
+          break;
+        }
       } while (cursor);
 
       const now = this.now();
       await this.repo.finishScan(scan.id, found, now);
       await this.repo.setLastScan(inbox.id, now);
-      this.log.info({ scanned, skipped, found }, 'scan finished');
+      // hitCap means mail beyond SCAN_MAX_MESSAGES was not read; windowYears shows whether a date window applied.
+      this.log.info({ scanned, skipped, ignored, found, hitCap, windowYears: this.opts.windowYears ?? null }, 'scan finished');
     } catch (err) {
       const code = err instanceof GmailApiError ? `gmail_${err.code}` : 'internal_error';
       await this.repo.failScan(scan.id, code, this.now());

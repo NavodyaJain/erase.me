@@ -1,30 +1,14 @@
 import type { GmailMessageMeta } from './gmail.client.js';
+import { ExcludeList, isDeliveryDomain, MAILBOX_PROVIDERS, type SignalType } from './detection-rules.js';
 
-export type SignalType = 'welcome' | 'receipt' | 'verify' | 'list_unsubscribe' | 'newsletter';
+export type { SignalType } from './detection-rules.js';
 
 export interface Sighting {
-  /** Registrable domain of the sender, for example `shop.example`. */
+  /** Registrable domain of the brand that sent the message (never an email-delivery service). */
   domain: string;
   seenAt: Date;
   signals: SignalType[];
 }
-
-/** Consumer mailbox providers: mail from them is a person, not a company that holds your data. */
-const MAILBOX_PROVIDERS = new Set([
-  'gmail.com',
-  'googlemail.com',
-  'yahoo.com',
-  'yahoo.co.in',
-  'outlook.com',
-  'hotmail.com',
-  'live.com',
-  'icloud.com',
-  'me.com',
-  'proton.me',
-  'protonmail.com',
-  'rediffmail.com',
-  'aol.com',
-]);
 
 /** Second-level labels under which the registrable domain has three parts (co.in, com.au, ...). */
 const SECOND_LEVEL = new Set(['co', 'com', 'org', 'net', 'gov', 'ac', 'edu', 'nic', 'res']);
@@ -35,7 +19,15 @@ const VERIFY = /verify your|confirm your (email|account|address)|activate your a
 const WELCOME = /\bwelcome\b|getting started|thanks for (signing up|joining|registering|creating)|your new account|account (has been )?created/i;
 const RECEIPT = /\breceipt\b|\binvoice\b|your order|order (confirmation|confirmed|#)|payment (received|successful|confirmation)|subscription|billing|statement/i;
 
-/** The address in a From header, lowercased: `"Name" <a@b.example>` or `a@b.example`. */
+// Transactional senders, from headers only (sender local part and subject line). A message from an address like
+// orders@ or statements@, or one whose subject reads like an order, delivery, booking or account statement and
+// carries no mailing-list headers, is one a company sends because of something the user did or holds.
+const TRANSACTIONAL_LOCAL =
+  /^(orders?|receipts?|invoices?|billing|payments?|statements?|estatements?|transactions?|alerts?|bookings?|reservations?|tickets?|shipping|delivery)([._-].*)?$/;
+const TRANSACTIONAL_SUBJECT =
+  /\b(e-?statement|account statement|statement (is )?(ready|available)|transaction alert|(debit|credit) alert|payment (due|reminder)|(has|have) (shipped|been (dispatched|delivered|shipped))|out for delivery|order (shipped|dispatched|delivered|placed)|booking (confirmed|confirmation)|e-?ticket|itinerary|your (ticket|trip|ride)|bill (is )?(due|generated)|account (summary|balance))\b/i;
+
+/** The address in a From or Reply-To header, lowercased: `"Name" <a@b.example>` or `a@b.example`. */
 export function senderAddress(from: string): string | undefined {
   const angle = /<([^<>]+)>/.exec(from);
   const candidate = (angle?.[1] ?? from).trim().toLowerCase();
@@ -52,24 +44,57 @@ export function registrableDomain(host: string): string | undefined {
   return labels.slice(threePart ? -3 : -2).join('.');
 }
 
+const registrableOfAddress = (address: string | undefined): string | undefined => {
+  const host = address?.split('@')[1];
+  return host ? registrableDomain(host) : undefined;
+};
+
+/** An empty exclude list, for callers and tests that have none. */
+export const NO_EXCLUSIONS = new ExcludeList([], [], registrableDomain);
+
+/**
+ * Which brand sent this message. Normally the From domain. When the From domain is an email-delivery service
+ * (SendGrid, Mailchimp, Amazon SES and so on) the brand is taken from Reply-To, then from the hosts in the
+ * List-Unsubscribe header; if none of them names a real brand the message is skipped.
+ */
+export function attributeBrand(m: GmailMessageMeta, exclude: ExcludeList): string | undefined {
+  const address = m.from ? senderAddress(m.from) : undefined;
+  if (address && exclude.matchesAddress(address)) return undefined;
+  const fromDomain = registrableOfAddress(address);
+  if (!fromDomain) return undefined;
+
+  const usable = (d: string | undefined): d is string =>
+    d !== undefined && !isDeliveryDomain(d) && !MAILBOX_PROVIDERS.has(d) && !exclude.matchesDomain(d);
+
+  if (!isDeliveryDomain(fromDomain)) return usable(fromDomain) ? fromDomain : undefined;
+
+  const candidates = [
+    registrableOfAddress(m.replyTo ? senderAddress(m.replyTo) : undefined),
+    ...m.listUnsubscribeHosts.map((h) => registrableDomain(h)),
+  ];
+  return candidates.find(usable);
+}
+
 /**
  * Turns one message's headers into a sighting, or null if it is not a company signal.
  * The subject is matched in memory and not returned. Nothing here is kept beyond domain, date and signal names.
  */
-export function readSighting(m: GmailMessageMeta): Sighting | null {
-  if (!m.from) return null;
-  const address = senderAddress(m.from);
-  const host = address?.split('@')[1];
-  const domain = host ? registrableDomain(host) : undefined;
-  if (!domain || MAILBOX_PROVIDERS.has(domain)) return null;
+export function readSighting(m: GmailMessageMeta, exclude: ExcludeList = NO_EXCLUSIONS): Sighting | null {
+  const domain = attributeBrand(m, exclude);
+  if (!domain) return null;
 
   const subject = m.subject ?? '';
   if (OTP.test(subject)) return null;
 
+  const address = m.from ? senderAddress(m.from) : undefined;
+  const localPart = address?.split('@')[0] ?? '';
   const signals: SignalType[] = [];
   if (WELCOME.test(subject)) signals.push('welcome');
   if (RECEIPT.test(subject)) signals.push('receipt');
   if (VERIFY.test(subject)) signals.push('verify');
+  if (TRANSACTIONAL_LOCAL.test(localPart) || (TRANSACTIONAL_SUBJECT.test(subject) && !m.hasListUnsubscribe && !m.hasListId)) {
+    signals.push('transactional');
+  }
   if (m.hasListUnsubscribe) signals.push('list_unsubscribe');
   if (m.hasListId) signals.push('newsletter');
   if (signals.length === 0) return null;
