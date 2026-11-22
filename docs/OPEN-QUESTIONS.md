@@ -8,7 +8,7 @@ Items marked **[OPEN]** in the PRD and TRD, with the owner's answers (2026-11-21
 | --- | --- | --- |
 | Overview cards for deferred features | PRD F3 | Show Companies and Control. Money and Risk render "Not available yet". Drop the Subscriptions table and the alias row. |
 | Grievance contact source | PRD F6-AC4 | Reviewed `catalog.json`. Every entry needs `email`, `source_url` (the company's published privacy or grievance page) and `verified_on`. Fictional dev entries use `@example.com` and `fictional: true`. Never invent real addresses. Unknown contact blocks the draft. Real entries are added by the owner later. |
-| Draft template wording | PRD 7.5 | Written from PRD 7.5, flagged for the owner's legal review. No legal conclusions, no threats. The statute citation is **[OPEN]** until the owner verifies it. |
+| Draft template wording | TRD 7.5, PRD F6 | Written from TRD 7.5 (prompt and output rules) and PRD F6, with the PRD 4.4 wording rules; flagged for the owner's legal review. (This row said "PRD 7.5", which does not exist.) No legal conclusions, no threats. The statute citation is **[OPEN]**: drafts carry a visible [OPEN] marker, approval and sending refuse text that still has it, and real sending stays off until the owner verifies the wording and replaces the constant in `services/api/src/modules/requests/draft-citation.ts`. |
 | Reply handling | PRD F7 | Reply states exist in the state machine. No job moves a request past `sent` in Phase 1. |
 | Registry | PRD F9 | No registry code in Phase 1 (not even the 10-request and 5-user guard). |
 | Key management | TRD 8.3 | A local master key from the environment behind a `KeyProvider` interface so KMS can replace it. Never committed. |
