@@ -23,4 +23,6 @@ Rules: validate every input, no business logic in controllers, every admin/suppo
 - `POST /v1/requests/drafts` (batch), `GET /v1/requests`, `GET /v1/requests/:id`, `PATCH /v1/requests/:id/draft`, `POST /v1/requests/:id/approve`, `POST /v1/requests/:id/close`, `POST /v1/requests/:id/send` (needs `Idempotency-Key`).
 - An approval is bound to the sha256 of recipient, subject and body. An edit makes a new version and a new hash, and puts the request back to `drafted`.
 - Send needs a user approval of the current hash (application guard; migration 0002 enforces it again), a verified contact, a company that is not must-keep, and text without ID numbers or an `[OPEN]` placeholder.
+- A web-form company (`grievance_channel = web_form`) cannot be sent by email: create answers outcome `use_form` with the link and a draft to copy and paste, and approve and send answer 409 `use_form`. The optional `self_serve_url` of a company is returned with the create results and the request view.
+- Drafts are polite requests, not demands. The statute sections and the commencement date sit behind one flag in `draft-citation.ts`.
 - Real sending is off until the owner verifies the statute citation (`draft-citation.ts`) and sets `ALLOW_REAL_SEND=true`. In development and test the fake sender is used and every response says so.

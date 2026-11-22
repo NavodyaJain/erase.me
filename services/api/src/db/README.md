@@ -53,6 +53,10 @@ It has no DELETE anywhere in Phase 1. Purging and account deletion (Phase 2) run
 - `grievance_form_url` and `self_serve_url` must be `https` (`companies_urls_https`). Fictional entries may only point at example.com (addresses, forms and links alike), and real entries never do.
 - `self_serve_url` is the company's own account-deletion page, shown to the user before a request by email. Optional.
 
+## `request_drafts.to_email` holds the destination (decision)
+
+For a company that takes requests by email, `to_email` is the verified address. For a `web_form` company it holds the **form URL**. The column keeps its name because renaming it would touch an append-only table and every query for no gain: a draft has exactly one destination, the draft hash covers it (so a changed form link is a changed draft), and the service reads it only through `destinationOf(company)`. A draft whose destination does not match the company's current contact is refused at approval and send (`contact_changed`). Nothing sends to a form URL: the sender is never called for a web-form request (`use_form`). The column has no format check, so it accepts either.
+
 ## Differences from TRD 6.4
 
 - `companies.grievance_verified_on` is a `date` (was `grievance_verified_at`); added `is_fictional`.

@@ -108,6 +108,17 @@ describe('renderDraft', () => {
     });
   });
 
+  it('changes only the closing line for a web form, and stays free of legal-demand language', () => {
+    const email = renderDraft(input, verified);
+    const form = renderDraft({ ...input, channel: 'web_form' }, verified);
+    expect(form.body).toContain('I am submitting this through your web form. Please reply to the email address above.');
+    expect(form.body).not.toContain('I am sending this from the email address above');
+    expect(form.body.replace('I am submitting this through your web form. Please reply to the email address above.', '')).toBe(
+      email.body.replace('I am sending this from the email address above. Please reply to it.', ''),
+    );
+    for (const [label, re] of LEGAL_DEMAND_PHRASES) expect(form.body, label).not.toMatch(re);
+  });
+
   it('never carries an ID number', () => {
     expect(findSafetyIssues(d.subject, d.body).filter((f) => f !== 'open_placeholder')).toEqual([]);
   });

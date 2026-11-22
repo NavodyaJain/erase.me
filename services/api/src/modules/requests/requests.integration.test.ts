@@ -29,7 +29,7 @@ beforeEach(() => {
 
 // ---------- helpers ----------
 
-type Contact = 'fictional' | 'real' | 'none' | 'unverified' | 'bounced';
+type Contact = 'fictional' | 'real' | 'none' | 'unverified' | 'bounced' | 'form' | 'realform';
 interface SeedOptions {
   name?: string;
   contact?: Contact;
@@ -37,6 +37,8 @@ interface SeedOptions {
   signals?: string[];
   status?: 'active' | 'not_mine';
   riskLevel?: 'must_keep';
+  /** The company's own account-deletion page. */
+  selfServeUrl?: string;
 }
 
 interface Actor {
@@ -70,11 +72,14 @@ async function actor(harness: Harness, label: string): Promise<Actor> {
         none: [null, null, null, 'unknown', false],
         unverified: [`grievance@${domain}`, `https://${domain}/privacy`, '2026-01-01', 'unknown', false],
         bounced: [`grievance@${domain}`, `https://${domain}/privacy`, '2026-01-01', 'bounced', false],
+        form: [null, 'https://example.com/privacy', '2026-01-01', 'verified', true],
+        realform: [null, `https://${domain}/privacy`, '2026-01-01', 'verified', false],
       }[contact];
+      const formUrl = contact === 'form' ? 'https://example.com/privacy/request' : contact === 'realform' ? `https://${domain}/privacy/request` : null;
       await t.owner.query(
-        `INSERT INTO companies (id, slug, name, domains, category, grievance_email, grievance_source, grievance_verified_on, grievance_status, is_fictional, must_keep)
-         VALUES ($1, $2, $3, ARRAY[$4], 'ecommerce', $5, $6, $7, $8, $9, $10)`,
-        [companyId, slug, o.name ?? `Shop ${slug.slice(3, 8)}`, domain, ...cols, o.mustKeep ?? false],
+        `INSERT INTO companies (id, slug, name, domains, category, grievance_email, grievance_source, grievance_verified_on, grievance_status, is_fictional, must_keep, grievance_channel, grievance_form_url, self_serve_url)
+         VALUES ($1, $2, $3, ARRAY[$4], 'ecommerce', $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [companyId, slug, o.name ?? `Shop ${slug.slice(3, 8)}`, domain, ...cols, o.mustKeep ?? false, formUrl ? 'web_form' : 'email', formUrl, o.selfServeUrl ?? null],
       );
       await t.owner.query(
         `INSERT INTO user_companies (id, user_id, company_id, inbox_id, first_seen, last_seen, signal_types, status, risk_level)
@@ -834,6 +839,170 @@ describe('close (before sending only)', () => {
     const send = await A(h).send(a.s, closed.id, key());
     expect(send.statusCode).toBe(409);
     expect(sender.calls).toBe(1);
+  });
+});
+
+// ---------- web-form contacts and the self-serve link ----------
+
+describe('web-form contacts: the draft is for copy and paste, never sent by email', () => {
+  const FORM = 'https://example.com/privacy/request';
+
+  it('creates the request with a use_form outcome and the link, and shows the draft for copy and paste', async () => {
+    const a = await actor(h, 'form1');
+    const c = await a.seed({ contact: 'form', name: 'Forms Co' });
+    const r = (await A(h).create(a.s, [c.ucId])).json<{ results: Array<{ outcome: string; requestId: string; formUrl: string; message: string }> }>().results[0];
+    expect(r).toMatchObject({ outcome: 'use_form', formUrl: FORM });
+    expect(r?.message).toMatch(/web form/);
+    expect(r?.message).toMatch(/cannot send this by email/);
+
+    const v = (await A(h).get(a.s, r?.requestId ?? '')).json<View & { useForm: boolean; contact: { channel: string; formUrl: string | null } }>();
+    expect(v.useForm).toBe(true);
+    expect(v.contact).toEqual({ channel: 'web_form', formUrl: FORM });
+    expect(v.draft.to).toBe(FORM); // the form URL is the draft's destination (stored in to_email)
+    expect(v.draft.hash).toBe(hashDraft({ to: FORM, subject: v.draft.subject, body: v.draft.body }));
+    expect(v.draft.body).toContain('I am submitting this through your web form. Please reply to the email address above.');
+    expect(v.draft.body).not.toContain('I am sending this from the email address above');
+    expect(v.canSend).toBe(false);
+    expect(v.blockers).toContainEqual(expect.objectContaining({ code: 'use_form', formUrl: FORM }));
+    expect(v.events.map((e) => e.type)).toEqual(['drafted']);
+  });
+
+  it('returns the same request, still as use_form, when asked again, and never makes a duplicate', async () => {
+    const a = await actor(h, 'form2');
+    const c = await a.seed({ contact: 'form' });
+    const results = await Promise.all([1, 2, 3].map(() => A(h).create(a.s, [c.ucId])));
+    const outcomes = results.map((r) => r.json<{ results: Array<{ outcome: string; requestId: string }> }>().results[0]);
+    expect(outcomes.every((o) => o?.outcome === 'use_form')).toBe(true);
+    expect(new Set(outcomes.map((o) => o?.requestId)).size).toBe(1);
+    expect((await t.owner.query('SELECT 1 FROM requests WHERE user_company_id = $1', [c.ucId])).rows).toHaveLength(1);
+  });
+
+  it('refuses to approve, answering use_form with the link, and records no approval', async () => {
+    const a = await actor(h, 'form3');
+    const r = await newRequest(h, a, { contact: 'form' });
+    const res = await A(h).approve(a.s, r.id, r.view.draft.hash);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'use_form', formUrl: FORM });
+    expect((await events(r.id)).map((e) => e.type)).toEqual(['drafted']);
+    expect((await requestRow(r.id))?.status).toBe('drafted');
+  });
+
+  it('refuses to send, answering use_form with the link, without calling the sender or claiming a key', async () => {
+    const a = await actor(h, 'form4');
+    const r = await newRequest(h, a, { contact: 'form' });
+    const res = await A(h).send(a.s, r.id, key());
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'use_form', formUrl: FORM });
+    expect(sender.calls).toBe(0);
+    expect((await t.owner.query('SELECT 1 FROM idempotency_keys WHERE request_id = $1', [r.id])).rows).toHaveLength(0);
+    expect((await requestRow(r.id))?.status).toBe('drafted');
+  });
+
+  it('refuses to send even if the request was forced to approved with a matching approval', async () => {
+    const a = await actor(h, 'form5');
+    const r = await newRequest(h, a, { contact: 'form' });
+    const v = await resolveMarker(h, a, r.id);
+    await t.owner.query("INSERT INTO request_events (id, request_id, type, actor_type, draft_hash) VALUES ($1, $2, 'approved', 'user', $3)", [newId('event'), r.id, v.draft.hash]);
+    await t.owner.query("UPDATE requests SET status = 'approved' WHERE id = $1", [r.id]);
+    const res = await A(h).send(a.s, r.id, key());
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'use_form' });
+    expect(sender.calls).toBe(0);
+  });
+
+  it('still lets the user edit the text to copy, and close the request', async () => {
+    const a = await actor(h, 'form6');
+    const r = await newRequest(h, a, { contact: 'form' });
+    const edited = await resolveMarker(h, a, r.id);
+    expect(edited.draft.version).toBe(2);
+    expect(edited.draft.to).toBe(FORM);
+    expect(edited.draft.body).not.toContain('[OPEN');
+    const closed = await A(h).close(a.s, r.id);
+    expect(closed.statusCode).toBe(200);
+    expect(closed.json<View>().request.status).toBe('closed');
+  });
+
+  it('keeps the ID-number guard on the text the user will paste', async () => {
+    const a = await actor(h, 'form7');
+    const r = await newRequest(h, a, { contact: 'form' });
+    const res = await A(h).edit(a.s, r.id, r.view.draft.hash, 'Subject', 'My PAN is ABCDE1234F');
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toMatchObject({ code: 'draft_unsafe' });
+  });
+
+  it('checks the form contact like an email contact: verified, sourced, dated, example.com only when fictional', async () => {
+    const a = await actor(h, 'form8');
+    const real = await a.seed({ contact: 'realform' });
+    expect((await A(h).create(a.s, [real.ucId])).json<{ results: Array<{ outcome: string; formUrl: string }> }>().results[0]).toMatchObject({ outcome: 'use_form' });
+    // The contact loses its verification: the request can no longer be created.
+    const lost = await a.seed({ contact: 'form' });
+    await t.owner.query("UPDATE companies SET grievance_status = 'unknown' WHERE id = $1", [lost.companyId]);
+    const blocked = (await A(h).create(a.s, [lost.ucId])).json<{ results: Array<{ outcome: string; reason: string }> }>().results[0];
+    expect(blocked).toMatchObject({ outcome: 'blocked', reason: 'no_contact' });
+    const audit = await t.owner.query('SELECT 1 FROM audit_log WHERE action = $1 AND target_id = $2', ['company.contact_missing', lost.companyId]);
+    expect(audit.rows.length).toBeGreaterThan(0);
+  });
+
+  it('puts must_keep before the form: a must-keep company is refused outright', async () => {
+    const a = await actor(h, 'form9');
+    const c = await a.seed({ contact: 'form', mustKeep: true });
+    const r = (await A(h).create(a.s, [c.ucId])).json<{ results: Array<{ outcome: string; reason: string }> }>().results[0];
+    expect(r).toMatchObject({ outcome: 'blocked', reason: 'must_keep' });
+  });
+
+  it('blocks send if the form link changed since the draft was made', async () => {
+    const a = await actor(h, 'form10');
+    const r = await newRequest(h, a, { contact: 'form' });
+    await t.owner.query("UPDATE companies SET grievance_form_url = 'https://example.com/privacy/new-form' WHERE id = $1", [r.companyId]);
+    const v = (await A(h).get(a.s, r.id)).json<View>();
+    expect(v.blockers.map((b) => b.code)).toEqual(expect.arrayContaining(['use_form', 'contact_changed']));
+  });
+
+  it('keeps email companies working in the same batch', async () => {
+    const a = await actor(h, 'form11');
+    const email = await a.seed({ contact: 'fictional' });
+    const form = await a.seed({ contact: 'form' });
+    const results = (await A(h).create(a.s, [email.ucId, form.ucId])).json<{ results: Array<{ userCompanyId: string; outcome: string }> }>().results;
+    expect(Object.fromEntries(results.map((r) => [r.userCompanyId, r.outcome]))).toEqual({ [email.ucId]: 'created', [form.ucId]: 'use_form' });
+    const ready = await approved(h, a); // an email company still goes all the way
+    expect((await A(h).send(a.s, ready.id, key())).statusCode).toBe(200);
+  });
+});
+
+describe('self-serve link', () => {
+  const LINK = 'https://example.com/account/delete';
+  // A company that is not fictional cannot point at example.com (the database refuses it).
+  const REAL_LINK = 'https://brand-real.example/account/delete';
+
+  it('is given in the create results and the request view, for email and form companies', async () => {
+    const a = await actor(h, 'serve1');
+    const email = await a.seed({ contact: 'fictional', selfServeUrl: LINK });
+    const form = await a.seed({ contact: 'form', selfServeUrl: LINK });
+    const results = (await A(h).create(a.s, [email.ucId, form.ucId])).json<{ results: Array<{ userCompanyId: string; outcome: string; selfServeUrl?: string; requestId: string }> }>().results;
+    for (const r of results) expect(r.selfServeUrl, r.outcome).toBe(LINK);
+    const view = (await A(h).get(a.s, results[0]?.requestId ?? '')).json<View & { company: { selfServeUrl: string | null } }>();
+    expect(view.company.selfServeUrl).toBe(LINK);
+    // Asking again still shows it.
+    const again = (await A(h).create(a.s, [email.ucId])).json<{ results: Array<{ outcome: string; selfServeUrl?: string }> }>().results[0];
+    expect(again).toMatchObject({ outcome: 'existing', selfServeUrl: LINK });
+  });
+
+  it('is also shown when the request is blocked for a missing contact, and left out when there is none', async () => {
+    const a = await actor(h, 'serve2');
+    const none = await a.seed({ contact: 'none', selfServeUrl: REAL_LINK });
+    const plain = await a.seed({ contact: 'fictional' });
+    const [blocked, ok] = (await A(h).create(a.s, [none.ucId, plain.ucId])).json<{ results: Array<{ outcome: string; selfServeUrl?: string }> }>().results;
+    expect(blocked).toMatchObject({ outcome: 'blocked', selfServeUrl: REAL_LINK });
+    expect(ok?.outcome).toBe('created');
+    expect(ok).not.toHaveProperty('selfServeUrl');
+  });
+
+  it('is never offered for a must-keep company', async () => {
+    const a = await actor(h, 'serve3');
+    const c = await a.seed({ contact: 'none', mustKeep: true, selfServeUrl: REAL_LINK });
+    const r = (await A(h).create(a.s, [c.ucId])).json<{ results: Array<{ outcome: string; reason: string }> }>().results[0];
+    expect(r).toMatchObject({ outcome: 'blocked', reason: 'must_keep' });
+    expect(r).not.toHaveProperty('selfServeUrl');
   });
 });
 
