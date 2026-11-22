@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import pg from 'pg';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { loadEnv, type Env } from '../src/config/env.js';
@@ -17,6 +18,7 @@ import {
 } from '../src/modules/auth/google-oauth.js';
 import type { GmailClient, GmailMessageMeta, MessagePage } from '../src/modules/gmail/gmail.client.js';
 import type { GmailApiError } from '../src/modules/gmail/gmail.client.js';
+import type { SenderChoice } from '../src/modules/requests/sender.js';
 import { captureLogs } from './capture.js';
 import type { TestDb } from './db-helper.js';
 
@@ -155,6 +157,8 @@ export interface HarnessOptions {
   withKeys?: boolean;
   envOverrides?: Record<string, string>;
   authRateLimitPerMinute?: number;
+  /** Replaces the default sender choice (fake in test). */
+  sender?: SenderChoice;
   /** Runs after the app is built and before it is ready, for example to register the dev helper. */
   beforeReady?: (app: FastifyInstance, ctx: { env: Env; db: Db }) => Promise<void>;
 }
@@ -171,7 +175,9 @@ export async function buildHarness(t: TestDb, opts: HarnessOptions = {}): Promis
     LOG_LEVEL: 'debug',
     ...opts.envOverrides,
   });
-  const db = drizzle(t.app, { schema }) as unknown as Db;
+  // A pool, not the single test connection: the requests module runs real concurrent transactions.
+  const pool = new pg.Pool({ connectionString: t.appUrl, max: 8 });
+  const db = drizzle(pool, { schema }) as unknown as Db;
   const logs = captureLogs();
   const google = new FakeGoogle();
   const gmail = new FakeGmail();
@@ -191,7 +197,11 @@ export async function buildHarness(t: TestDb, opts: HarnessOptions = {}): Promis
       queue,
       now: () => new Date(clock.now),
       authRateLimitPerMinute: opts.authRateLimitPerMinute ?? 10_000,
+      ...(opts.sender ? { sender: opts.sender } : {}),
     },
+  });
+  app.addHook('onClose', async () => {
+    await pool.end();
   });
   await opts.beforeReady?.(app, { env, db });
   await app.ready();

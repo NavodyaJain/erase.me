@@ -144,6 +144,11 @@ describe('protection', () => {
   });
 
   it('has no send route', () => {
-    expect(h.app.printRoutes({ commonPrefix: false })).not.toMatch(/send/i);
+    const devRoutes = h.app
+      .printRoutes({ commonPrefix: false })
+      .split(/\r?\n/)
+      .filter((line) => line.includes('/dev/'));
+    expect(devRoutes.length).toBeGreaterThan(0);
+    expect(devRoutes.join(' ')).not.toMatch(/send/i);
   });
 });

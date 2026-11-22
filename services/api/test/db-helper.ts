@@ -12,6 +12,8 @@ export interface TestDb {
   owner: pg.Client;
   /** Connection as a member of the restricted `erase_app` role, like the API. */
   app: pg.Client;
+  /** URL of the same role, for a pool (tests that need real concurrent transactions). */
+  appUrl: string;
   drop(): Promise<void>;
 }
 
@@ -48,13 +50,15 @@ export async function createTestDb(): Promise<TestDb> {
     END $$`);
 
   const owner = new pg.Client({ connectionString: ownerUrl });
-  const app = new pg.Client({ connectionString: urlFor(ADMIN_URL, name, { user: APP_ROLE_LOGIN, password: APP_ROLE_LOGIN }) });
+  const appUrl = urlFor(ADMIN_URL, name, { user: APP_ROLE_LOGIN, password: APP_ROLE_LOGIN });
+  const app = new pg.Client({ connectionString: appUrl });
   await owner.connect();
   await app.connect();
 
   return {
     owner,
     app,
+    appUrl,
     async drop() {
       await app.end();
       await owner.end();
