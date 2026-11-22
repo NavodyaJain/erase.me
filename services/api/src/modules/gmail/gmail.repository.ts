@@ -34,6 +34,8 @@ export interface Detection {
   firstSeen: Date;
   lastSeen: Date;
   signals: string[];
+  /** The latest receipt or transactional message in this batch. */
+  lastTransactionalAt?: Date;
 }
 
 export interface DetectedCompany {
@@ -52,6 +54,8 @@ export interface DetectedCompany {
   selfServeUrl: string | null;
   /** When the user chose "keep". */
   keptAt: Date | null;
+  /** The latest receipt or transactional message, when the scan has recorded one. */
+  lastTransactionalAt: Date | null;
 }
 
 const inboxColumns = {
@@ -304,6 +308,7 @@ export function createGmailRepository(db: Db) {
                 firstSeen: d.firstSeen,
                 lastSeen: d.lastSeen,
                 signalTypes: d.signals,
+                lastTransactionalAt: d.lastTransactionalAt ?? null,
                 // A must-keep company (for example the account provider) is flagged so no deletion is offered.
                 ...(company.mustKeep ? { riskLevel: 'must_keep' as const } : {}),
               },
@@ -320,6 +325,8 @@ export function createGmailRepository(db: Db) {
             firstSeen: sql`least(${userCompanies.firstSeen}, excluded.first_seen)`,
             lastSeen: sql`greatest(${userCompanies.lastSeen}, excluded.last_seen)`,
             signalTypes: sql`array(select distinct unnest(${userCompanies.signalTypes} || excluded.signal_types) order by 1)`,
+            // greatest() ignores NULL, so a batch with no receipt never erases a date already recorded.
+            lastTransactionalAt: sql`greatest(${userCompanies.lastTransactionalAt}, excluded.last_transactional_at)`,
             riskLevel: sql`coalesce(excluded.risk_level, ${userCompanies.riskLevel})`,
             updatedAt: sql`now()`,
           },
@@ -342,6 +349,7 @@ export function createGmailRepository(db: Db) {
           inboxId: userCompanies.inboxId,
           selfServeUrl: companies.selfServeUrl,
           keptAt: userCompanies.keptAt,
+          lastTransactionalAt: userCompanies.lastTransactionalAt,
         })
         .from(userCompanies)
         .innerJoin(companies, eq(companies.id, userCompanies.companyId))

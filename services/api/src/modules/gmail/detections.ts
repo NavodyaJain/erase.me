@@ -1,3 +1,4 @@
+import { activityHint, DEFAULT_ACTIVITY, type ActivityConfig, type ActivityHint } from './activity.js';
 import { confidenceFor, isDeliveryDomain, MAILBOX_PROVIDERS, type Confidence, type ExcludeList } from './detection-rules.js';
 import type { DetectedCompany } from './gmail.repository.js';
 
@@ -19,6 +20,11 @@ export interface DetectionView {
   selfServeUrl: string | null;
   /** The user chose "keep": no request is offered for this company. */
   kept: boolean;
+  /**
+   * A hint from message dates: "looks in use" (a receipt or similar lately) or "looks unused" (nothing for a long time).
+   * Null when neither. A hint, not a decision.
+   */
+  activity: ActivityHint | null;
 }
 
 const day = (d: Date): string => d.toISOString().slice(0, 10);
@@ -28,7 +34,11 @@ const day = (d: Date): string => d.toISOString().slice(0, 10);
  * recorded before the delivery-domain rule, or a domain added to the exclude list later, drops out without a
  * rescan. Companies marked "not mine" are excluded everywhere (F2-AC3).
  */
-export function toDetectionViews(rows: DetectedCompany[], exclude: ExcludeList): DetectionView[] {
+export function toDetectionViews(
+  rows: DetectedCompany[],
+  exclude: ExcludeList,
+  activity: { now: Date; config: ActivityConfig } = { now: new Date(), config: DEFAULT_ACTIVITY },
+): DetectionView[] {
   return rows
     .filter(
       (r) =>
@@ -49,6 +59,7 @@ export function toDetectionViews(rows: DetectedCompany[], exclude: ExcludeList):
       category: r.category,
       selfServeUrl: r.mustKeep ? null : r.selfServeUrl,
       kept: r.keptAt !== null,
+      activity: activityHint(r, activity.now, activity.config),
     }))
     .sort(
       (a, b) =>

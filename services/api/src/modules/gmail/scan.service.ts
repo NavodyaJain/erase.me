@@ -229,5 +229,6 @@ function toDetections(sightings: Sighting[]) {
     firstSeen: a.firstSeen,
     lastSeen: a.lastSeen,
     signals: [...a.signals].sort(),
+    ...(a.lastTransactional ? { lastTransactionalAt: a.lastTransactional } : {}),
   }));
 }

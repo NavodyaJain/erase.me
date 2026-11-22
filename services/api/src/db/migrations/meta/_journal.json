@@ -64,6 +64,13 @@
       "when": 1795358542079,
       "tag": "0008_user_companies_kept_at",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795358851833,
+      "tag": "0009_user_companies_last_transactional_at",
+      "breakpoints": true
     }
   ]
 }

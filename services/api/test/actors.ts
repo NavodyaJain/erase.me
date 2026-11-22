@@ -16,6 +16,11 @@ export interface SeedOptions {
   selfServeUrl?: string;
   /** Use this domain instead of a generated one (for example a delivery service that the list hides). */
   domainOverride?: string;
+  /** When the company first and last sent anything. Defaults: 90 days ago and now. */
+  firstSeen?: Date;
+  lastSeen?: Date;
+  /** The latest receipt or transactional message, if any. */
+  lastTransactionalAt?: Date;
 }
 
 export interface Actor {
@@ -66,9 +71,9 @@ export function actorFactory(getDb: () => TestDb) {
           [companyId, slug, o.name ?? `Shop ${slug.slice(3, 8)}`, domain, ...cols, o.mustKeep ?? false, formUrl ? 'web_form' : 'email', formUrl, o.selfServeUrl ?? null],
         );
         await t.owner.query(
-          `INSERT INTO user_companies (id, user_id, company_id, inbox_id, first_seen, last_seen, signal_types, status, risk_level)
-           VALUES ($1, $2, $3, $4, now() - interval '90 days', now(), $5, $6, $7)`,
-          [ucId, s.userId, companyId, inboxId, o.signals ?? ['welcome', 'receipt'], o.status ?? 'active', o.riskLevel ?? null],
+          `INSERT INTO user_companies (id, user_id, company_id, inbox_id, first_seen, last_seen, signal_types, status, risk_level, last_transactional_at)
+           VALUES ($1, $2, $3, $4, COALESCE($8::timestamptz, LEAST(COALESCE($9::timestamptz, now()), now() - interval '90 days')), COALESCE($9::timestamptz, now()), $5, $6, $7, $10)`,
+          [ucId, s.userId, companyId, inboxId, o.signals ?? ['welcome', 'receipt'], o.status ?? 'active', o.riskLevel ?? null, o.firstSeen ?? null, o.lastSeen ?? null, o.lastTransactionalAt ?? null],
         );
         return { ucId, companyId, contactEmail: cols[0] as string | null };
       },

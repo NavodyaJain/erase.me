@@ -1,5 +1,6 @@
 import { AppError, Problems } from '../../common/errors.js';
 import type { AuditRepository } from '../audit/audit.repository.js';
+import type { ActivityConfig } from '../gmail/activity.js';
 import { ExcludeList, parseExcludeList } from '../gmail/detection-rules.js';
 import { toDetectionViews, type DetectionView } from '../gmail/detections.js';
 import type { GmailRepository } from '../gmail/gmail.repository.js';
@@ -18,6 +19,9 @@ export interface CompaniesServiceDeps {
   audit: AuditRepository;
   /** SCAN_EXCLUDE: domains or addresses left out of results. */
   excludeEntries: string[];
+  /** ACTIVITY_RECENT_DAYS and ACTIVITY_OLD_DAYS. */
+  activity: ActivityConfig;
+  now?: () => Date;
 }
 
 export class CompaniesService {
@@ -31,7 +35,8 @@ export class CompaniesService {
       this.deps.repo.openRequests(userId),
     ]);
     const exclude = new ExcludeList(parseExcludeList(this.deps.excludeEntries.join(' ')), own, registrableDomain);
-    return toDetectionViews(rows, exclude).map((v) => ({ ...v, openRequest: open.get(v.id) ?? null }));
+    const now = this.deps.now?.() ?? new Date();
+    return toDetectionViews(rows, exclude, { now, config: this.deps.activity }).map((v) => ({ ...v, openRequest: open.get(v.id) ?? null }));
   }
 
   /**

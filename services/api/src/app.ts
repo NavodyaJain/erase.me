@@ -174,6 +174,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       gmailRepo,
       audit,
       excludeEntries: parseExcludeList(deps.env.SCAN_EXCLUDE),
+      activity: { recentDays: deps.env.ACTIVITY_RECENT_DAYS, oldDays: deps.env.ACTIVITY_OLD_DAYS },
+      now,
     });
     m.queue.register(SCAN_JOB, (p) => scans.run(p.scanId ?? ''));
     m.queue.register(DELETE_ACCOUNT_JOB, (p) => account.runDeletion(p.userId ?? ''));

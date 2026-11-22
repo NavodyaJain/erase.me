@@ -91,7 +91,7 @@ export async function registerDevHelper(app: FastifyInstance, ctx: { env: Env; d
         inboxes: inboxes.map((i) => ({ id: i.id, email: i.email, status: i.status, lastScanAt: i.lastScanAt })),
         scans,
         // Company-level fields only: name, domain, dates, the signals used, confidence and the must-keep flag.
-        results: toDetectionViews(detections, exclude).map(({ category: _category, ...row }) => row),
+        results: toDetectionViews(detections, exclude, { now: new Date(), config: { recentDays: env.ACTIVITY_RECENT_DAYS, oldDays: env.ACTIVITY_OLD_DAYS } }).map(({ category: _category, ...row }) => row),
       };
     });
 

@@ -47,6 +47,10 @@ const EnvSchema = z
     // Senders to leave out of results: registrable domains (an employer) or full addresses, comma separated.
     // The user's own addresses and the domain of a custom-domain inbox are always left out.
     SCAN_EXCLUDE: z.string().optional(),
+    // The activity hint (a hint only, never a decision). A receipt or transactional message within RECENT days means
+    // "looks in use"; nothing for more than OLD days means "looks unused".
+    ACTIVITY_RECENT_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
+    ACTIVITY_OLD_DAYS: z.coerce.number().int().min(2).max(7300).default(365),
     // Real sends are off by default. Dev and test send only to the fake Gmail.
     ALLOW_REAL_SEND: bool,
     REAL_SEND_DAILY_CAP: z.coerce.number().int().min(0).default(5),
@@ -62,6 +66,9 @@ const EnvSchema = z
     }
     if ((env.GOOGLE_CLIENT_ID === undefined) !== (env.GOOGLE_CLIENT_SECRET === undefined)) {
       issue('GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together');
+    }
+    if (env.ACTIVITY_OLD_DAYS <= env.ACTIVITY_RECENT_DAYS) {
+      issue('ACTIVITY_OLD_DAYS', 'must be greater than ACTIVITY_RECENT_DAYS');
     }
     if (env.ALLOW_REAL_SEND && env.NODE_ENV === 'test') {
       issue('ALLOW_REAL_SEND', 'must be false when NODE_ENV is test');

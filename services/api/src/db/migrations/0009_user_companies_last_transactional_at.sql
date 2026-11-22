@@ -1,0 +1,1 @@
+ALTER TABLE "user_companies" ADD COLUMN "last_transactional_at" timestamp with time zone;

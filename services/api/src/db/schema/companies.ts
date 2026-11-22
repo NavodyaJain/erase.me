@@ -101,6 +101,8 @@ export const userCompanies = pgTable(
     status: userCompanyStatus('status').notNull().default('active'),
     /** Set when the user chose "keep" for this company: no request is offered or approved for it until cleared. */
     keptAt: ts('kept_at'),
+    /** The date of the latest receipt or transactional message from this company (header signals only). Feeds the activity hint. */
+    lastTransactionalAt: ts('last_transactional_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

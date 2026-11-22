@@ -101,17 +101,30 @@ export function readSighting(m: GmailMessageMeta, exclude: ExcludeList = NO_EXCL
   return { domain, seenAt: m.receivedAt, signals };
 }
 
-/** Merges sightings by domain: earliest and latest date, union of signals. */
-export function aggregate(sightings: Sighting[]): Map<string, { firstSeen: Date; lastSeen: Date; signals: Set<SignalType> }> {
-  const out = new Map<string, { firstSeen: Date; lastSeen: Date; signals: Set<SignalType> }>();
+/** The signals that show a company is actively serving the user: an order, a payment, a statement. */
+const ACTIVITY_SIGNALS: ReadonlySet<SignalType> = new Set(['receipt', 'transactional']);
+
+export interface Aggregate {
+  firstSeen: Date;
+  lastSeen: Date;
+  signals: Set<SignalType>;
+  /** The latest message carrying a receipt or transactional signal, for the activity hint. */
+  lastTransactional: Date | undefined;
+}
+
+/** Merges sightings by domain: earliest and latest date, union of signals, latest receipt or transactional date. */
+export function aggregate(sightings: Sighting[]): Map<string, Aggregate> {
+  const out = new Map<string, Aggregate>();
   for (const s of sightings) {
+    const transactional = s.signals.some((t) => ACTIVITY_SIGNALS.has(t)) ? s.seenAt : undefined;
     const cur = out.get(s.domain);
     if (!cur) {
-      out.set(s.domain, { firstSeen: s.seenAt, lastSeen: s.seenAt, signals: new Set(s.signals) });
+      out.set(s.domain, { firstSeen: s.seenAt, lastSeen: s.seenAt, signals: new Set(s.signals), lastTransactional: transactional });
       continue;
     }
     if (s.seenAt < cur.firstSeen) cur.firstSeen = s.seenAt;
     if (s.seenAt > cur.lastSeen) cur.lastSeen = s.seenAt;
+    if (transactional && (!cur.lastTransactional || transactional > cur.lastTransactional)) cur.lastTransactional = transactional;
     for (const t of s.signals) cur.signals.add(t);
   }
   return out;

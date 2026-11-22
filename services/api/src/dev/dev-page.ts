@@ -166,7 +166,10 @@ export function renderDevPage(nonce: string): string {
         c.appendChild(link);
       }
       tr.appendChild(c);
-      tr.appendChild(el('td', r.confidence === 'high' ? 'Likely' : 'Possible', r.confidence === 'high' ? 'high' : ''));
+      var conf = el('td', r.confidence === 'high' ? 'Likely' : 'Possible', r.confidence === 'high' ? 'high' : '');
+      if (r.activity) conf.appendChild(el('div', r.activity === 'looks_in_use' ? 'Looks in use' : 'Looks unused', 'dom'));
+      if (r.kept) conf.appendChild(el('div', 'Kept', 'dom'));
+      tr.appendChild(conf);
       tr.appendChild(el('td', r.firstSeen));
       tr.appendChild(el('td', r.lastSeen));
       var sig = el('td');

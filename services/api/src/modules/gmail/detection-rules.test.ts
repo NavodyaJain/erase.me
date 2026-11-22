@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { confidenceFor, DELIVERY_DOMAINS, MAILBOX_PROVIDERS } from './detection-rules.js';
+import { DEFAULT_ACTIVITY } from './activity.js';
 import { toDetectionViews } from './detections.js';
 import type { DetectedCompany } from './gmail.repository.js';
 import { ExcludeList } from './detection-rules.js';
@@ -45,15 +46,19 @@ describe('toDetectionViews', () => {
     inboxId: 'inb_x',
     selfServeUrl: null,
     keptAt: null,
+    lastTransactionalAt: null,
     ...over,
   });
   const none = new ExcludeList([], [], registrableDomain);
+  // A fixed "now" a week after the fixture's last message, so the activity hint does not depend on the date the tests run.
+  const activity = { now: new Date('2025-06-08T10:00:00Z'), config: DEFAULT_ACTIVITY };
 
   it('shows name, dates, signals used, confidence and the must-keep flag', () => {
-    const [v] = toDetectionViews([row({ signals: ['receipt', 'list_unsubscribe'], mustKeep: true })], none);
+    const [v] = toDetectionViews([row({ signals: ['receipt', 'list_unsubscribe'], mustKeep: true })], none, activity);
     expect(v).toEqual({
       id: 'ucm_x',
       kept: false,
+      activity: null,
       company: 'Brand',
       domain: 'brand.example',
       firstSeen: '2025-01-02',
@@ -76,19 +81,20 @@ describe('toDetectionViews', () => {
         row({ domain: 'keep.example', company: 'Keep' }),
       ],
       new ExcludeList(['employer.example'], [], registrableDomain),
+      activity,
     );
     expect(views.map((v) => v.company)).toEqual(['Keep']);
   });
 
   it('carries the self-serve link, but never for a must-keep company', () => {
     const link = 'https://brand.example/account/delete';
-    const [a, b] = toDetectionViews([row({ company: 'A', selfServeUrl: link }), row({ company: 'B', domain: 'b.example', selfServeUrl: link, mustKeep: true })], none);
+    const [a, b] = toDetectionViews([row({ company: 'A', selfServeUrl: link }), row({ company: 'B', domain: 'b.example', selfServeUrl: link, mustKeep: true })], none, activity);
     expect(a?.selfServeUrl).toBe(link);
     expect(b?.selfServeUrl).toBeNull();
   });
 
   it('marks a company the user chose to keep', () => {
-    const [kept, plain] = toDetectionViews([row({ company: 'Kept', keptAt: new Date('2026-01-01') }), row({ company: 'Plain', domain: 'plain.example' })], none);
+    const [kept, plain] = toDetectionViews([row({ company: 'Kept', keptAt: new Date('2026-01-01') }), row({ company: 'Plain', domain: 'plain.example' })], none, activity);
     expect(kept?.kept).toBe(true);
     expect(plain?.kept).toBe(false);
   });

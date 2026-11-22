@@ -93,6 +93,14 @@ describe('loadEnv', () => {
     expect(failure({ ...base, SCAN_MAX_MESSAGES: '5' }).issues.map((i) => i.variable)).toEqual(['SCAN_MAX_MESSAGES']);
   });
 
+  it('reads the activity thresholds: 90 and 365 days by default, old must be greater than recent', () => {
+    expect(loadEnv(base)).toMatchObject({ ACTIVITY_RECENT_DAYS: 90, ACTIVITY_OLD_DAYS: 365 });
+    expect(loadEnv({ ...base, ACTIVITY_RECENT_DAYS: '30', ACTIVITY_OLD_DAYS: '180' })).toMatchObject({ ACTIVITY_RECENT_DAYS: 30, ACTIVITY_OLD_DAYS: 180 });
+    expect(loadEnv({ ...base, ACTIVITY_RECENT_DAYS: '', ACTIVITY_OLD_DAYS: '' }).ACTIVITY_OLD_DAYS).toBe(365);
+    expect(failure({ ...base, ACTIVITY_RECENT_DAYS: '200', ACTIVITY_OLD_DAYS: '100' }).issues.map((i) => i.variable)).toEqual(['ACTIVITY_OLD_DAYS']);
+    expect(failure({ ...base, ACTIVITY_RECENT_DAYS: '0' }).issues.map((i) => i.variable)).toEqual(['ACTIVITY_RECENT_DAYS']);
+  });
+
   it('derives the Google redirect URI from API_PUBLIC_URL with the registered callback path', () => {
     expect(googleRedirectUri(loadEnv(base))).toBe('http://localhost:4000/v1/auth/google/callback');
     expect(googleRedirectUri(loadEnv({ ...base, API_PUBLIC_URL: 'https://api.erase.me' }))).toBe(

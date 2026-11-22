@@ -175,6 +175,20 @@ describe('parseExcludeList', () => {
   });
 });
 
+describe('aggregate: the latest receipt or transactional date', () => {
+  it('records the latest message with a receipt or transactional signal, and ignores newsletters', () => {
+    const out = aggregate([
+      { domain: 'a.example', seenAt: new Date('2024-01-01'), signals: ['receipt'] },
+      { domain: 'a.example', seenAt: new Date('2025-03-01'), signals: ['transactional', 'list_unsubscribe'] },
+      { domain: 'a.example', seenAt: new Date('2026-01-01'), signals: ['newsletter'] },
+      { domain: 'b.example', seenAt: new Date('2026-01-01'), signals: ['newsletter', 'welcome', 'verify'] },
+    ]);
+    expect(out.get('a.example')?.lastTransactional).toEqual(new Date('2025-03-01'));
+    expect(out.get('a.example')?.lastSeen).toEqual(new Date('2026-01-01'));
+    expect(out.get('b.example')?.lastTransactional).toBeUndefined();
+  });
+});
+
 describe('aggregate', () => {
   it('merges per domain: widest dates, union of signals', () => {
     const out = aggregate([
