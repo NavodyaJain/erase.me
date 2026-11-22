@@ -98,7 +98,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     reply.header('access-control-allow-credentials', 'true');
     reply.header('vary', 'Origin');
     if (request.method === 'OPTIONS') {
-      reply.header('access-control-allow-methods', 'GET, POST, PATCH, DELETE');
+      reply.header('access-control-allow-methods', 'GET, POST, PUT, PATCH, DELETE');
       reply.header('access-control-allow-headers', 'content-type, x-csrf-token, idempotency-key');
       reply.header('access-control-max-age', '600');
       return reply.status(204).send();

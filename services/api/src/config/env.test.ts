@@ -108,6 +108,16 @@ describe('loadEnv', () => {
     );
   });
 
+  it('takes WEB_ORIGIN as an origin: a trailing slash is normalised, a path is refused', () => {
+    expect(loadEnv({ ...base, WEB_ORIGIN: 'http://localhost:3005' }).WEB_ORIGIN).toBe('http://localhost:3005');
+    expect(loadEnv({ ...base, WEB_ORIGIN: 'http://localhost:3005/' }).WEB_ORIGIN).toBe('http://localhost:3005');
+    expect(loadEnv({ ...base, WEB_ORIGIN: 'HTTPS://App.Erase.Me' }).WEB_ORIGIN).toBe('https://app.erase.me');
+    expect(loadEnv(base).WEB_ORIGIN).toBe('http://localhost:3000');
+    for (const bad of ['http://localhost:3000/app', 'http://localhost:3000?x=1', 'ftp://localhost', 'localhost:3000', 'http://user@localhost:3000']) {
+      expect(failure({ ...base, WEB_ORIGIN: bad }).issues.map((i) => i.variable), bad).toEqual(['WEB_ORIGIN']);
+    }
+  });
+
   it('requires hardening settings in production', () => {
     const err = failure({ ...base, NODE_ENV: 'production', WEB_ORIGIN: 'http://erase.example' });
     expect(err.issues.map((i) => i.variable).sort()).toEqual(['AI_SERVICE_TOKEN', 'API_PUBLIC_URL', 'TOKEN_MASTER_KEY', 'WEB_ORIGIN']);

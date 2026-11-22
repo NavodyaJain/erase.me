@@ -12,6 +12,27 @@ const urlWith = (protocols: string[], label: string) =>
     { message: `must be a valid ${label} URL` },
   );
 
+/**
+ * An origin: scheme, host and optional port, nothing else. The browser sends exactly this in the `Origin` header,
+ * and the API compares it exactly, so a trailing slash or a path in the setting would silently break CORS and the
+ * CSRF origin check. A bare origin with a trailing slash is accepted and normalised; anything with a path, query or
+ * fragment is refused.
+ */
+const originUrl = z
+  .string()
+  .refine(
+    (v) => {
+      try {
+        const u = new URL(v);
+        return ['http:', 'https:'].includes(u.protocol) && u.pathname === '/' && !u.search && !u.hash && !u.username && !u.password;
+      } catch {
+        return false;
+      }
+    },
+    { message: 'must be an origin such as https://app.example (scheme, host, optional port; no path)' },
+  )
+  .transform((v) => new URL(v).origin);
+
 const bool = z
   .enum(['true', 'false'], { message: 'must be "true" or "false"' })
   .default('false')
@@ -23,7 +44,8 @@ const EnvSchema = z
     API_HOST: z.string().min(1).default('127.0.0.1'),
     API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-    WEB_ORIGIN: urlWith(['http:', 'https:'], 'http(s)').default('http://localhost:3000'),
+    // The web app's origin. Drives CORS, the CSRF origin check and the post-sign-in redirect. It runs on its own port or host.
+    WEB_ORIGIN: originUrl.default('http://localhost:3000'),
     // The app connects as the restricted role (INSERT/SELECT only on append-only tables).
     DATABASE_URL: urlWith(['postgres:', 'postgresql:'], 'Postgres'),
     // Migrations run as the owner role. Only the migrate script needs this.
