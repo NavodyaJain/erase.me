@@ -157,7 +157,7 @@ describe('create a request and its draft', () => {
     expect(r.view.draft.body).toContain(`Name: ${a.name}`);
     expect(r.view.draft.body).toContain(`Email address: ${a.email}`);
     expect(r.view.draft.body).toMatch(/likely holds/);
-    expect(r.view.draft.body).toContain('[OPEN: statute citation pending verification.');
+    expect(r.view.draft.body).toContain('[OPEN: statute citation and commencement date pending verification.');
     expect(r.view.events.map((e) => e.type)).toEqual(['drafted']);
     expect(r.view.canSend).toBe(false);
     expect(r.view.blockers.map((b) => b.code)).toContain('draft_unsafe');

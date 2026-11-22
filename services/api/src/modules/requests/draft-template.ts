@@ -32,29 +32,37 @@ function holdsPhrases(signals: readonly string[]): string {
   return phrases.length ? phrases.join(' and ') : 'my email address';
 }
 
+/** The statute wording as one paragraph, or the [OPEN] paragraph that stands in for it until it is verified. */
+function statuteParagraph(c: StatuteCitation): string {
+  if (!c.verified) {
+    return `[OPEN: statute citation and commencement date pending verification. To verify: ${c.candidate}. Replace this paragraph with the verified wording before approving.]`;
+  }
+  return [c.erasureLine, c.summaryLine, c.commencementLine].join(' ');
+}
+
 /**
- * The first draft of an erasure request (F6, TRD 7.5): plain and polite, specific, mentions the user's name and
- * registered email, asks for written confirmation within 30 days, and never includes an ID number, a threat or a
- * claim about the outcome. Wording follows PRD 4.4: "likely holds" or "may hold", never a promise or a conclusion.
- * No AI is involved; this is a fixed template.
+ * The first draft of an erasure request (F6, TRD 7.5): a plain, polite request. It is not a legal demand: until the
+ * rights provisions commence there is no duty to point to, and even after, this text only asks. It mentions the
+ * user's name and registered email, asks for erasure and, as an optional extra, a short summary of the data held,
+ * and says it is also made under any erasure process in the company's own privacy policy. "Within 30 days" is a
+ * hope ("I would be grateful for..."), never a deadline, and nothing here threatens, accuses or claims an outcome.
+ * No ID number is ever included. Wording follows PRD 4.4: "likely holds" or "may hold", never a promise or a
+ * conclusion. No AI is involved; this is a fixed template, for the owner's legal review before real use.
  *
- * The statute line comes from `citation`. While it is unverified the draft carries an [OPEN] marker that approval
- * and sending refuse (see draft-safety), so an unchecked citation cannot be sent by accident.
- * For the owner's legal review before real use.
+ * The statute wording (section numbers and the commencement date) comes from `citation`. While it is unverified the
+ * draft carries an [OPEN] paragraph that approval and sending refuse (see draft-safety), so an unchecked citation or
+ * date cannot be sent by accident.
  */
 export function renderDraft(input: DraftInput, citation: StatuteCitation = STATUTE_CITATION): RenderedDraft {
   const name = oneLine(input.userName) || 'Erase.me user';
   const email = oneLine(input.userEmail);
   const company = oneLine(input.companyName);
   const hedge = confidenceFor(input.signals) === 'high' ? 'likely holds' : 'may hold';
-  const citationLine = citation.verified
-    ? citation.line
-    : `[OPEN: statute citation pending verification. Candidate: ${citation.candidate}. Replace this line with the verified wording before approving.]`;
 
   const body = [
     `To the Grievance Officer, ${company}`,
     '',
-    `I am writing about personal data that ${company} ${hedge} about me.`,
+    `I am writing to ask about personal data that ${company} ${hedge} about me.`,
     '',
     'My details',
     `Name: ${name}`,
@@ -64,12 +72,16 @@ export function renderDraft(input: DraftInput, citation: StatuteCitation = STATU
     `From emails that ${company} sent to this address, I think you ${hedge} ${holdsPhrases(input.signals)}.`,
     '',
     'My request',
-    `I ask ${company} to erase the personal data it holds about me. Please reply in writing within 30 days to tell me:`,
+    `I would like to ask ${company} to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:`,
     '1. whether the data has been erased;',
     '2. if you keep any of it, what you keep, why, and for how long; and',
     '3. if you need anything from me to confirm who I am, what you need.',
     '',
-    citationLine,
+    'If you can, I would also appreciate a short summary of the personal data you hold about me.',
+    '',
+    statuteParagraph(citation),
+    '',
+    'I am also making this request under any erasure process described in your privacy policy.',
     '',
     'I am sending this from the email address above. Please reply to it.',
     '',
