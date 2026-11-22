@@ -1,8 +1,9 @@
 'use client';
 
-import { isApiError } from '@erase/api-client';
-import type { CompanyItem } from '@erase/contracts';
+import { createIdempotencyKey, isApiError, isStaleDraft } from '@erase/api-client';
+import type { CompanyItem, RequestView } from '@erase/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { useApi } from './providers';
 
 export const SCAN_POLL_MS = 1500;
@@ -105,4 +106,82 @@ export function useCreateDrafts() {
       void queries.invalidateQueries({ queryKey: ['requests'] });
     },
   });
+}
+
+export function useRequest(id: string) {
+  const api = useApi();
+  return useQuery({ queryKey: ['request', id], queryFn: () => api.requests.get(id) });
+}
+
+function useRefreshRequest() {
+  const queries = useQueryClient();
+  return (id: string, view?: RequestView) => {
+    if (view) queries.setQueryData(['request', id], view);
+    else void queries.invalidateQueries({ queryKey: ['request', id] });
+    void queries.invalidateQueries({ queryKey: ['requests'] });
+    void queries.invalidateQueries({ queryKey: ['companies'] });
+  };
+}
+
+export function useEditDraft(id: string) {
+  const api = useApi();
+  const refresh = useRefreshRequest();
+  return useMutation({
+    mutationFn: (input: { baseHash: string; subject: string; body: string }) => api.requests.editDraft(id, input),
+    onSuccess: (view) => refresh(id, view),
+    onError: (e) => {
+      if (isStaleDraft(e)) refresh(id);
+    },
+  });
+}
+
+export function useCloseRequest(id: string) {
+  const api = useApi();
+  const refresh = useRefreshRequest();
+  return useMutation({ mutationFn: () => api.requests.close(id), onSuccess: (view) => refresh(id, view) });
+}
+
+export type StepResult =
+  | { state: 'sent'; delivery: 'fake' | 'real' }
+  | { state: 'approved' }
+  | { state: 'stale' }
+  | { state: 'error'; error: unknown };
+
+/**
+ * Approve (the exact draft version the person opened) and then send. Rules:
+ * - approve uses `viewedHash`, never the latest hash;
+ * - a changed draft (`draft_changed`) stops there: the request is refreshed and nothing is retried;
+ * - one Idempotency-Key is made per request and reused on every retry, so a retry cannot send twice.
+ */
+export function useApproveAndSend() {
+  const api = useApi();
+  const refresh = useRefreshRequest();
+  const keys = useRef(new Map<string, string>());
+  return async (id: string, input: { viewedHash: string; alreadyApproved: boolean }): Promise<StepResult> => {
+    try {
+      if (!input.alreadyApproved) await api.requests.approve(id, input.viewedHash);
+    } catch (error) {
+      if (isStaleDraft(error)) {
+        refresh(id);
+        return { state: 'stale' };
+      }
+      refresh(id);
+      return { state: 'error', error };
+    }
+    let key = keys.current.get(id);
+    if (!key) {
+      key = createIdempotencyKey();
+      keys.current.set(id, key);
+    }
+    try {
+      const sent = await api.requests.send(id, key);
+      keys.current.delete(id);
+      refresh(id);
+      return { state: 'sent', delivery: sent.delivery };
+    } catch (error) {
+      // The key stays, so pressing "try again" reuses it.
+      refresh(id);
+      return { state: 'error', error };
+    }
+  };
 }
