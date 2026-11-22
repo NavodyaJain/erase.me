@@ -66,6 +66,17 @@ Decided by the owner:
 - **Self-serve link.** A catalog entry may carry `self_serve_url` (the company's own account-deletion page). It is shown before a request by email: in the create results, the request view, the detections list and the dev page. Never for a must-keep company.
 - **No real contacts in the repo.** The committed catalog has only fictional entries on example.com (including one web form and one self-serve link). Real emails, form URLs and self-serve links are added by hand from each company's own page, in `catalog.json` or `catalog.local.json`, with `source_url` and `verified_on`.
 
+### Keep this, the activity hint and the API contract (2026-11-22)
+
+Decided by the owner:
+- **"Keep this".** `PUT` and `DELETE /v1/companies/:id/keep` (idempotent; `:id` is the detected-company id). A kept company is never offered for a request: create answers outcome `kept`. A request already in progress is **refused at approve and send with 409 `kept`** (like `must_keep`), and goes on once the user clears it. Editing and closing still work, and an already-sent request is unaffected (a new send key still answers `already_sent`). Keep on a must-keep company answers 409 `must_keep`, on a "not mine" company 409 `company_excluded`. Each change writes an `audit_log` entry (`company.keep_set`, `company.keep_cleared`).
+- **Activity hint.** `user_companies.last_transactional_at` is set by the scan to the date of the latest receipt or transactional message (header signals and dates only). "Looks in use" means one within `ACTIVITY_RECENT_DAYS` (90); "looks unused" means the last message of any kind is older than `ACTIVITY_OLD_DAYS` (365); otherwise none. A company scanned before the column existed gets no "in use" hint until a rescan. It is a hint only and changes nothing about what a user can do.
+- **No pagination** on `GET /v1/companies` for now.
+- **API contract.** `services/api/openapi/openapi.json` is generated from zod (`src/contract`), checked in, and kept current by a CI check. `@erase/contracts` holds the generated types and `@erase/api-client` is the typed client (cookies, CSRF header, required Idempotency-Key on send). Both are source-only packages with no build step. See `services/api/openapi/README.md` for the error and outcome shapes.
+- New dev dependencies are pinned to exact versions: `@seriousme/openapi-schema-validator`, `ajv`, `ajv-formats`, `openapi-typescript`, `openapi-fetch`.
+
+Left for later: the dev page shows the hint and "kept" but has no Keep button; the contract has no pagination parameters yet.
+
 Left for later: `must_keep` is enforced at create, approve and send. The reply states, follow-up and proof pack stay unbuilt, and no job moves a request past `sent`.
 
 ## Design drift found by the banned-word lint

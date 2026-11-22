@@ -26,3 +26,7 @@ Rules: validate every input, no business logic in controllers, every admin/suppo
 - A web-form company (`grievance_channel = web_form`) cannot be sent by email: create answers outcome `use_form` with the link and a draft to copy and paste, and approve and send answer 409 `use_form`. The optional `self_serve_url` of a company is returned with the create results and the request view.
 - Drafts are polite requests, not demands. The statute sections and the commencement date sit behind one flag in `draft-citation.ts`.
 - Real sending is off until the owner verifies the statute citation (`draft-citation.ts`) and sets `ALLOW_REAL_SEND=true`. In development and test the fake sender is used and every response says so.
+
+## Companies, keep, and the contract
+- `GET /v1/companies` lists the user's detected companies (confidence, signals, `mustKeep`, `kept`, activity hint, self-serve link, open request). `PUT` and `DELETE /v1/companies/:id/keep` set and clear "keep this".
+- The API contract is `openapi/openapi.json`, generated from `src/contract` (`pnpm --filter @erase/api openapi:generate`; `openapi:check` fails if it is stale, and CI runs it). See `openapi/README.md`. The typed client is `@erase/api-client`, built on the generated types in `@erase/contracts`.
