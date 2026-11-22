@@ -21,6 +21,12 @@ import { gmailRoutes } from './modules/gmail/gmail.controller.js';
 import { createGmailRepository } from './modules/gmail/gmail.repository.js';
 import { InboxService } from './modules/gmail/inbox.service.js';
 import { SCAN_JOB, ScanService, scanOptionsFromEnv } from './modules/gmail/scan.service.js';
+import { createRequestsRepository } from './modules/requests/requests.repository.js';
+import { requestsRoutes } from './modules/requests/requests.controller.js';
+import { RequestsService } from './modules/requests/requests.service.js';
+import { STATUTE_CITATION } from './modules/requests/draft-citation.js';
+import { HttpGmailSender } from './modules/requests/http-gmail-sender.js';
+import { selectSender, type SenderChoice } from './modules/requests/sender.js';
 import { healthRoutes } from './modules/health/health.controller.js';
 import { HealthService } from './modules/health/health.service.js';
 
@@ -43,6 +49,8 @@ export interface AppDeps {
     authRateLimitPerMinute?: number;
     /** Where the browser lands after Google. Defaults to WEB_ORIGIN. */
     postAuthRedirect?: string;
+    /** Tests inject a sender. Otherwise the choice follows selectSender (fake in development and test, real only when allowed). */
+    sender?: SenderChoice;
   };
 }
 
@@ -50,6 +58,7 @@ export interface AppServices {
   scans: ScanService;
   inboxes: InboxService;
   account: AccountService;
+  requests: RequestsService;
   sessions: SessionService;
   auth: AuthService;
 }
@@ -141,13 +150,28 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       now,
     });
     const account = new AccountService(authRepo, sessions, inboxes, m.queue, audit, now);
+    const requestsService = new RequestsService({
+      repo: createRequestsRepository(m.db),
+      audit,
+      inboxes,
+      sender:
+        m.sender ??
+        selectSender(deps.env, {
+          citationVerified: STATUTE_CITATION.verified,
+          real: () => new HttpGmailSender({ getAccessToken: (inboxId) => inboxes.accessTokenById(inboxId) }),
+        }),
+      realSendDailyCap: deps.env.REAL_SEND_DAILY_CAP,
+      now,
+      log: { info: (o, msg) => app.log.info(o, msg), warn: (o, msg) => app.log.warn(o, msg) },
+    });
     m.queue.register(SCAN_JOB, (p) => scans.run(p.scanId ?? ''));
     m.queue.register(DELETE_ACCOUNT_JOB, (p) => account.runDeletion(p.userId ?? ''));
-    app.decorate('services', { scans, inboxes, account, sessions, auth });
+    app.decorate('services', { scans, inboxes, account, requests: requestsService, sessions, auth });
 
     const requireUser = createAuthGuard(sessions, deps.env.WEB_ORIGIN);
     const limiter = createRateLimiter({ max: m.authRateLimitPerMinute ?? 30, windowMs: 60_000 });
     void app.register(authRoutes, { env: deps.env, auth, postAuthRedirect: m.postAuthRedirect ?? deps.env.WEB_ORIGIN, account, sessions, requireUser, limiter });
+    void app.register(requestsRoutes, { requests: requestsService, requireUser });
     void app.register(gmailRoutes, { env: deps.env, auth, inboxes, scans, requireUser });
   }
 

@@ -55,7 +55,7 @@ describe('renderDraft', () => {
   it('keeps line breaks and control characters out of the name, email and company', () => {
     const odd = renderDraft({ userName: 'Asha\r\nBcc: x@example.test', userEmail: 'a@example.test\n', companyName: 'Shop\u0000 Co', signals: [] });
     expect(odd.body).toContain('Name: Asha Bcc: x@example.test');
-    expect(odd.body).not.toMatch(/\u0000/);
+    expect(odd.body.includes('\u0000')).toBe(false);
   });
 });
 

@@ -134,6 +134,13 @@ export class InboxService implements InboxDisconnector {
     return { revokedAtGoogle: revoked };
   }
 
+  /** An access token for an inbox by id, for the sender. In memory only. */
+  async accessTokenById(inboxId: string): Promise<string> {
+    const inbox = await this.repo.findInbox(inboxId);
+    if (!inbox) throw new GmailApiError('auth');
+    return this.accessTokenFor(inbox);
+  }
+
   /**
    * A short-lived access token for a connected inbox, kept in memory only. If Google says the grant is
    * gone (the user revoked it in their Google account) the inbox is marked `error` and no more calls are made.
