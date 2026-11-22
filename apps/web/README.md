@@ -23,6 +23,6 @@ Set `NEXT_PUBLIC_API_URL` (see `.env.example`). The API's `WEB_ORIGIN` must be t
 
 ## Wording and screens that differ from the design boards
 The boards are sample data and follow `docs/design`, with these deliberate differences (see also `docs/OPEN-QUESTIONS.md`):
-- Three boards state "leaked" as fact (Home, Desktop, Leak). The app uses hedged wording instead.
+- Three boards state "leaked" as fact (Home, Desktop, Leak). The app uses hedged wording instead. <!-- banned-words:ignore - documents the boards' wording -->
 - Boards that show risk levels, Money, KYC, Aliases, replies, "Chase now" and the proof pack are not built in Phase 1.
 - Draft text always comes from the API; the boards' hard-coded draft wording is not used.
