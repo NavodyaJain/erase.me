@@ -274,14 +274,18 @@ export class RequestsService {
       if (!isDraftHash(draftHash) || draftHash !== latest.draftHash) {
         throw new AppError(409, 'draft_changed', 'The draft changed', 'The text you approved is not the latest version. Review it again.');
       }
-      if (req.status === 'approved') return this.view(tx, userId, requestId); // already approved: same answer
-      assertTransition(req.status, 'approved');
+      // Already approved with a valid approval of this exact draft: same answer, nothing to record.
+      if (req.status === 'approved' && (await tx.hasUserApproval(req.id, latest.draftHash, latest.createdAt))) {
+        return this.view(tx, userId, requestId);
+      }
+      if (req.status !== 'approved') assertTransition(req.status, 'approved');
 
+      // The guards run on every approval, including one that finds an approved request with no valid approval.
       const blocker = draftBlockers(ctx, latest)[0];
       if (blocker) throwBlocker(blocker);
 
       await tx.insertEvent({ requestId: req.id, type: 'approved', actorType: 'user', actorId: userId, draftHash: latest.draftHash, payload: { version: latest.version } });
-      await tx.setStatus(req.id, 'approved');
+      if (req.status !== 'approved') await tx.setStatus(req.id, 'approved');
       return this.view(tx, userId, requestId);
     });
   }

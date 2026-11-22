@@ -19,7 +19,7 @@ describe('renderDraft', () => {
 
   it('uses hedged wording, never a promise, a threat or a legal conclusion (PRD 4.4)', () => {
     expect(d.body).toMatch(/likely holds/);
-    expect(d.body).not.toMatch(/will delete|guarantee|leaked|your data is safe|compliant|illegal|violat|sue|court|penalt|fine\b|!/i);
+    expect(d.body).not.toMatch(/will delete|guarantee|leaked|your data is safe|compliant|illegal|violat|sue|court|penalt|fine\b|!/i); // banned-words:ignore - asserts these phrases are absent
     expect(d.body).not.toMatch(/\b(you must|you are required|breach)\b/i);
   });
 
