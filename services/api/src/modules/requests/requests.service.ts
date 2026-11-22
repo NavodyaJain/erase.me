@@ -14,7 +14,7 @@ export const MAX_DRAFTS_PER_CALL = 10;
 
 /** Something that stops a request from being drafted, approved or sent, with words a person can act on. */
 export interface Blocker {
-  code: 'company_excluded' | 'must_keep' | 'no_contact' | 'contact_bounced' | 'contact_changed' | 'use_form' | 'draft_integrity' | 'draft_unsafe';
+  code: 'company_excluded' | 'must_keep' | 'kept' | 'no_contact' | 'contact_bounced' | 'contact_changed' | 'use_form' | 'draft_integrity' | 'draft_unsafe';
   status: number;
   message: string;
   findings?: SafetyFinding[];
@@ -24,6 +24,8 @@ export interface Blocker {
 
 export const mustKeepMessage = (company: string): string =>
   `${company} is needed to keep your account working, so Erase.me does not offer a deletion request for it. If you stop using it, you can close the account with the company directly.`;
+export const keptMessage = (company: string): string =>
+  `You chose to keep ${company}, so Erase.me makes no request for it. Undo "keep" to continue.`;
 const noContactMessage = (company: string): string =>
   `We do not have a verified grievance contact for ${company} yet, so this request is blocked. We have noted it so the contact can be found. Nothing is sent without one.`;
 const bouncedMessage = (company: string): string =>
@@ -68,6 +70,8 @@ function companyBlockers(c: CompanyContext): Blocker[] {
     out.push({ code: 'company_excluded', status: 409, message: `You marked ${c.companyName} as not yours, so no request can be made for it.` });
   }
   if (c.mustKeep || c.riskLevel === 'must_keep') out.push({ code: 'must_keep', status: 409, message: mustKeepMessage(c.companyName) });
+  // The user's own choice, checked at create, approve and send. Clearing it lets the request go on. Editing and closing still work.
+  if (c.keptAt !== null) out.push({ code: 'kept', status: 409, message: keptMessage(c.companyName) });
   const contact = contactBlocker(c);
   if (contact) out.push(contact);
   return out;
@@ -103,6 +107,8 @@ function titleFor(code: Blocker['code']): string {
       return 'No verified contact for this company';
     case 'company_excluded':
       return 'Company excluded';
+    case 'kept':
+      return 'You chose to keep this company';
     case 'use_form':
       return 'Use the company\u2019s web form';
     case 'draft_unsafe':
@@ -122,9 +128,10 @@ export interface DraftOutcome {
   userCompanyId: string;
   /**
    * `created` and `existing`: an email request. `use_form`: the company takes requests through a web form, so the
-   * request holds a draft to copy and `formUrl` says where to paste it. `blocked`: see `reason` and `message`.
+   * request holds a draft to copy and `formUrl` says where to paste it. `kept`: the user chose to keep this company, so
+   * no request is made. `blocked`: see `reason` and `message`.
    */
-  outcome: 'created' | 'existing' | 'use_form' | 'blocked';
+  outcome: 'created' | 'existing' | 'use_form' | 'kept' | 'blocked';
   requestId?: string;
   reason?: Blocker['code'] | 'not_found';
   message?: string;
@@ -135,7 +142,7 @@ export interface DraftOutcome {
 
 export interface RequestView {
   request: { id: string; status: RequestStatus; createdAt: Date; updatedAt: Date; sentAt: Date | null; dueAt: Date | null };
-  company: { id: string; name: string; mustKeep: boolean; selfServeUrl: string | null };
+  company: { id: string; name: string; mustKeep: boolean; kept: boolean; selfServeUrl: string | null };
   /** How the company takes requests. For `web_form` the draft is for copy and paste and cannot be sent by email. */
   contact: { channel: 'email' | 'web_form'; formUrl: string | null };
   useForm: boolean;
@@ -208,6 +215,7 @@ export class RequestsService {
         // Stands in for the admin task of finding the contact (F6-AC4) until the admin module exists.
         await this.deps.audit.record({ actorType: 'user', actorId: userId, action: 'company.contact_missing', targetType: 'company', targetId: ctx.companyId, requestId: httpRequestId });
       }
+      if (blocker.code === 'kept') return { userCompanyId, outcome: 'kept', message: blocker.message, ...selfServe };
       return { userCompanyId, outcome: 'blocked', reason: blocker.code, message: blocker.message, ...selfServe };
     }
 
@@ -266,7 +274,7 @@ export class RequestsService {
     const canSend = req.status === 'approved' && approved && blockers.length === 0;
     return {
       request: { id: req.id, status: req.status, createdAt: req.createdAt, updatedAt: req.updatedAt, sentAt: req.sentAt, dueAt: req.dueAt },
-      company: { id: ctx.companyId, name: ctx.companyName, mustKeep: ctx.mustKeep || ctx.riskLevel === 'must_keep', selfServeUrl: ctx.selfServeUrl },
+      company: { id: ctx.companyId, name: ctx.companyName, mustKeep: ctx.mustKeep || ctx.riskLevel === 'must_keep', kept: ctx.keptAt !== null, selfServeUrl: ctx.selfServeUrl },
       contact: { channel: ctx.grievanceChannel, formUrl: ctx.grievanceChannel === 'web_form' ? ctx.grievanceFormUrl : null },
       useForm: ctx.grievanceChannel === 'web_form',
       draft: { version: draft.version, to: draft.toEmail, subject: draft.subject, body: draft.body, hash: draft.draftHash, createdBy: draft.createdBy, createdAt: draft.createdAt },
@@ -401,12 +409,14 @@ export class RequestsService {
         }
       }
 
+      // A request that was already sent is unaffected by later changes (keep, must keep, a new contact).
+      if (req.status === 'sent') throw new AppError(409, 'already_sent', 'Already sent', 'This request was already sent.');
+
       // A web-form company cannot be sent by email, whatever state the request is in.
       const formCtx = await tx.contextForRequest(userId, requestId);
       if (!formCtx) throw Problems.notFound();
       assertEmailRequest(formCtx);
 
-      if (req.status === 'sent') throw new AppError(409, 'already_sent', 'Already sent', 'This request was already sent.');
       if (req.status !== 'approved') {
         if (req.status === 'drafted') {
           throw new AppError(409, 'approval_required', 'Approval needed', 'Review the draft and approve it before sending. Nothing is sent without your approval.');

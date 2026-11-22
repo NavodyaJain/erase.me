@@ -1,12 +1,45 @@
 import { and, arrayOverlaps, eq, sql } from 'drizzle-orm';
 import { newId } from '../../common/ids.js';
 import type { Db } from '../../db/client.js';
-import { companies } from '../../db/schema/index.js';
+import { companies, requests, userCompanies } from '../../db/schema/index.js';
 import type { CatalogEntry } from './catalog.js';
 
 /** The only code that writes the canonical company records from the catalog. */
 export function createCompaniesRepository(db: Db) {
   return {
+    /** One detected company of this user, with what the keep rules need. Ownership is part of the query. */
+    async findUserCompany(userId: string, userCompanyId: string) {
+      const [row] = await db
+        .select({
+          id: userCompanies.id,
+          status: userCompanies.status,
+          riskLevel: userCompanies.riskLevel,
+          keptAt: userCompanies.keptAt,
+          mustKeep: companies.mustKeep,
+        })
+        .from(userCompanies)
+        .innerJoin(companies, eq(companies.id, userCompanies.companyId))
+        .where(and(eq(userCompanies.id, userCompanyId), eq(userCompanies.userId, userId)));
+      return row;
+    },
+
+    /** Sets or clears "keep". Idempotent: setting it again keeps the original time. */
+    async setKept(userId: string, userCompanyId: string, kept: boolean): Promise<void> {
+      await db
+        .update(userCompanies)
+        .set({ keptAt: kept ? sql`coalesce(${userCompanies.keptAt}, now())` : null, updatedAt: sql`now()` })
+        .where(and(eq(userCompanies.id, userCompanyId), eq(userCompanies.userId, userId)));
+    },
+
+    /** The open request (not closed or bounced) of each of the user's detected companies. */
+    async openRequests(userId: string): Promise<Map<string, { id: string; status: string }>> {
+      const rows = await db
+        .select({ userCompanyId: requests.userCompanyId, id: requests.id, status: requests.status })
+        .from(requests)
+        .where(and(eq(requests.userId, userId), sql`${requests.status} not in ('closed', 'bounced')`));
+      return new Map(rows.map((r) => [r.userCompanyId, { id: r.id, status: r.status }]));
+    },
+
     /**
      * Makes the companies table match the catalog: the display name, category, domains and must-keep flag.
      * A company the scan already created from a bare domain is updated in place (matched by domain), so a

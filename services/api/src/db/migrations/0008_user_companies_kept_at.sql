@@ -1,0 +1,1 @@
+ALTER TABLE "user_companies" ADD COLUMN "kept_at" timestamp with time zone;

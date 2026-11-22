@@ -41,8 +41,10 @@ describe('toDetectionViews', () => {
     status: 'active',
     mustKeep: false,
     category: 'other',
+    id: 'ucm_x',
     inboxId: 'inb_x',
     selfServeUrl: null,
+    keptAt: null,
     ...over,
   });
   const none = new ExcludeList([], [], registrableDomain);
@@ -50,6 +52,8 @@ describe('toDetectionViews', () => {
   it('shows name, dates, signals used, confidence and the must-keep flag', () => {
     const [v] = toDetectionViews([row({ signals: ['receipt', 'list_unsubscribe'], mustKeep: true })], none);
     expect(v).toEqual({
+      id: 'ucm_x',
+      kept: false,
       company: 'Brand',
       domain: 'brand.example',
       firstSeen: '2025-01-02',
@@ -81,6 +85,12 @@ describe('toDetectionViews', () => {
     const [a, b] = toDetectionViews([row({ company: 'A', selfServeUrl: link }), row({ company: 'B', domain: 'b.example', selfServeUrl: link, mustKeep: true })], none);
     expect(a?.selfServeUrl).toBe(link);
     expect(b?.selfServeUrl).toBeNull();
+  });
+
+  it('marks a company the user chose to keep', () => {
+    const [kept, plain] = toDetectionViews([row({ company: 'Kept', keptAt: new Date('2026-01-01') }), row({ company: 'Plain', domain: 'plain.example' })], none);
+    expect(kept?.kept).toBe(true);
+    expect(plain?.kept).toBe(false);
   });
 
   it('lists likely companies before possible ones, then newest first', () => {

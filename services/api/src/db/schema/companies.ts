@@ -99,6 +99,8 @@ export const userCompanies = pgTable(
     riskLevel: riskLevel('risk_level'),
     holdsHint: text('holds_hint').array().notNull().default(emptyTextArray),
     status: userCompanyStatus('status').notNull().default('active'),
+    /** Set when the user chose "keep" for this company: no request is offered or approved for it until cleared. */
+    keptAt: ts('kept_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

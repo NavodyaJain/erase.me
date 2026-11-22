@@ -45,6 +45,8 @@ export interface CompanyContext {
   userCompanyId: string;
   inboxId: string;
   userCompanyStatus: 'active' | 'not_mine' | 'requested';
+  /** When the user chose "keep" for this company, if they did. */
+  keptAt: Date | null;
   riskLevel: string | null;
   signals: string[];
   companyId: string;
@@ -97,6 +99,7 @@ const contextColumns = {
   userCompanyId: userCompanies.id,
   inboxId: userCompanies.inboxId,
   userCompanyStatus: userCompanies.status,
+  keptAt: userCompanies.keptAt,
   riskLevel: userCompanies.riskLevel,
   signals: userCompanies.signalTypes,
   companyId: companies.id,

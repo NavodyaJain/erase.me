@@ -37,6 +37,8 @@ export interface Detection {
 }
 
 export interface DetectedCompany {
+  /** The detected-company id (`ucm_...`) the API uses. */
+  id: string;
   company: string;
   domain: string;
   firstSeen: Date;
@@ -48,6 +50,8 @@ export interface DetectedCompany {
   inboxId: string;
   /** The company's own account-deletion page, from the catalog. */
   selfServeUrl: string | null;
+  /** When the user chose "keep". */
+  keptAt: Date | null;
 }
 
 const inboxColumns = {
@@ -326,6 +330,7 @@ export function createGmailRepository(db: Db) {
     async listDetections(userId: string, inboxId?: string): Promise<DetectedCompany[]> {
       return db
         .select({
+          id: userCompanies.id,
           company: companies.name,
           domain: sql<string>`${companies.domains}[1]`,
           firstSeen: userCompanies.firstSeen,
@@ -336,6 +341,7 @@ export function createGmailRepository(db: Db) {
           category: companies.category,
           inboxId: userCompanies.inboxId,
           selfServeUrl: companies.selfServeUrl,
+          keptAt: userCompanies.keptAt,
         })
         .from(userCompanies)
         .innerJoin(companies, eq(companies.id, userCompanies.companyId))

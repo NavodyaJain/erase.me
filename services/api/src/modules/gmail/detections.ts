@@ -3,6 +3,8 @@ import type { DetectedCompany } from './gmail.repository.js';
 
 /** What a person sees for one detected company. Company-level only. Wording stays hedged: "likely" or "possible". */
 export interface DetectionView {
+  /** The detected-company id (`ucm_...`). */
+  id: string;
   company: string;
   domain: string;
   firstSeen: string;
@@ -15,6 +17,8 @@ export interface DetectionView {
   category: string;
   /** The company's own account-deletion page, shown before a request by email. Never set for a must-keep company. */
   selfServeUrl: string | null;
+  /** The user chose "keep": no request is offered for this company. */
+  kept: boolean;
 }
 
 const day = (d: Date): string => d.toISOString().slice(0, 10);
@@ -34,6 +38,7 @@ export function toDetectionViews(rows: DetectedCompany[], exclude: ExcludeList):
         !exclude.matchesDomain(r.domain),
     )
     .map((r) => ({
+      id: r.id,
       company: r.company,
       domain: r.domain,
       firstSeen: day(r.firstSeen),
@@ -43,6 +48,7 @@ export function toDetectionViews(rows: DetectedCompany[], exclude: ExcludeList):
       mustKeep: r.mustKeep,
       category: r.category,
       selfServeUrl: r.mustKeep ? null : r.selfServeUrl,
+      kept: r.keptAt !== null,
     }))
     .sort(
       (a, b) =>

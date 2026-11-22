@@ -83,8 +83,8 @@ describe('state, connect, scan and results', () => {
     expect(body.signedIn).toBe(true);
     expect(body.scans[inboxId]).toMatchObject({ status: 'done', foundCount: 2 });
     expect(body.results).toEqual([
-      { company: 'Loanly', domain: 'loanly.example', firstSeen: '2019-03-04', lastSeen: '2024-07-09', signals: ['receipt', 'transactional', 'welcome'], confidence: 'high', mustKeep: false, selfServeUrl: null },
-      { company: 'Streamo', domain: 'streamo.example', firstSeen: '2021-01-01', lastSeen: '2021-01-01', signals: ['list_unsubscribe'], confidence: 'low', mustKeep: false, selfServeUrl: null },
+      { id: expect.stringMatching(/^ucm_/), kept: false, company: 'Loanly', domain: 'loanly.example', firstSeen: '2019-03-04', lastSeen: '2024-07-09', signals: ['receipt', 'transactional', 'welcome'], confidence: 'high', mustKeep: false, selfServeUrl: null },
+      { id: expect.stringMatching(/^ucm_/), kept: false, company: 'Streamo', domain: 'streamo.example', firstSeen: '2021-01-01', lastSeen: '2021-01-01', signals: ['list_unsubscribe'], confidence: 'low', mustKeep: false, selfServeUrl: null },
     ]);
     for (const secret of ['secret-id', 'Hidden Sender', 'noreply@', 'billing@', 'confidential', 'invoice 4411', 'Big sale']) {
       expect(state.body, secret).not.toContain(secret);
