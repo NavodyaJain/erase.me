@@ -14,6 +14,7 @@ export const ID_PREFIXES = {
   audit: 'aud',
   session: 'ses',
   oauthState: 'ost',
+  idempotencyKey: 'idk',
 } as const;
 
 export type IdKind = keyof typeof ID_PREFIXES;

@@ -22,6 +22,7 @@ const INSUFFICIENT_PRIVILEGE = '42501';
 const EXPECTED_TABLES = [
   'audit_log',
   'companies',
+  'idempotency_keys',
   'inboxes',
   'oauth_states',
   'reply_labels',

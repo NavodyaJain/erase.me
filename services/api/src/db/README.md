@@ -41,6 +41,11 @@ It has no DELETE anywhere in Phase 1. Purging and account deletion (Phase 2) run
 - `oauth_states`: one row per Google authorization attempt (state hash, PKCE verifier, nonce). Single use, 10 minutes.
 - Both are mutable (revoke, consume) with no DELETE for the app role. Expired rows are removed by the Phase 2 owner-role purge job.
 
+## Idempotency (migrations 0005 and 0006)
+
+- `idempotency_keys`: one claim per send (`scope = 'send'`). Unique per `(user_id, scope, key)`, and a partial unique index allows only one `in_progress` or `completed` send per request, whatever key it used. `failed` frees the request for another attempt; an unknown outcome stays `in_progress` on purpose.
+- Holds ids, status codes and the response to replay. Never draft text or addresses. Mutable (INSERT, SELECT, UPDATE), no DELETE.
+
 ## Differences from TRD 6.4
 
 - `companies.grievance_verified_on` is a `date` (was `grievance_verified_at`); added `is_fictional`.
