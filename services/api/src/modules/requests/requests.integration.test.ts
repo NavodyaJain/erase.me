@@ -510,8 +510,22 @@ describe('idempotency key on send', () => {
     const a = await actor(h, 'idem4');
     const r = await approved(h, a);
     const k = key();
-    sender.beforeSend = () => new Promise((resolve) => setTimeout(resolve, 60));
-    const results = await Promise.all([A(h).send(a.s, r.id, k), A(h).send(a.s, r.id, k), A(h).send(a.s, r.id, key())]);
+    // The first send is held at the sender until two of the three requests have been answered, so all three really are
+    // in flight together. A fixed delay would let a slow machine finish the first send before the others arrive, and a
+    // same-key replay after completion correctly gets the saved 200, which is not what this test is about.
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    sender.beforeSend = () => gate;
+    let answered = 0;
+    const answer = <T,>(p: Promise<T>): Promise<T> =>
+      p.then((value) => {
+        answered += 1;
+        if (answered === 2) open();
+        return value;
+      });
+    const safety = setTimeout(open, 5000); // never hang if the others wait for the first send
+    const results = await Promise.all([answer(A(h).send(a.s, r.id, k)), answer(A(h).send(a.s, r.id, k)), answer(A(h).send(a.s, r.id, key()))]);
+    clearTimeout(safety);
     const codes = results.map((x) => x.statusCode).sort();
     expect(codes.filter((c) => c === 200)).toHaveLength(1);
     expect(sender.calls).toBe(1);
@@ -567,9 +581,14 @@ describe('concurrent edit and send', () => {
     const a = await actor(h, 'conc2');
     const r = await approved(h, a);
     let release: () => void = () => undefined;
-    sender.beforeSend = () => new Promise<void>((resolve) => (release = resolve));
+    let reached: () => void = () => undefined;
+    const atSender = new Promise<void>((resolve) => (reached = resolve));
+    sender.beforeSend = () => {
+      reached();
+      return new Promise<void>((resolve) => (release = resolve));
+    };
     const sending = A(h).send(a.s, r.id, key());
-    await new Promise((resolve) => setTimeout(resolve, 150)); // the send has claimed the request and is waiting on the sender
+    await atSender; // the send has claimed the request and is waiting on the sender (no guessing with a timer)
     const edit = await A(h).edit(a.s, r.id, r.view.draft.hash, r.view.draft.subject, 'Changed while sending');
     expect(edit.statusCode).toBe(409);
     expect(edit.json()).toMatchObject({ code: 'send_in_progress' });
