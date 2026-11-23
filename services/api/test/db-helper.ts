@@ -46,7 +46,7 @@ export async function createTestDb(): Promise<TestDb> {
       IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_ROLE_LOGIN}') THEN
         CREATE ROLE ${APP_ROLE_LOGIN} LOGIN PASSWORD '${APP_ROLE_LOGIN}' IN ROLE erase_app;
       END IF;
-    EXCEPTION WHEN duplicate_object THEN NULL;
+    EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL;
     END $$`);
 
   const owner = new pg.Client({ connectionString: ownerUrl });
