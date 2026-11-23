@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -222,5 +222,17 @@ describe('activate and messages', () => {
     expect(w.c.stores.size).toBe(2);
     await w.message({ type: 'CLEAR_CACHES' });
     expect(w.c.stores.size).toBe(0);
+  });
+});
+
+describe('the precache list matches files that exist', () => {
+  // public/brand is generated from packages/ui by scripts/sync-brand.mjs (gitignored). If a precached file is missing,
+  // the worker's install fails and it never activates, so every file named here must exist at the source.
+  const listed = [...code.matchAll(/'(\/brand\/[^']+)'/g)].map((m) => m[1] as string);
+  it('names at least the icons and logo', () => {
+    expect(listed.length).toBeGreaterThanOrEqual(3);
+  });
+  it.each(listed)('%s exists in the shared brand assets', (file) => {
+    expect(existsSync(path.resolve(__dirname, '../../../packages/ui/assets/brand', path.basename(file)))).toBe(true);
   });
 });

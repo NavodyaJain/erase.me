@@ -17,7 +17,8 @@ export default defineConfig({
   forbidOnly: ci,
   timeout: 30_000,
   expect: { timeout: 10_000 },
-  reporter: ci ? [['list'], ['html', { open: 'never' }]] : [['list']],
+  // The list reporter prints every failing assertion in the log; `github` adds annotations on the run.
+  reporter: ci ? [['list'], ['github'], ['html', { open: 'never' }]] : [['list']],
   use: {
     baseURL: WEB,
     trace: 'retain-on-failure',
@@ -32,6 +33,9 @@ export default defineConfig({
       cwd: '../..',
       url: `${API}/healthz`,
       env: { E2E_MODE: 'true' },
+      // In CI the servers' own output goes into the log, so a failure on the server side can be read there.
+      stdout: ci ? 'pipe' : 'ignore',
+      stderr: 'pipe',
       reuseExistingServer: false,
       timeout: 90_000,
     },
@@ -39,6 +43,8 @@ export default defineConfig({
       command: 'pnpm exec next start -p 3100',
       url: `${WEB}/offline`,
       env: { NEXT_PUBLIC_API_URL: API, NEXT_DIST_DIR: '.next-e2e' },
+      stdout: ci ? 'pipe' : 'ignore',
+      stderr: 'pipe',
       reuseExistingServer: false,
       timeout: 60_000,
     },

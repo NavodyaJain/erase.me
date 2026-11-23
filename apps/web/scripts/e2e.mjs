@@ -15,5 +15,8 @@ function run(command, args) {
   if (r.status !== 0) process.exit(r.status ?? 1);
 }
 
+// `next build` called directly skips the `prebuild` hook, so copy the brand icons (gitignored, generated from
+// packages/ui) first. Without them the service worker cannot precache its icons and never installs.
+run('node', ['scripts/sync-brand.mjs']);
 run('pnpm', ['exec', 'next', 'build']);
 if (process.argv[2] !== 'build') run('pnpm', ['exec', 'playwright', 'test', ...process.argv.slice(2)]);

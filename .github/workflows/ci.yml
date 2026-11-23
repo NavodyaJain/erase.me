@@ -31,7 +31,9 @@ jobs:
       - run: pnpm lint        # eslint plus the banned-word lint
       - run: pnpm typecheck
       - run: pnpm --filter @erase/api openapi:check   # fails if services/api/openapi/openapi.json is out of date
+      # Grouped logs print each package's failing assertions together instead of interleaved.
       - run: pnpm test
+        env: { TURBO_LOG_ORDER: grouped, FORCE_COLOR: "0" }
   e2e:
     # Playwright against the e2e stack: a fake Google and Gmail, a dedicated database and fictional data only.
     runs-on: ubuntu-latest
