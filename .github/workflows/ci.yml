@@ -32,6 +32,43 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm --filter @erase/api openapi:check   # fails if services/api/openapi/openapi.json is out of date
       - run: pnpm test
+  e2e:
+    # Playwright against the e2e stack: a fake Google and Gmail, a dedicated database and fictional data only.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_USER: erase, POSTGRES_PASSWORD: erase, POSTGRES_DB: erase }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U erase -d erase" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    env:
+      E2E_DATABASE_ADMIN_URL: postgres://erase:erase@localhost:5432/postgres
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Cache the Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Chromium only
+        run: pnpm --filter @erase/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @erase/web e2e
+      - name: Keep the report when a test fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
   ai:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: services/ai } }
