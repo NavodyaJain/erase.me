@@ -72,6 +72,7 @@ export function ConnectScreen() {
 
       <div className="stack">
         {startConnect.isError ? <ErrorNotice error={startConnect.error} /> : null}
+        {startScan.isError ? <ErrorNotice error={startScan.error} /> : null}
         <div className="row">
           <Button variant="primary" loading={startConnect.isPending || startConnect.isSuccess} onClick={connect}>
             {startConnect.isPending || startConnect.isSuccess ? copy.connect.redirecting : live.length ? copy.connect.addAnother : copy.connect.add}

@@ -168,6 +168,39 @@ describe('Connect: after Google sends the person back', () => {
     expect(api.calls(`POST /v1/inboxes/${INBOX.id}/scan`)).toHaveLength(1);
   });
 
+  it('shows the scan even when the first "is there a scan?" answer (none) arrives after the scan was started', async () => {
+    // The page asks for the latest scan at the same moment it starts the first one. If that question is answered "none"
+    // by a server that had not created the scan yet, and the answer is still on its way when the start call returns,
+    // the screen must still end up showing the scan (this once left it stuck on a plain Scan button).
+    resetNav('/connect', '?inbox=connected');
+    const fresh = { ...INBOX, lastScanAt: null };
+    let reads = 0;
+    const { api } = renderApp(<ConnectScreen />, {
+      'GET /v1/inboxes': { body: { inboxes: [fresh] } },
+      [scanKey]: async () => {
+        reads += 1;
+        if (reads === 1) {
+          await new Promise((r) => setTimeout(r, 150)); // the slow, early "none"
+          return problem(404, 'not_found');
+        }
+        return { body: SCAN({ status: 'done', progressPct: 100, foundCount: 4 }) };
+      },
+      [`POST /v1/inboxes/${INBOX.id}/scan`]: { status: 202, body: SCAN({ status: 'queued', progressPct: 0, foundCount: 0 }) },
+    });
+    expect(await screen.findByText('Scan finished · 4 companies')).toBeTruthy();
+    expect(api.calls(`POST /v1/inboxes/${INBOX.id}/scan`)).toHaveLength(1);
+  });
+
+  it('says so when the automatic first scan could not be started', async () => {
+    resetNav('/connect', '?inbox=connected');
+    renderApp(<ConnectScreen />, {
+      'GET /v1/inboxes': { body: { inboxes: [{ ...INBOX, lastScanAt: null }] } },
+      [scanKey]: problem(404, 'not_found'),
+      [`POST /v1/inboxes/${INBOX.id}/scan`]: problem(409, 'inbox_not_connected'),
+    });
+    expect(await screen.findByText(ERROR_MESSAGES.inbox_not_connected)).toBeTruthy();
+  });
+
   it('does not scan an inbox that already has a scan', async () => {
     resetNav('/connect', '?inbox=connected');
     const { api } = renderApp(<ConnectScreen />, { 'GET /v1/inboxes': { body: { inboxes: [INBOX] } }, [scanKey]: { body: SCAN() } });

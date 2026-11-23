@@ -37,7 +37,14 @@ export function useStartScan() {
   const queries = useQueryClient();
   return useMutation({
     mutationFn: (inboxId: string) => api.inboxes.startScan(inboxId),
-    onSuccess: (_data, inboxId) => {
+    onSuccess: async (started, inboxId) => {
+      // The screen asks for the latest scan at the same moment it starts the first one. If that question was answered
+      // "none" before the scan existed and the answer is still on its way, a plain invalidate would reuse that stale
+      // in-flight request (a first fetch has no data to replace, so it is shared, not repeated), and the screen would
+      // never learn about the scan. So drop the stale request, put the scan we were just given in its place (which also
+      // starts the polling) and then ask again.
+      await queries.cancelQueries({ queryKey: ['scan', inboxId] });
+      queries.setQueryData(['scan', inboxId], started.scan);
       void queries.invalidateQueries({ queryKey: ['scan', inboxId] });
       void queries.invalidateQueries({ queryKey: ['inboxes'] });
     },
