@@ -12,7 +12,9 @@
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "node scripts/e2e.mjs",
+    "e2e:build": "node scripts/e2e.mjs build"
   },
   "dependencies": {
     "@erase/api-client": "workspace:^",
@@ -26,6 +28,7 @@
   },
   "devDependencies": {
     "@erase/config": "workspace:^",
+    "@playwright/test": "1.65.1",
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.13",

@@ -23,3 +23,7 @@ services/api/catalog/catalog.local.json
 # Brand assets are copied from packages/ui by scripts/sync-brand.mjs
 apps/web/public/brand/
 apps/web/next-env.d.ts
+# Playwright
+apps/web/.next-e2e/
+apps/web/test-results/
+apps/web/playwright-report/

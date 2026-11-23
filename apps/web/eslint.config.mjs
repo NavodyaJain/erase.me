@@ -1,6 +1,7 @@
 import base, { browserGlobals } from '@erase/config/eslint/base';
 
 export default [
+  { ignores: ['.next-e2e/**', 'test-results/**', 'playwright-report/**'] },
   ...base,
   { files: ['src/**/*.{ts,tsx}'], languageOptions: { globals: { ...browserGlobals } } },
   // The hand-written service worker runs in a worker scope, not a page.

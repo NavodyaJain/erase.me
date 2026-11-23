@@ -24,6 +24,8 @@ const csp = [
 ].join('; ');
 
 const config: NextConfig = {
+  // The end-to-end build lives apart from the dev build, so running one never breaks the other.
+  distDir: process.env.NEXT_DIST_DIR ?? '.next',
   reactStrictMode: true,
   poweredByHeader: false,
   transpilePackages: ['@erase/ui', '@erase/api-client', '@erase/contracts'],
