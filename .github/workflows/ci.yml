@@ -31,8 +31,10 @@ jobs:
       - run: pnpm lint        # eslint plus the banned-word lint
       - run: pnpm typecheck
       - run: pnpm --filter @erase/api openapi:check   # fails if services/api/openapi/openapi.json is out of date
+      # One package's tests at a time. Vitest gives a test worker 60 seconds to start, and four test runners starting
+      # together on a small runner starve each other ("Timeout waiting for worker to respond").
       # Grouped logs print each package's failing assertions together instead of interleaved.
-      - run: pnpm test
+      - run: pnpm exec turbo run test --concurrency=1 && pnpm test:scripts
         env: { TURBO_LOG_ORDER: grouped, FORCE_COLOR: "0" }
   e2e:
     # Playwright against the e2e stack: a fake Google and Gmail, a dedicated database and fictional data only.
