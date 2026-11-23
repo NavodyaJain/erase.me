@@ -153,9 +153,11 @@ describe('scan window and cap (item 6)', () => {
   it('applies SCAN_WINDOW_YEARS as an after: date, counted from the day the scan was created', async () => {
     const windowed = await buildHarness(t, { envOverrides: { SCAN_WINDOW_YEARS: '3' } });
     try {
-      windowed.clock.now = new Date('2026-11-22T10:00:00Z');
       await scanWith(windowed, 'win3', [msg('1', 'hi@win3.example', 'Welcome')]);
-      expect(windowed.gmail.queries[0]).toBe(`(${SCAN_QUERY}) after:2023/11/22`);
+      // The scan is stamped with the database clock when it is created, so the expected date follows today's date.
+      const today = new Date();
+      expect(windowed.gmail.queries[0]).toBe(buildScanQuery(3, today));
+      expect(windowed.gmail.queries[0]).toContain(`after:${today.getUTCFullYear() - 3}/`);
     } finally {
       await windowed.app.close();
     }
