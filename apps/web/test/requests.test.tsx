@@ -19,7 +19,8 @@ const view = (n: number, over: Record<string, unknown> = {}, draft: Record<strin
   draft: { version: 1, to: `privacy@examplo${n}.example`, subject: 'Request to erase my personal data', body: `Dear Examplo ${n}, please erase my data.`, hash: `hash-${n}-v1`, createdBy: 'template', createdAt: '2026-11-20T09:00:00.000Z', ...draft },
   approved: false,
   events: [{ type: 'drafted', actor: 'system', at: '2026-11-20T09:00:00.000Z', payload: {} }],
-  canSend: true,
+  // As the API reports it: true only once the draft is approved.
+  canSend: false,
   blockers: [],
   ...over,
 });
@@ -62,6 +63,28 @@ describe('Review and send', () => {
     const send = api.calls(`POST /v1/requests/${rid(1)}/send`)[0];
     expect(send?.headers.get('idempotency-key')).toMatch(/^[A-Za-z0-9._:-]{8,128}$/);
     expect(send?.headers.get('x-csrf-token')).toBe('csrf-token-1');
+  });
+
+  it('keeps a request on screen with its result after it is sent, even though it leaves the waiting list', async () => {
+    const sent = view(1, { request: { ...view(1).request, status: 'sent', sentAt: '2026-11-22T09:00:00.000Z', dueAt: '2026-12-22T09:00:00.000Z' }, approved: true });
+    const { api } = renderApp(<ReviewScreen />, {
+      ...routes([view(1)]),
+      [`POST /v1/requests/${rid(1)}/approve`]: { body: view(1) },
+      [`POST /v1/requests/${rid(1)}/send`]: () => {
+        // From now on the server reports the request as sent, as the real one does.
+        api.set('GET /v1/requests', { body: { requests: [item(1, 'sent')] } });
+        api.set(`GET /v1/requests/${rid(1)}`, { body: sent });
+        return { body: sentBody(1) };
+      },
+    });
+    await userEvent.click(await screen.findByRole('checkbox', { name: copy.requests.choose('Examplo 1') }));
+    await userEvent.click(screen.getByRole('button', { name: copy.requests.open }));
+    await userEvent.click(screen.getByRole('button', { name: copy.requests.approveAndSend(1) }));
+    expect(await screen.findByText(copy.requests.resultSent)).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 150)); // the lists refetch
+    expect(screen.getByText(copy.requests.resultSent)).toBeTruthy();
+    expect(screen.getByText(copy.requests.fakeNotice)).toBeTruthy();
+    expect((screen.getByRole('checkbox', { name: copy.requests.choose('Examplo 1') }) as HTMLInputElement).disabled).toBe(true);
   });
 
   it('a draft that changed after it was opened shows draft_changed, and nothing is retried or sent', async () => {

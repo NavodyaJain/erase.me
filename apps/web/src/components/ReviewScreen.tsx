@@ -13,6 +13,12 @@ import { type StepResult, useApproveAndSend, useRequests } from '@/lib/hooks';
 import { useApi } from '@/lib/providers';
 
 /**
+ * `canSend` from the API is true only once a draft is approved, so it cannot decide who may be chosen here. A draft
+ * can be chosen when nothing blocks it (no blockers) and it is still waiting.
+ */
+const isEligible = (v: RequestView): boolean => v.blockers.length === 0 && (v.request.status === 'drafted' || v.request.status === 'approved');
+
+/**
  * Review and send. The rules this screen enforces (PRD F6, F7):
  * - "Approve and send N" stays disabled until every chosen draft has been opened;
  * - approval carries the hash of the version the person opened, so a changed draft is refused (draft_changed);
@@ -23,7 +29,9 @@ export function ReviewScreen() {
   const api = useApi();
   const list = useRequests();
   const run = useApproveAndSend();
-  const waiting = (list.data ?? []).filter((r) => r.status === 'drafted' || r.status === 'approved');
+  const [results, setResults] = useState<Map<string, StepResult>>(new Map());
+  // A request that was just sent leaves the waiting list, but stays on screen with its result until the page is left.
+  const waiting = (list.data ?? []).filter((r) => r.status === 'drafted' || r.status === 'approved' || results.has(r.id));
   const details = useQueries({
     queries: waiting.map((r) => ({ queryKey: ['request', r.id], queryFn: () => api.requests.get(r.id) })),
   });
@@ -31,7 +39,6 @@ export function ReviewScreen() {
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [viewed, setViewed] = useState<Map<string, string>>(new Map());
-  const [results, setResults] = useState<Map<string, StepResult>>(new Map());
   const [busy, setBusy] = useState(false);
 
   const views = new Map<string, RequestView>();
@@ -45,7 +52,7 @@ export function ReviewScreen() {
   /** A draft counts as opened only while the version still on screen is the one that was opened. */
   const isViewed = (v: RequestView): boolean => viewed.get(v.request.id) === v.draft.hash;
   const changedAfterView = (v: RequestView): boolean => viewed.has(v.request.id) && viewed.get(v.request.id) !== v.draft.hash;
-  const chosenViews = emailItems.filter((v) => chosen.has(v.request.id) && v.canSend);
+  const chosenViews = emailItems.filter((v) => chosen.has(v.request.id) && isEligible(v));
   const allOpened = chosenViews.length > 0 && chosenViews.every(isViewed);
 
   function toggleOpen(v: RequestView) {
@@ -138,8 +145,8 @@ export function ReviewScreen() {
                     <Checkbox
                       label={<span style={{ fontWeight: 600 }}>{v.company.name}</span>}
                       aria-label={copy.requests.choose(v.company.name)}
-                      checked={chosen.has(id) && v.canSend}
-                      disabled={!v.canSend || busy}
+                      checked={chosen.has(id) && isEligible(v)}
+                      disabled={!isEligible(v) || busy}
                       onChange={(e) => toggleChosen(id, e.target.checked)}
                     />
                     <div className="chips">

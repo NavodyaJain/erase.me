@@ -151,7 +151,7 @@ function Loaded({ id, view }: { id: string; view: RequestView }) {
               <Button
                 variant="primary"
                 loading={busy}
-                disabled={busy || dirty || unread || !view.canSend}
+                disabled={busy || dirty || unread || view.blockers.length > 0}
                 onClick={() => void approveAndSend()}
               >
                 {busy ? copy.requests.working : copy.requests.sendConfirm}

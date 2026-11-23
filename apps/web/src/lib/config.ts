@@ -10,4 +10,6 @@ export function resolveApiUrl(env: { NEXT_PUBLIC_API_URL?: string | undefined; N
   return 'http://localhost:4000';
 }
 
-export const API_URL = resolveApiUrl();
+// Next replaces only the literal `process.env.NEXT_PUBLIC_API_URL` when it builds the browser bundle. Passing the whole
+// `process.env` object would leave the browser with no value and the localhost default. The end-to-end suite catches that.
+export const API_URL = resolveApiUrl({ NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL, NODE_ENV: process.env.NODE_ENV });
