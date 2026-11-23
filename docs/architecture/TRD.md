@@ -62,7 +62,7 @@ packages/{contracts,ui,api-client,config}
 infra/{docker,terraform}  scripts/  docs/  .github/
 ```
 
-- Node 20 (see `.nvmrc`), pnpm 9, Python 3.12.
+- Node 22 (see `.nvmrc`; Vitest 5 needs 22.12 or newer), pnpm 9, Python 3.12.
 - One lockfile per ecosystem. Conventional Commits. Trunk-based with short branches and PRs. CODEOWNERS enforced.
 - Each app and service has its own `package.json`/`pyproject.toml`, README, tests and env schema.
 
@@ -75,7 +75,7 @@ infra/{docker,terraform}  scripts/  docs/  .github/
 | Components | Radix UI primitives + own components in `packages/ui` | Accessible by default |
 | Data fetching | `@erase/api-client` (generated from OpenAPI) + TanStack Query | Typed, cached |
 | Forms/validation | React Hook Form + Zod | Shared schemas |
-| Core API | Node 20, TypeScript, **Fastify**, Zod, `zod-to-openapi` **[ASSUMPTION]** | Fast, typed, schema-first; the user confirmed TypeScript is acceptable via the scaffold |
+| Core API | Node 22, TypeScript, **Fastify**, Zod, `zod-to-openapi` **[ASSUMPTION]** | Fast, typed, schema-first; the user confirmed TypeScript is acceptable via the scaffold |
 | ORM/migrations | Drizzle ORM + SQL migrations **[ASSUMPTION]** (Prisma is an acceptable alternative) | Close to SQL, simple |
 | Database | PostgreSQL 16 | Relational data, row-level controls |
 | Queue/jobs | Redis + BullMQ | Scans, sends, follow-ups, retries |

@@ -10,7 +10,7 @@ PRD sections 7, 8, 11. TRD sections 2, 6, 8, 11, 12.
 `services/api`, `packages/contracts` (generated), `services/api/openapi`, database migrations.
 
 ## Stack
-Node 20, TypeScript strict, Fastify, Zod, `zod-to-openapi`, Drizzle (or Prisma, confirm), PostgreSQL 16, Redis + BullMQ, Vitest, Supertest, Testcontainers.
+Node 22, TypeScript strict, Fastify, Zod, `zod-to-openapi`, Drizzle (or Prisma, confirm), PostgreSQL 16, Redis + BullMQ, Vitest, Supertest, Testcontainers.
 
 ## Rules
 1. Module layout: controller → service → repository. No business logic in controllers. Only repositories touch the DB.
