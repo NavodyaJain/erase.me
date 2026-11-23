@@ -5,6 +5,6 @@
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**"] },
     "lint": {},
     "typecheck": { "dependsOn": ["^build"] },
-    "test": { "dependsOn": ["^build"] }
+    "test": { "dependsOn": ["^build"], "passThroughEnv": ["TEST_DATABASE_ADMIN_URL"] }
   }
 }
