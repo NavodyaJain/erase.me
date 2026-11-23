@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "_comment": "Fictional catalog for the end-to-end tests only. Every entry is fictional and uses example.com contacts.",
+  "companies": [
+    {
+      "slug": "e2e-bank",
+      "name": "E2E Bank",
+      "domains": ["e2ebank.example"],
+      "category": "credit",
+      "fictional": true,
+      "self_serve_url": "https://example.com/e2e-bank/delete-account",
+      "grievance": { "email": "grievance@example.com", "source_url": "https://example.com/privacy", "verified_on": "2026-01-01" }
+    },
+    {
+      "slug": "e2e-forms",
+      "name": "E2E Forms",
+      "domains": ["e2eforms.example"],
+      "category": "saas",
+      "fictional": true,
+      "grievance": { "channel": "web_form", "form_url": "https://example.com/e2e-forms/privacy-form", "source_url": "https://example.com/privacy", "verified_on": "2026-01-01" }
+    },
+    {
+      "slug": "e2e-login",
+      "name": "E2E Login",
+      "domains": ["e2elogin.example"],
+      "category": "account_provider",
+      "must_keep": true,
+      "fictional": true
+    }
+  ]
+}

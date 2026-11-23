@@ -5,10 +5,10 @@ import { EnvError, googleRedirectUri, loadEnv, type Env } from './config/env.js'
 import { createDb, type Db } from './db/client.js';
 import { LocalKeyProvider } from './crypto/key-provider.js';
 import { InProcessJobQueue } from './jobs/queue.js';
-import { HttpGoogleOAuthClient } from './modules/auth/google-oauth.js';
+import { HttpGoogleOAuthClient, type GoogleOAuthClient } from './modules/auth/google-oauth.js';
 import { loadCatalog } from './modules/companies/catalog.js';
 import { createCompaniesRepository } from './modules/companies/companies.repository.js';
-import { HttpGmailClient } from './modules/gmail/gmail.client.js';
+import { HttpGmailClient, type GmailClient } from './modules/gmail/gmail.client.js';
 import { createHealthRepository } from './modules/health/health.repository.js';
 
 export interface StartContext {
@@ -20,6 +20,8 @@ export interface StartContext {
 export interface StartOptions {
   /** Extra plugins registered before listening (the dev helper). Never used by the production entry. */
   plugins?: Array<(ctx: StartContext) => Promise<void>>;
+  /** Replaces the Google and Gmail clients and the catalog folder. Used only by the end-to-end entry (e2e/server.ts); the production entry never passes it. */
+  overrides?: { google?: GoogleOAuthClient; gmail?: GmailClient; catalogDir?: string };
   /** Where the browser lands after Google. Defaults to WEB_ORIGIN. */
   postAuthRedirect?: string;
 }
@@ -38,23 +40,27 @@ export async function start(opts: StartOptions = {}): Promise<void> {
     modules: {
       db,
       queue,
-      gmail: new HttpGmailClient({ maxRequestsPerSecond: 15 }),
+      gmail: opts.overrides?.gmail ?? new HttpGmailClient({ maxRequestsPerSecond: 15 }),
       // Secrets stay inside these two objects: they are never logged or returned.
       google:
-        env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+        opts.overrides?.google ??
+        (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
           ? new HttpGoogleOAuthClient({
               clientId: env.GOOGLE_CLIENT_ID,
               clientSecret: env.GOOGLE_CLIENT_SECRET,
               redirectUri: googleRedirectUri(env),
             })
-          : undefined,
+          : undefined),
       keys: env.TOKEN_MASTER_KEY ? new LocalKeyProvider(env.TOKEN_MASTER_KEY) : undefined,
       ...(opts.postAuthRedirect ? { postAuthRedirect: opts.postAuthRedirect } : {}),
     },
   });
   pool.on('error', (err) => app.log.error({ err }, 'database pool error'));
   // Company names, categories and the must-keep flag come from the reviewed catalog. Fictional entries only outside production.
-  const catalog = loadCatalog({ includeFictional: env.NODE_ENV !== 'production' && env.NODE_ENV !== 'staging' });
+  const catalog = loadCatalog({
+    includeFictional: env.NODE_ENV !== 'production' && env.NODE_ENV !== 'staging',
+    ...(opts.overrides?.catalogDir ? { dir: opts.overrides.catalogDir } : {}),
+  });
   const synced = await createCompaniesRepository(db).syncCatalog(catalog);
   app.log.info({ entries: catalog.length, ...synced }, 'catalog synced');
   for (const plugin of opts.plugins ?? []) await plugin({ env, app, db });
