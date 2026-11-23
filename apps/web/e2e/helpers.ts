@@ -52,6 +52,29 @@ export async function firstRequestId(page: Page): Promise<string> {
   return (href ?? '').split('/').pop() ?? '';
 }
 
+/** The draft text without its unfinished [OPEN] paragraph. */
+export const removeOpenLine = (text: string): string => text.replace(/\[OPEN[\s\S]*?(\n\n|$)/, '');
+
+/** Opens a request's edit page and removes the unfinished [OPEN] paragraph, saving the draft. */
+export async function resolveOpenLine(page: Page, id: string): Promise<void> {
+  await page.goto(`/requests/${id}`);
+  const message = page.getByLabel(copy.requests.message);
+  const text = await message.inputValue();
+  await message.fill(removeOpenLine(text));
+  await page.getByRole('button', { name: copy.requests.save }).click();
+  await expect(page.getByText(copy.requests.saved)).toBeVisible();
+}
+
+/** Chooses one drafted request on the review screen and opens its draft. Returns the approve button. */
+export async function chooseAndOpen(page: Page, company: string) {
+  await page.goto('/requests/review');
+  await page.getByRole('checkbox', { name: copy.requests.choose(company) }).check();
+  await page.getByRole('button', { name: copy.requests.open }).click();
+  const approve = page.getByRole('button', { name: copy.requests.approveAndSend(1) });
+  await expect(approve).toBeEnabled();
+  return approve;
+}
+
 /** Runs axe-core in the page and returns the serious and critical problems. */
 export async function seriousViolations(page: Page): Promise<string[]> {
   const axeSource = readFileSync(fileURLToPath(new URL('../node_modules/axe-core/axe.min.js', import.meta.url)), 'utf8');
