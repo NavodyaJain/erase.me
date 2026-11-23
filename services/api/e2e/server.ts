@@ -46,6 +46,8 @@ async function main(): Promise<void> {
       google: new FakeGoogle(env.API_PUBLIC_URL),
       gmail: new FakeGmail(),
       catalogDir: path.join(here, 'catalog'),
+      // Every test signs in again from the same address, which the real limit (30 a minute) would refuse.
+      authRateLimitPerMinute: 10_000,
     },
     plugins: [
       ({ app }) => {
