@@ -44,7 +44,7 @@ export function findViolations(text, rules = RULES) {
 }
 
 const TEXT_EXT = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.json', '.md', '.mdx', '.html', '.css', '.py', '.yml', '.yaml', '.toml', '.sql', '.txt']);
-const SKIP_DIR = new Set(['node_modules', '.next', 'dist', '.turbo', '.venv', 'coverage', '.git', '__pycache__', 'screens', '_runtime', 'openapi', 'meta']);
+const SKIP_DIR = new Set(['node_modules', '.next', 'dist', '.turbo', '.venv', 'coverage', '.git', '__pycache__', 'playwright-report', 'test-results', '.next-e2e', 'screens', '_runtime', 'openapi', 'meta']);
 // docs/design/source is design reference, not shipped copy. Known wording drift there is listed in docs/OPEN-QUESTIONS.md.
 const SCAN_ROOTS = ['apps', 'packages', 'services', 'README.md', 'docs/design/README.md'];
 
