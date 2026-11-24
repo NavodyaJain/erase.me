@@ -2,7 +2,7 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [main, phase-1]
+    branches: [main, "phase-*"]
 jobs:
   js:
     runs-on: ubuntu-latest
