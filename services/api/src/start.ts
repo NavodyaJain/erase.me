@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from './app.js';
 import { scrubString } from './common/scrub.js';
-import { EnvError, googleRedirectUri, loadEnv, type Env } from './config/env.js';
+import { EnvError, googleRedirectUri, jobsEnabled, loadEnv, type Env } from './config/env.js';
 import { createDb, type Db } from './db/client.js';
 import { LocalKeyProvider } from './crypto/key-provider.js';
 import { InProcessJobQueue } from './jobs/queue.js';
+import { PgTaskLock, Scheduler } from './jobs/scheduler.js';
 import { HttpGoogleOAuthClient, type GoogleOAuthClient } from './modules/auth/google-oauth.js';
 import { loadCatalog } from './modules/companies/catalog.js';
 import { createCompaniesRepository } from './modules/companies/companies.repository.js';
@@ -66,8 +67,14 @@ export async function start(opts: StartOptions = {}): Promise<void> {
   app.log.info({ entries: catalog.length, ...synced }, 'catalog synced');
   for (const plugin of opts.plugins ?? []) await plugin({ env, app, db });
 
+  // Background tasks run inside this process, behind a Postgres lock so a second process skips a task already running.
+  const scheduler = new Scheduler({ lock: new PgTaskLock(pool), log: { info: (o, m) => app.log.info(o, m), warn: (o, m) => app.log.warn(o, m) } });
+  const replies = app.services?.replies;
+  if (replies) scheduler.add({ name: 'poll-replies', everyMs: env.REPLY_POLL_MINUTES * 60_000, run: () => replies.runOnce() });
+
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, 'shutting down');
+    await scheduler.stop();
     await app.close();
     await queue.drain();
     await close();
@@ -77,6 +84,7 @@ export async function start(opts: StartOptions = {}): Promise<void> {
   process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
   await app.listen({ host: env.API_HOST, port: env.API_PORT });
+  if (jobsEnabled(env)) scheduler.start();
   const resumed = await app.services?.scans.resumeInterrupted();
   if (resumed) app.log.info({ resumed }, 'resumed interrupted scans');
   if (!env.GOOGLE_CLIENT_ID) app.log.warn('GOOGLE_CLIENT_ID is not set: sign-in is disabled');

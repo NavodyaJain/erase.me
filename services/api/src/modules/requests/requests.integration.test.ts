@@ -1144,3 +1144,59 @@ describe('read', () => {
     expect((await A(h).get(a.s, newId('request'))).statusCode).toBe(404);
   });
 });
+
+// ---------- tracking after send (through the real app wiring) ----------
+
+describe('reply tracking through the app', () => {
+  it('finds a reply to a request sent through the API, using the ids stored at send, and shows it in the request', async () => {
+    const a = await actor(h, 'track1');
+    const r = await approved(h, a);
+    expect((await A(h).send(a.s, r.id, key())).statusCode).toBe(200);
+    const sent = (await t.owner.query<{ thread_id: string; sent_rfc_message_id: string }>('SELECT thread_id, sent_rfc_message_id FROM requests WHERE id = $1', [r.id])).rows[0];
+    if (!sent) throw new Error('no sent row');
+    h.gmail.threads.set(sent.thread_id, [
+      { id: 'reply-track-1', receivedAt: new Date(), fromAddress: 'dpo@fictional.example', messageId: 'reply@fictional.example', inReplyTo: sent.sent_rfc_message_id, references: [sent.sent_rfc_message_id], automatic: false },
+    ]);
+    const poller = h.app.services?.replies;
+    if (!poller) throw new Error('the reply poller is not wired');
+    // Other requests sent earlier in this file share the database; only this one has a reply.
+    expect(await poller.runOnce()).toMatchObject({ replied: 1, newReplies: 1 });
+    const view = (await A(h).get(a.s, r.id)).json<View>();
+    expect(view.request.status).toBe('reply_received');
+    expect(view.events.map((e) => e.type)).toContain('reply_received');
+    expect(view.events.find((e) => e.type === 'reply_received')).toMatchObject({ actor: 'system' });
+    // The reply check never sent anything and never touched the draft.
+    expect(sender.calls).toBe(1);
+  });
+
+  it('keeps a request answered from another address or by an automatic message as it is until a person replies', async () => {
+    const a = await actor(h, 'track2');
+    const r = await approved(h, a);
+    expect((await A(h).send(a.s, r.id, key())).statusCode).toBe(200);
+    const sent = (await t.owner.query<{ thread_id: string; sent_rfc_message_id: string }>('SELECT thread_id, sent_rfc_message_id FROM requests WHERE id = $1', [r.id])).rows[0];
+    if (!sent) throw new Error('no sent row');
+    h.gmail.threads.set(sent.thread_id, [
+      { id: 'auto-track-2', receivedAt: new Date(), fromAddress: 'noreply@fictional.example', messageId: 'a@x', inReplyTo: sent.sent_rfc_message_id, references: [sent.sent_rfc_message_id], automatic: true },
+    ]);
+    await h.app.services?.replies.runOnce();
+    expect((await A(h).get(a.s, r.id)).json<View>().request.status).toBe('sent');
+  });
+});
+
+describe('nothing is sent while a person has asked to delete their data', () => {
+  it('refuses approve, edit, send and close for a session whose account is pending deletion, and works again if it is active again', async () => {
+    const a = await actor(h, 'paused1');
+    const r = await approved(h, a);
+    await t.owner.query(`UPDATE users SET status = 'deleting', deleted_at = now() WHERE id = $1`, [a.s.userId]);
+
+    expect((await A(h).send(a.s, r.id, key())).statusCode).toBe(401);
+    expect((await A(h).approve(a.s, r.id, r.view.draft.hash)).statusCode).toBe(401);
+    expect((await A(h).edit(a.s, r.id, r.view.draft.hash, 'S', 'B')).statusCode).toBe(401);
+    expect((await A(h).close(a.s, r.id)).statusCode).toBe(401);
+    expect(sender.calls).toBe(0);
+    expect((await requestRow(r.id))?.status).toBe('approved');
+
+    await t.owner.query(`UPDATE users SET status = 'active', deleted_at = NULL WHERE id = $1`, [a.s.userId]);
+    expect((await A(h).send(a.s, r.id, key())).statusCode).toBe(200);
+  });
+});

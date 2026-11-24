@@ -19,6 +19,8 @@ import { SessionService } from './modules/auth/session.service.js';
 import type { GmailClient } from './modules/gmail/gmail.client.js';
 import { gmailRoutes } from './modules/gmail/gmail.controller.js';
 import { createGmailRepository } from './modules/gmail/gmail.repository.js';
+import { ReplyPoller } from './modules/tracker/reply-poller.js';
+import { createTrackerRepository } from './modules/tracker/tracker.repository.js';
 import { InboxService } from './modules/gmail/inbox.service.js';
 import { SCAN_JOB, ScanService, scanOptionsFromEnv } from './modules/gmail/scan.service.js';
 import { companiesRoutes } from './modules/companies/companies.controller.js';
@@ -66,6 +68,8 @@ export interface AppServices {
   companies: CompaniesService;
   sessions: SessionService;
   auth: AuthService;
+  /** Looks for replies on sent requests' threads. Run by the scheduler, and by tests. */
+  replies: ReplyPoller;
 }
 
 declare module 'fastify' {
@@ -177,9 +181,18 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       activity: { recentDays: deps.env.ACTIVITY_RECENT_DAYS, oldDays: deps.env.ACTIVITY_OLD_DAYS },
       now,
     });
+    const replies = new ReplyPoller({
+      repo: createTrackerRepository(m.db),
+      gmail: m.gmail,
+      accessToken: (inboxId) => inboxes.accessTokenById(inboxId),
+      ownAddresses: (userId) => gmailRepo.listOwnAddresses(userId),
+      now,
+      options: { maxAgeDays: deps.env.REPLY_POLL_MAX_AGE_DAYS, batchSize: 100 },
+      log: { info: (o, msg) => app.log.info(o, msg), warn: (o, msg) => app.log.warn(o, msg) },
+    });
     m.queue.register(SCAN_JOB, (p) => scans.run(p.scanId ?? ''));
     m.queue.register(DELETE_ACCOUNT_JOB, (p) => account.runDeletion(p.userId ?? ''));
-    app.decorate('services', { scans, inboxes, account, requests: requestsService, companies: companiesService, sessions, auth });
+    app.decorate('services', { scans, inboxes, account, requests: requestsService, companies: companiesService, sessions, auth, replies });
 
     const requireUser = createAuthGuard(sessions, deps.env.WEB_ORIGIN);
     const limiter = createRateLimiter({ max: m.authRateLimitPerMinute ?? 30, windowMs: 60_000 });
