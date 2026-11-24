@@ -318,6 +318,53 @@ describe('responses match the document', () => {
     }
   });
 
+  it('reporting an outcome, and marking a web-form request as submitted: every status and error code is documented', async () => {
+    const a = await actor(h, 'contract8');
+    const outcomeUrl = (id: string) => `/v1/requests/${id}/outcome`;
+
+    // An email request: there is no outcome to report before it is sent, then each outcome and taking it back.
+    const r = await makeApproved(a, { contact: 'fictional' });
+    expect((await checked('PUT', outcomeUrl(r.id), authed(a.s), { outcome: 'refused' })).code).toBe('invalid_transition');
+    expect((await checked('PUT', outcomeUrl(r.id), authed(a.s), { outcome: 'not-an-outcome' })).code).toBe('validation_failed');
+    expect((await checked('PUT', outcomeUrl('req_00000000000000000000000000'), authed(a.s), { outcome: 'refused' })).code).toBe('not_found');
+    expect((await checked('POST', `/v1/requests/${r.id}/send`, { ...authed(a.s), 'idempotency-key': key() })).res.statusCode).toBe(200);
+    for (const outcome of ['confirmed_erased', 'refused', 'needs_more_info', 'no_answer_yet']) {
+      const res = (await checked('PUT', outcomeUrl(r.id), authed(a.s), { outcome })).res;
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ outcome: { value: string; setByUser: boolean } }>().outcome.value).toBe(outcome);
+    }
+    expect((await checked('GET', '/v1/requests', { cookie: a.s.cookie })).res.json<{ requests: Array<{ channel: string; outcome: string | null }> }>().requests[0]).toMatchObject({ channel: 'email' });
+
+    // A web-form request: copy, then say it was pasted into the form.
+    const form = await a.seed({ contact: 'form' });
+    const created = (await checked('POST', '/v1/requests/drafts', authed(a.s), { userCompanyIds: [form.ucId] })).res.json<{ results: Array<{ requestId: string }> }>();
+    const formId = created.results[0]?.requestId as string;
+    const view = (await checked('GET', `/v1/requests/${formId}`, { cookie: a.s.cookie })).res.json<{ draft: { hash: string; subject: string; body: string }; canMarkSubmitted: boolean }>();
+    expect(view.canMarkSubmitted).toBe(false); // the [OPEN] line is still there
+    const submitted = (hash: string) => checked('POST', `/v1/requests/${formId}/submitted`, authed(a.s), { draftHash: hash });
+    const open = await submitted(view.draft.hash);
+    expect(open.code).toBe('draft_unsafe');
+    expect(open.res.statusCode).toBe(422);
+    const body = view.draft.body.split('\n').filter((l) => !l.startsWith('[OPEN')).join('\n');
+    const edited = (await checked('PATCH', `/v1/requests/${formId}/draft`, authed(a.s), { baseHash: view.draft.hash, subject: view.draft.subject, body })).res.json<{ draft: { hash: string } }>();
+    expect((await submitted(view.draft.hash)).code).toBe('draft_changed');
+    expect((await checked('POST', `/v1/requests/${formId}/submitted`, authed(a.s), { draftHash: 'not-a-hash' })).code).toBe('validation_failed');
+    expect((await checked('POST', `/v1/requests/${r.id}/submitted`, authed(a.s), { draftHash: r.hash })).code).toBe('already_sent');
+    const ok = await submitted(edited.draft.hash);
+    expect(ok.res.statusCode).toBe(200);
+    expect(ok.res.json<{ request: { status: string; channel: string }; useForm: boolean }>()).toMatchObject({ request: { status: 'sent', channel: 'web_form' }, useForm: true });
+    expect((await submitted(edited.draft.hash)).res.statusCode).toBe(200); // saying it again changes nothing
+
+    // An email company is not a form request; the other guards are covered in outcomes.integration.test.ts.
+    const emailDraft = await makeApprovedDraftOnly(a);
+    expect((await checked('POST', `/v1/requests/${emailDraft.id}/submitted`, authed(a.s), { draftHash: emailDraft.hash })).code).toBe('not_a_form_request');
+    const closed = await a.seed({ contact: 'form' });
+    const closedId = (await checked('POST', '/v1/requests/drafts', authed(a.s), { userCompanyIds: [closed.ucId] })).res.json<{ results: Array<{ requestId: string }> }>().results[0]?.requestId as string;
+    await checked('POST', `/v1/requests/${closedId}/close`, authed(a.s));
+    expect((await checked('POST', `/v1/requests/${closedId}/submitted`, authed(a.s), { draftHash: 'a'.repeat(64) })).code).toBe('invalid_transition');
+    expect((await checked('POST', `/v1/requests/req_00000000000000000000000000/submitted`, authed(a.s), { draftHash: 'a'.repeat(64) })).code).toBe('not_found');
+  });
+
   it('inbox limit', async () => {
     const s = await signIn(h, { email: 'contract7@example.test', sub: 'g-contract7' });
     for (let i = 1; i <= 5; i++) await connectInbox(h, s, { email: `c7-box${i}@example.test`, sub: `g-c7-box${i}` });
@@ -336,4 +383,15 @@ async function makeApproved(a: Actor, o: { contact: 'fictional' | 'real' }, harn
   const approved = await harness.app.inject({ method: 'POST', url: `/v1/requests/${id}/approve`, headers: authed(a.s), payload: { draftHash: edited.draft.hash } });
   expect(approved.statusCode).toBe(200);
   return { id, hash: edited.draft.hash, companyId: c.companyId, ucId: c.ucId };
+}
+
+/** A drafted email request whose [OPEN] line is resolved. Not approved. */
+async function makeApprovedDraftOnly(a: Actor, harness: Harness = h) {
+  const c = await a.seed({ contact: 'fictional' });
+  const created = await harness.app.inject({ method: 'POST', url: '/v1/requests/drafts', headers: authed(a.s), payload: { userCompanyIds: [c.ucId] } });
+  const id = created.json<{ results: Array<{ requestId: string }> }>().results[0]?.requestId as string;
+  const view = (await harness.app.inject({ method: 'GET', url: `/v1/requests/${id}`, headers: { cookie: a.s.cookie } })).json<{ draft: { hash: string; subject: string; body: string } }>();
+  const body = view.draft.body.split('\n').filter((l) => !l.startsWith('[OPEN')).join('\n');
+  const edited = (await harness.app.inject({ method: 'PATCH', url: `/v1/requests/${id}/draft`, headers: authed(a.s), payload: { baseHash: view.draft.hash, subject: view.draft.subject, body } })).json<{ draft: { hash: string } }>();
+  return { id, hash: edited.draft.hash };
 }

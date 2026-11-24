@@ -17,12 +17,14 @@ import {
   InboxList,
   InboxParams,
   Me,
+  OutcomeBody,
   RequestList,
   RequestParams,
   RequestView,
   ScanResponse,
   SendHeaders,
   SendResponse,
+  SubmittedBody,
   type ProblemCode,
 } from './schemas.js';
 
@@ -100,7 +102,7 @@ const companyExample = {
 };
 
 const requestViewExample = {
-  request: { id: exId('request'), status: 'drafted', createdAt: T1, updatedAt: T1, sentAt: null, dueAt: null },
+  request: { id: exId('request'), status: 'drafted', channel: 'email', createdAt: T1, updatedAt: T1, sentAt: null, dueAt: null },
   company: { id: exId('company'), name: 'Sample Shop', mustKeep: false, kept: false, selfServeUrl: SELF_SERVE },
   contact: { channel: 'email', formUrl: null },
   useForm: false,
@@ -123,6 +125,25 @@ const requestViewExample = {
       findings: ['open_placeholder'],
     },
   ],
+  replies: { count: 0, automaticCount: 0, firstAt: null, lastAt: null, senderMatch: null },
+  outcome: null,
+  canSetOutcome: false,
+  canMarkSubmitted: false,
+};
+
+/** A request that was sent and is waiting for an answer. */
+const sentViewExample = {
+  ...requestViewExample,
+  request: { ...requestViewExample.request, status: 'sent', sentAt: T1, dueAt: T1 },
+  approved: true,
+  blockers: [],
+  events: [
+    ...requestViewExample.events,
+    { type: 'approved', actor: 'user', at: T1, payload: { version: 1 } },
+    { type: 'sent', actor: 'user', at: T1, payload: { version: 1, delivery: 'fake' } },
+  ],
+  outcome: { value: 'no_answer_yet', setByUser: false, at: null },
+  canSetOutcome: true,
 };
 
 // ---------- problem examples used by several operations ----------
@@ -370,7 +391,7 @@ export const operations: OperationDoc[] = [
       200: {
         description: 'Requests, most recently changed first',
         schema: RequestList,
-        example: { requests: [{ id: exId('request'), status: 'drafted', company: { name: 'Sample Shop', mustKeep: false }, createdAt: T1, updatedAt: T1, sentAt: null, dueAt: null }] },
+        example: { requests: [{ id: exId('request'), status: 'drafted', company: { name: 'Sample Shop', mustKeep: false }, channel: 'email', outcome: null, createdAt: T1, updatedAt: T1, sentAt: null, dueAt: null }] },
       },
     },
   },
@@ -443,6 +464,81 @@ export const operations: OperationDoc[] = [
       200: { description: 'Closed', schema: RequestView, example: { ...requestViewExample, request: { ...requestViewExample.request, status: 'closed' } } },
       404: { description: 'No such request for this user', problems: [NOT_FOUND] },
       409: { description: 'Cannot be closed now', problems: [prob('request_not_closable', 'This request cannot be closed here', 'A request that is sent cannot be closed before sending.'), prob('send_in_progress', 'This request is being sent', 'It cannot be closed while it is being sent.')] },
+    },
+  },
+  {
+    operationId: 'setRequestOutcome',
+    method: 'put',
+    path: '/v1/requests/:id/outcome',
+    tag: 'Requests',
+    summary: 'Report what the company answered',
+    description:
+      'The person reports the outcome: `confirmed_erased`, `refused`, `needs_more_info`, or `no_answer_yet` to take a report back. Erase.me never infers it, not from a reply it found and not from who sent it, and it always shows as "Reported by you", never as a verified fact. It can be set whether or not a reply was detected (the answer may have come by phone or through the form), and changed later. `no_answer_yet` returns the request to `sent`, or to `no_reply` once the follow-up day has passed. Saying the same thing again changes nothing. Only a sent request has an outcome: a draft, a closed or a bounced request answers 409 `invalid_transition`.',
+    auth: true,
+    params: RequestParams,
+    body: OutcomeBody,
+    bodyExample: { outcome: 'refused' },
+    responses: {
+      200: {
+        description: 'The request with the reported outcome',
+        schema: RequestView,
+        example: {
+          ...sentViewExample,
+          request: { ...sentViewExample.request, status: 'replied_refused' },
+          events: [...sentViewExample.events, { type: 'outcome_set', actor: 'user', at: T1, payload: { from: 'sent', to: 'replied_refused', outcome: 'refused' } }],
+          outcome: { value: 'refused', setByUser: true, at: T1 },
+        },
+      },
+      404: { description: 'No such request for this user', problems: [NOT_FOUND] },
+      409: {
+        description: 'There is no outcome to report for this request yet',
+        problems: [prob('invalid_transition', 'There is no outcome to report yet', 'This request has not been sent yet, so there is nothing to report. Send it, or mark it as submitted if it uses a web form.')],
+      },
+    },
+  },
+  {
+    operationId: 'markRequestSubmitted',
+    method: 'post',
+    path: '/v1/requests/:id/submitted',
+    tag: 'Requests',
+    summary: 'Say the draft was pasted into the company’s web form',
+    description:
+      'For a company that takes requests through a web form. Nothing is sent from here: the person copied the draft into the form and says so. It is recorded like a send: the person approves the exact draft they copied (`draftHash`), the guards run again (a must-keep or kept company, a verified form contact, ID-like numbers and the unresolved [OPEN] line), and the request becomes `sent` with channel `web_form`, which starts the clock for a reply. There is no Gmail thread to follow, so reply checks do not apply and the person reports the outcome. Saying it again changes nothing. An email company answers 409 `not_a_form_request`.',
+    auth: true,
+    params: RequestParams,
+    body: SubmittedBody,
+    bodyExample: { draftHash: DRAFT_HASH },
+    responses: {
+      200: {
+        description: 'The request, now sent (or already marked)',
+        schema: RequestView,
+        example: {
+          ...sentViewExample,
+          request: { ...sentViewExample.request, channel: 'web_form' },
+          contact: { channel: 'web_form', formUrl: FORM },
+          useForm: true,
+          draft: { ...sentViewExample.draft, to: FORM },
+          events: [...sentViewExample.events.slice(0, 2), { type: 'submitted', actor: 'user', at: T1, payload: { version: 1 } }],
+        },
+      },
+      404: { description: 'No such request for this user', problems: [NOT_FOUND] },
+      409: {
+        description: 'Cannot be marked as submitted',
+        problems: [
+          prob('not_a_form_request', 'This company does not use a web form', 'Sample Shop takes requests by email. Review the draft, approve it and send it instead.'),
+          DRAFT_CHANGED,
+          MUST_KEEP,
+          KEPT,
+          NO_CONTACT,
+          prob('company_excluded', 'Company excluded', 'You marked this company as not yours, so no request can be made for it.'),
+          prob('contact_bounced', 'No verified contact for this company', 'The contact we have for this company did not accept earlier mail, so this request is blocked until it is checked.'),
+          prob('contact_changed', 'The request cannot move forward', 'The contact for this company changed since this draft was made. Close this request and create a new one.'),
+          prob('draft_integrity', 'The request cannot move forward', 'This draft does not match its saved fingerprint. Create a new request.'),
+          prob('already_sent', 'Already sent', 'This request was already sent by email.'),
+          prob('invalid_transition', 'This request cannot move to that state', 'A request that is closed cannot become approved.'),
+        ],
+      },
+      422: { description: 'The draft cannot be used yet', problems: [DRAFT_UNSAFE] },
     },
   },
   {

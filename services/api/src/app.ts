@@ -170,6 +170,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
           real: () => new HttpGmailSender({ getAccessToken: (inboxId) => inboxes.accessTokenById(inboxId) }),
         }),
       realSendDailyCap: deps.env.REAL_SEND_DAILY_CAP,
+      followupAfterDays: deps.env.FOLLOWUP_AFTER_DAYS,
       now,
       log: { info: (o, msg) => app.log.info(o, msg), warn: (o, msg) => app.log.warn(o, msg) },
     });

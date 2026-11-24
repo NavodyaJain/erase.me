@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import { newId } from '../../common/ids.js';
 import type { Db } from '../../db/client.js';
-import { companies, idempotencyKeys, inboxes, requestDrafts, requestEvents, requests, userCompanies, users } from '../../db/schema/index.js';
+import { companies, idempotencyKeys, inboxes, requestDrafts, requestEvents, requestReplies, requests, userCompanies, users } from '../../db/schema/index.js';
 import type { RequestEventType, RequestStatus } from './state-machine.js';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -13,10 +13,23 @@ export interface RequestRow {
   userCompanyId: string;
   status: RequestStatus;
   threadId: string | null;
+  /** `email`: sent from the person's Gmail. `web_form`: the person pasted it into the company's form. */
+  channel: 'email' | 'web_form';
   sentAt: Date | null;
   dueAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** Replies seen on a sent request's thread, as counts and times. Nothing from the messages themselves. */
+export interface ReplySummary {
+  /** Replies from a person, and automatic ones, counted apart. */
+  count: number;
+  automaticCount: number;
+  firstAt: Date | null;
+  lastAt: Date | null;
+  /** Whether the first reply from a person came from the company's own domain. Null until there is one. */
+  senderMatch: 'company' | 'other' | 'unknown' | null;
 }
 
 export interface DraftRow {
@@ -77,6 +90,7 @@ const requestColumns = {
   userCompanyId: requests.userCompanyId,
   status: requests.status,
   threadId: requests.threadId,
+  channel: requests.channel,
   sentAt: requests.sentAt,
   dueAt: requests.dueAt,
   createdAt: requests.createdAt,
@@ -187,10 +201,10 @@ function methods(x: Executor) {
     },
 
     /** Returns undefined when the company already has an open request (unique index). */
-    async insertRequest(userId: string, userCompanyId: string): Promise<RequestRow | undefined> {
+    async insertRequest(userId: string, userCompanyId: string, channel: 'email' | 'web_form' = 'email'): Promise<RequestRow | undefined> {
       const [row] = await x
         .insert(requests)
-        .values({ id: newId('request'), userId, userCompanyId, status: 'drafted' })
+        .values({ id: newId('request'), userId, userCompanyId, status: 'drafted', channel })
         .onConflictDoNothing()
         .returning(requestColumns);
       return row as RequestRow | undefined;
@@ -214,6 +228,39 @@ function methods(x: Executor) {
           updatedAt: sql`now()`,
         })
         .where(eq(requests.id, requestId));
+    },
+
+    /**
+     * The person pasted the draft into the company's web form. Nothing was sent from here, so there is no thread. The
+     * request is `sent` from then on (the clock for a reply starts) and is marked as a form request.
+     */
+    async markSubmitted(requestId: string, p: { sentAt: Date; dueAt: Date }): Promise<void> {
+      await x
+        .update(requests)
+        .set({ status: 'sent', channel: 'web_form', threadId: null, sentAt: p.sentAt, dueAt: p.dueAt, day30FollowupAt: p.dueAt, updatedAt: sql`now()` })
+        .where(eq(requests.id, requestId));
+    },
+
+    /** How many replies have been seen on this request, from metadata rows only. */
+    async replySummary(requestId: string): Promise<ReplySummary> {
+      const [row] = await x
+        .select({
+          count: sql<number>`count(*) filter (where not ${requestReplies.automatic})`.mapWith(Number),
+          automaticCount: sql<number>`count(*) filter (where ${requestReplies.automatic})`.mapWith(Number),
+          firstAt: sql<Date | string | null>`min(${requestReplies.receivedAt}) filter (where not ${requestReplies.automatic})`,
+          lastAt: sql<Date | string | null>`max(${requestReplies.receivedAt}) filter (where not ${requestReplies.automatic})`,
+          senderMatch: sql<ReplySummary['senderMatch']>`(array_agg(${requestReplies.senderMatch} order by ${requestReplies.receivedAt}, ${requestReplies.id}) filter (where not ${requestReplies.automatic}))[1]`,
+        })
+        .from(requestReplies)
+        .where(eq(requestReplies.requestId, requestId));
+      const at = (v: Date | string | null | undefined): Date | null => (v ? new Date(v) : null);
+      return {
+        count: row?.count ?? 0,
+        automaticCount: row?.automaticCount ?? 0,
+        firstAt: at(row?.firstAt),
+        lastAt: at(row?.lastAt),
+        senderMatch: row?.senderMatch ?? null,
+      };
     },
 
     async latestDraft(requestId: string): Promise<DraftRow | undefined> {

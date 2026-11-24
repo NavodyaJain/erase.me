@@ -5,7 +5,8 @@ import type { InboxService } from '../gmail/inbox.service.js';
 import { hashDraft, isDraftHash } from './draft-hash.js';
 import { explainFindings, findSafetyIssues, ID_FINDINGS, type SafetyFinding } from './draft-safety.js';
 import { renderDraft } from './draft-template.js';
-import type { ClaimRow, CompanyContext, DraftRow, EventRow, RequestRow, RequestsRepository, RequestsTx } from './requests.repository.js';
+import { isReportedOutcome, isWaiting, outcomeOfStatus, reportedOutcomeOf, statusForOutcome, TRACKING_STATUSES, type OutcomeValue } from './outcomes.js';
+import type { ClaimRow, CompanyContext, DraftRow, EventRow, ReplySummary, RequestRow, RequestsRepository, RequestsTx } from './requests.repository.js';
 import { SenderOutcomeUnknownError, SenderRejectedError, type SenderChoice, type SentMessage } from './sender.js';
 import { assertTransition, eventFor, PRE_SEND_STATUSES, type RequestStatus } from './state-machine.js';
 
@@ -141,7 +142,7 @@ export interface DraftOutcome {
 }
 
 export interface RequestView {
-  request: { id: string; status: RequestStatus; createdAt: Date; updatedAt: Date; sentAt: Date | null; dueAt: Date | null };
+  request: { id: string; status: RequestStatus; channel: 'email' | 'web_form'; createdAt: Date; updatedAt: Date; sentAt: Date | null; dueAt: Date | null };
   company: { id: string; name: string; mustKeep: boolean; kept: boolean; selfServeUrl: string | null };
   /** How the company takes requests. For `web_form` the draft is for copy and paste and cannot be sent by email. */
   contact: { channel: 'email' | 'web_form'; formUrl: string | null };
@@ -151,6 +152,17 @@ export interface RequestView {
   events: Array<{ type: string; actor: string; at: Date; payload: Record<string, unknown> }>;
   canSend: boolean;
   blockers: Array<{ code: string; message: string; findings?: SafetyFinding[]; formUrl?: string }>;
+  /** Replies seen on the Gmail thread, from message headers only: counts and times, never what they said. */
+  replies: ReplySummary;
+  /**
+   * What the person reports the company answered. Set by the person and never inferred, so it is always "Reported by
+   * you". `no_answer_yet` while waiting. Null before the request is sent, and after it bounced.
+   */
+  outcome: { value: OutcomeValue; setByUser: boolean; at: Date | null } | null;
+  /** A sent request can take an outcome. */
+  canSetOutcome: boolean;
+  /** A web-form request whose draft is ready: the person can say they pasted it into the form. */
+  canMarkSubmitted: boolean;
 }
 
 export interface SendResponse {
@@ -167,6 +179,8 @@ export interface RequestsServiceDeps {
   sender: SenderChoice;
   realSendDailyCap: number;
   now?: () => Date;
+  /** Days after sending before a request counts as overdue (FOLLOWUP_AFTER_DAYS). Default 30. */
+  followupAfterDays?: number;
   log?: { info(o: object, m: string): void; warn(o: object, m: string): void };
 }
 
@@ -222,7 +236,7 @@ export class RequestsService {
     return repo.transaction(async (tx) => {
       const existing = await tx.findOpenRequest(userCompanyId);
       if (existing) return done('existing', existing.id);
-      const created = await tx.insertRequest(userId, userCompanyId);
+      const created = await tx.insertRequest(userId, userCompanyId, isForm ? 'web_form' : 'email');
       if (!created) {
         const raced = await tx.findOpenRequest(userCompanyId);
         return done('existing', raced?.id);
@@ -245,6 +259,8 @@ export class RequestsService {
       id: r.id,
       status: r.status as RequestStatus,
       company: { name: r.companyName, mustKeep: r.mustKeep },
+      channel: r.channel,
+      outcome: outcomeOfStatus(r.status as RequestStatus),
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       sentAt: r.sentAt,
@@ -272,8 +288,11 @@ export class RequestsService {
     }));
     if (this.deps.sender.kind === 'unavailable') blockers.push({ code: this.deps.sender.code, message: this.deps.sender.detail });
     const canSend = req.status === 'approved' && approved && blockers.length === 0;
+    const replies = await r.replySummary(req.id);
+    const lastOutcomeEvent = [...events].reverse().find((e) => e.type === 'outcome_set');
+    const useForm = ctx.grievanceChannel === 'web_form';
     return {
-      request: { id: req.id, status: req.status, createdAt: req.createdAt, updatedAt: req.updatedAt, sentAt: req.sentAt, dueAt: req.dueAt },
+      request: { id: req.id, status: req.status, channel: req.channel, createdAt: req.createdAt, updatedAt: req.updatedAt, sentAt: req.sentAt, dueAt: req.dueAt },
       company: { id: ctx.companyId, name: ctx.companyName, mustKeep: ctx.mustKeep || ctx.riskLevel === 'must_keep', kept: ctx.keptAt !== null, selfServeUrl: ctx.selfServeUrl },
       contact: { channel: ctx.grievanceChannel, formUrl: ctx.grievanceChannel === 'web_form' ? ctx.grievanceFormUrl : null },
       useForm: ctx.grievanceChannel === 'web_form',
@@ -282,6 +301,11 @@ export class RequestsService {
       events: events.map((e: EventRow) => ({ type: e.type, actor: e.actorType, at: e.createdAt, payload: e.payload })),
       canSend,
       blockers,
+      replies,
+      outcome: outcomeView(req.status, lastOutcomeEvent),
+      canSetOutcome: TRACKING_STATUSES.includes(req.status),
+      // The form blocker is the very reason to use the form, so it does not count against marking it as submitted.
+      canMarkSubmitted: useForm && PRE_SEND_STATUSES.includes(req.status) && draftBlockers(ctx, draft).every((b) => b.code === 'use_form'),
     };
   }
 
@@ -374,6 +398,91 @@ export class RequestsService {
       await tx.setStatus(req.id, 'closed');
       return this.view(tx, userId, requestId);
     });
+  }
+
+  // ---- outcome and "mark as submitted" (Phase 2) ----
+
+  /**
+   * The person reports what the company answered (PRD F7). Nothing infers it: not a reply we found, not its sender, not
+   * its wording. It can be set when no reply was detected (the answer may have come by phone or through the form), changed,
+   * and taken back to "no answer yet", which returns the request to `sent`, or to `no_reply` once the follow-up day has
+   * passed. Setting the same thing again changes nothing and records nothing.
+   */
+  async setOutcome(userId: string, requestId: string, outcome: OutcomeValue): Promise<RequestView> {
+    let changed: { from: RequestStatus; to: RequestStatus } | undefined;
+    const view = await this.deps.repo.transaction(async (tx) => {
+      const req = await tx.lockRequest(userId, requestId);
+      if (!req) throw Problems.notFound();
+      if (!TRACKING_STATUSES.includes(req.status)) {
+        throw new AppError(409, 'invalid_transition', 'There is no outcome to report yet', outcomeRefusal(req.status));
+      }
+      const days = this.deps.followupAfterDays ?? 30;
+      const overdue = req.sentAt !== null && this.now().getTime() >= req.sentAt.getTime() + days * 24 * 60 * 60 * 1000;
+      const target = statusForOutcome(outcome, overdue);
+      // "No answer yet" while already waiting (sent or no_reply) is where the person already is.
+      if (target === req.status || (outcome === 'no_answer_yet' && (req.status === 'sent' || req.status === 'no_reply'))) {
+        return this.view(tx, userId, requestId);
+      }
+      assertTransition(req.status, target);
+      await tx.insertEvent({ requestId: req.id, type: eventFor(req.status, target), actorType: 'user', actorId: userId, payload: { from: req.status, to: target, outcome } });
+      await tx.setStatus(req.id, target);
+      changed = { from: req.status, to: target };
+      return this.view(tx, userId, requestId);
+    });
+    if (changed) {
+      await this.deps.audit.record({ actorType: 'user', actorId: userId, action: 'request.outcome_set', targetType: 'request', targetId: requestId });
+      this.log.info({ requestId, from: changed.from, to: changed.to }, 'outcome reported');
+    }
+    return view;
+  }
+
+  /**
+   * The person says they pasted the draft into the company's web form. Nothing is sent from here. It is recorded the way
+   * a send is: the person approves the exact draft they copied (`draftHash`), the guards run again (a must-keep or kept
+   * company, a verified form contact, ID numbers and the unresolved [OPEN] line), and the request becomes `sent`, which
+   * starts the clock for a reply. A web form has no Gmail thread, so there is nothing for reply checks to follow: the
+   * person reports the outcome. Doing it twice changes nothing.
+   */
+  async markSubmitted(userId: string, requestId: string, draftHash: string): Promise<RequestView> {
+    let recorded = false;
+    const view = await this.deps.repo.transaction(async (tx) => {
+      const req = await tx.lockRequest(userId, requestId);
+      if (!req) throw Problems.notFound();
+      const latest = await tx.latestDraft(req.id);
+      const ctx = await tx.contextForRequest(userId, requestId);
+      if (!latest || !ctx) throw Problems.notFound();
+
+      if (TRACKING_STATUSES.includes(req.status)) {
+        if (req.channel === 'web_form') return this.view(tx, userId, requestId); // already marked
+        throw new AppError(409, 'already_sent', 'Already sent', 'This request was already sent by email.');
+      }
+      if (ctx.grievanceChannel !== 'web_form') {
+        throw new AppError(409, 'not_a_form_request', 'This company does not use a web form', `${ctx.companyName} takes requests by email. Review the draft, approve it and send it instead.`);
+      }
+      if (req.status !== 'approved') assertTransition(req.status, 'approved'); // a closed or bounced request cannot be submitted
+
+      if (!isDraftHash(draftHash) || draftHash !== latest.draftHash) {
+        throw new AppError(409, 'draft_changed', 'The draft changed', 'The text you copied is not the latest version. Copy the latest draft before you say you submitted it.');
+      }
+      const blocker = draftBlockers(ctx, latest).find((b) => b.code !== 'use_form');
+      if (blocker) throwBlocker(blocker);
+
+      if (!(await tx.hasUserApproval(req.id, latest.draftHash, latest.createdAt))) {
+        await tx.insertEvent({ requestId: req.id, type: 'approved', actorType: 'user', actorId: userId, draftHash: latest.draftHash, payload: { version: latest.version, forForm: true } });
+      }
+      if (req.status !== 'approved') await tx.setStatus(req.id, 'approved');
+      assertTransition('approved', 'sent');
+      const sentAt = this.now();
+      await tx.markSubmitted(req.id, { sentAt, dueAt: new Date(sentAt.getTime() + THIRTY_DAYS_MS) });
+      await tx.insertEvent({ requestId: req.id, type: 'submitted', actorType: 'user', actorId: userId, draftHash: latest.draftHash, payload: { version: latest.version } });
+      recorded = true;
+      return this.view(tx, userId, requestId);
+    });
+    if (recorded) {
+      await this.deps.audit.record({ actorType: 'user', actorId: userId, action: 'request.submitted', targetType: 'request', targetId: requestId });
+      this.log.info({ requestId }, 'request marked as submitted to the web form');
+    }
+    return view;
   }
 
   // ---- send ----
@@ -530,6 +639,25 @@ export class RequestsService {
       await tx.completeClaim(claim.id, 200, body as unknown as Record<string, unknown>);
     });
   }
+}
+
+/** Why a request in this status cannot take an outcome. */
+function outcomeRefusal(status: RequestStatus): string {
+  if (status === 'drafted' || status === 'approved') return 'This request has not been sent yet, so there is nothing to report. Send it, or mark it as submitted if it uses a web form.';
+  return `A request that is ${status} cannot take an outcome.`;
+}
+
+/** What to show as the outcome of a request in this status, given the last time the person set one. */
+function outcomeView(status: RequestStatus, last: EventRow | undefined): RequestView['outcome'] {
+  const reported = reportedOutcomeOf(status);
+  if (reported) return { value: reported, setByUser: true, at: last?.createdAt ?? null };
+  if (isWaiting(status)) return { value: 'no_answer_yet', setByUser: false, at: null };
+  if (status === 'closed') {
+    // A closed request keeps the last outcome the person reported, if there was one.
+    const value = last?.payload.outcome;
+    return isReportedOutcome(value) ? { value, setByUser: true, at: last?.createdAt ?? null } : null;
+  }
+  return null;
 }
 
 export const isRequestId = (v: string): boolean => isId('request', v);

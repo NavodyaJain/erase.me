@@ -324,6 +324,26 @@ export interface paths {
         patch: operations["editRequestDraft"];
         trace?: never;
     };
+    "/v1/requests/{id}/outcome": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Report what the company answered
+         * @description The person reports the outcome: `confirmed_erased`, `refused`, `needs_more_info`, or `no_answer_yet` to take a report back. Erase.me never infers it, not from a reply it found and not from who sent it, and it always shows as "Reported by you", never as a verified fact. It can be set whether or not a reply was detected (the answer may have come by phone or through the form), and changed later. `no_answer_yet` returns the request to `sent`, or to `no_reply` once the follow-up day has passed. Saying the same thing again changes nothing. Only a sent request has an outcome: a draft, a closed or a bounced request answers 409 `invalid_transition`.
+         */
+        put: operations["setRequestOutcome"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/requests/{id}/send": {
         parameters: {
             query?: never;
@@ -338,6 +358,26 @@ export interface paths {
          * @description Needs an `Idempotency-Key` header: a repeat with the same key returns the first answer and never sends twice. Needs a user approval of the exact current draft (also enforced in the database), a verified contact, a company that is neither must-keep nor kept, and text without ID-like numbers or an [OPEN] placeholder. In development and test the sender is fake and the response says so (`delivery: "fake"`, with a `notice`); real sending stays off until it is explicitly enabled. If Gmail does not confirm, the request is left unsent and the user is told to check the Sent folder: it is never retried automatically (`send_outcome_unknown`).
          */
         post: operations["sendRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{id}/submitted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Say the draft was pasted into the company’s web form
+         * @description For a company that takes requests through a web form. Nothing is sent from here: the person copied the draft into the form and says so. It is recorded like a send: the person approves the exact draft they copied (`draftHash`), the guards run again (a must-keep or kept company, a verified form contact, ID-like numbers and the unresolved [OPEN] line), and the request becomes `sent` with channel `web_form`, which starts the clock for a reply. There is no Gmail thread to follow, so reply checks do not apply and the person reports the outcome. Saying it again changes nothing. An email company answers 409 `not_a_form_request`.
+         */
+        post: operations["markRequestSubmitted"];
         delete?: never;
         options?: never;
         head?: never;
@@ -470,7 +510,7 @@ export interface components {
              * @description A stable machine-readable code. Branch on this, not on `title` or `detail`.
              * @enum {string}
              */
-            code: "validation_failed" | "malformed_request" | "idempotency_key_required" | "idempotency_key_invalid" | "unauthorized" | "forbidden" | "not_found" | "inbox_limit" | "inbox_not_connected" | "already_sent" | "approval_required" | "draft_changed" | "fictional_company" | "invalid_transition" | "request_not_closable" | "request_not_editable" | "send_in_progress" | "company_excluded" | "must_keep" | "kept" | "no_contact" | "contact_bounced" | "contact_changed" | "use_form" | "draft_integrity" | "draft_unsafe" | "idempotency_key_reuse" | "rate_limited" | "daily_cap_reached" | "internal_error" | "send_failed" | "send_outcome_unknown" | "auth_not_configured" | "encryption_not_configured" | "send_disabled" | "real_send_blocked" | "not_ready";
+            code: "validation_failed" | "malformed_request" | "idempotency_key_required" | "idempotency_key_invalid" | "unauthorized" | "forbidden" | "not_found" | "inbox_limit" | "inbox_not_connected" | "already_sent" | "approval_required" | "draft_changed" | "fictional_company" | "invalid_transition" | "not_a_form_request" | "request_not_closable" | "request_not_editable" | "send_in_progress" | "company_excluded" | "must_keep" | "kept" | "no_contact" | "contact_bounced" | "contact_changed" | "use_form" | "draft_integrity" | "draft_unsafe" | "idempotency_key_reuse" | "rate_limited" | "daily_cap_reached" | "internal_error" | "send_failed" | "send_outcome_unknown" | "auth_not_configured" | "encryption_not_configured" | "send_disabled" | "real_send_blocked" | "not_ready";
             /** @description A sentence a person can act on. Never contains draft text, addresses or tokens. */
             detail?: string;
             /** @description The request path, without the query string */
@@ -558,6 +598,13 @@ export interface components {
                 mustKeep: boolean;
             };
             /**
+             * @description `email`: sent from the person’s Gmail. `web_form`: the person pasted it into the company’s web form.
+             * @enum {string}
+             */
+            channel: "email" | "web_form";
+            /** @description What the person reported (never inferred). `no_answer_yet` while waiting. Null before the request is sent. */
+            outcome: ("confirmed_erased" | "refused" | "needs_more_info" | "no_answer_yet") | null;
+            /**
              * Format: date-time
              * @description UTC timestamp, ISO 8601
              */
@@ -576,6 +623,8 @@ export interface components {
                 id: string;
                 /** @enum {string} */
                 status: "drafted" | "approved" | "sent" | "reply_received" | "replied_deleted" | "replied_info_requested" | "replied_refused" | "no_reply" | "closed" | "bounced";
+                /** @enum {string} */
+                channel: "email" | "web_form";
                 /**
                  * Format: date-time
                  * @description UTC timestamp, ISO 8601
@@ -647,6 +696,29 @@ export interface components {
                 /** Format: uri */
                 formUrl?: string;
             }[];
+            /** @description Found from message headers only. Erase.me never reads or stores what a reply says; open it in Gmail. */
+            replies: {
+                /** @description Replies from a person that were found on the sent thread */
+                count: number;
+                /** @description Automatic replies (out of office and similar). They do not change the status or stop the follow-up clock. */
+                automaticCount: number;
+                firstAt: string | null;
+                lastAt: string | null;
+                /** @description Whether the first reply from a person came from the company’s own domain. Null until there is one. */
+                senderMatch: ("company" | "other" | "unknown") | null;
+            };
+            /** @description What the person reports the company answered. Never inferred from a reply. `no_answer_yet` while waiting. Null before the request is sent, and after it bounced. */
+            outcome: {
+                /** @enum {string} */
+                value: "confirmed_erased" | "refused" | "needs_more_info" | "no_answer_yet";
+                /** @description True when the person reported it. Always shown as "Reported by you", never as a verified fact. */
+                setByUser: boolean;
+                at: string | null;
+            } | null;
+            /** @description True once the request is sent */
+            canSetOutcome: boolean;
+            /** @description True for a web-form request whose draft is ready: the person can say they pasted it into the form */
+            canMarkSubmitted: boolean;
         };
         Scan: {
             /** @description Prefixed ULID (`scn_` followed by 26 characters) */
@@ -1495,6 +1567,8 @@ export interface operations {
                      *             "name": "Sample Shop",
                      *             "mustKeep": false
                      *           },
+                     *           "channel": "email",
+                     *           "outcome": null,
                      *           "createdAt": "2026-11-22T10:00:00.000Z",
                      *           "updatedAt": "2026-11-22T10:00:00.000Z",
                      *           "sentAt": null,
@@ -1638,6 +1712,7 @@ export interface operations {
                      *       "request": {
                      *         "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
                      *         "status": "drafted",
+                     *         "channel": "email",
                      *         "createdAt": "2026-11-22T10:00:00.000Z",
                      *         "updatedAt": "2026-11-22T10:00:00.000Z",
                      *         "sentAt": null,
@@ -1685,7 +1760,17 @@ export interface operations {
                      *             "open_placeholder"
                      *           ]
                      *         }
-                     *       ]
+                     *       ],
+                     *       "replies": {
+                     *         "count": 0,
+                     *         "automaticCount": 0,
+                     *         "firstAt": null,
+                     *         "lastAt": null,
+                     *         "senderMatch": null
+                     *       },
+                     *       "outcome": null,
+                     *       "canSetOutcome": false,
+                     *       "canMarkSubmitted": false
                      *     }
                      */
                     "application/json": components["schemas"]["RequestView"];
@@ -1755,6 +1840,7 @@ export interface operations {
                      *       "request": {
                      *         "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
                      *         "status": "approved",
+                     *         "channel": "email",
                      *         "createdAt": "2026-11-22T10:00:00.000Z",
                      *         "updatedAt": "2026-11-22T10:00:00.000Z",
                      *         "sentAt": null,
@@ -1794,7 +1880,17 @@ export interface operations {
                      *         }
                      *       ],
                      *       "canSend": true,
-                     *       "blockers": []
+                     *       "blockers": [],
+                     *       "replies": {
+                     *         "count": 0,
+                     *         "automaticCount": 0,
+                     *         "firstAt": null,
+                     *         "lastAt": null,
+                     *         "senderMatch": null
+                     *       },
+                     *       "outcome": null,
+                     *       "canSetOutcome": false,
+                     *       "canMarkSubmitted": false
                      *     }
                      */
                     "application/json": components["schemas"]["RequestView"];
@@ -1879,6 +1975,7 @@ export interface operations {
                      *       "request": {
                      *         "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
                      *         "status": "closed",
+                     *         "channel": "email",
                      *         "createdAt": "2026-11-22T10:00:00.000Z",
                      *         "updatedAt": "2026-11-22T10:00:00.000Z",
                      *         "sentAt": null,
@@ -1926,7 +2023,17 @@ export interface operations {
                      *             "open_placeholder"
                      *           ]
                      *         }
-                     *       ]
+                     *       ],
+                     *       "replies": {
+                     *         "count": 0,
+                     *         "automaticCount": 0,
+                     *         "firstAt": null,
+                     *         "lastAt": null,
+                     *         "senderMatch": null
+                     *       },
+                     *       "outcome": null,
+                     *       "canSetOutcome": false,
+                     *       "canMarkSubmitted": false
                      *     }
                      */
                     "application/json": components["schemas"]["RequestView"];
@@ -2018,6 +2125,7 @@ export interface operations {
                      *       "request": {
                      *         "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
                      *         "status": "drafted",
+                     *         "channel": "email",
                      *         "createdAt": "2026-11-22T10:00:00.000Z",
                      *         "updatedAt": "2026-11-22T10:00:00.000Z",
                      *         "sentAt": null,
@@ -2065,7 +2173,17 @@ export interface operations {
                      *             "open_placeholder"
                      *           ]
                      *         }
-                     *       ]
+                     *       ],
+                     *       "replies": {
+                     *         "count": 0,
+                     *         "automaticCount": 0,
+                     *         "firstAt": null,
+                     *         "lastAt": null,
+                     *         "senderMatch": null
+                     *       },
+                     *       "outcome": null,
+                     *       "canSetOutcome": false,
+                     *       "canMarkSubmitted": false
                      *     }
                      */
                     "application/json": components["schemas"]["RequestView"];
@@ -2118,6 +2236,178 @@ export interface operations {
             };
             /** @description The text looks like it contains an ID number */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setRequestOutcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Prefixed ULID (`req_` followed by 26 characters) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "outcome": "refused"
+                 *     }
+                 */
+                "application/json": {
+                    /**
+                     * @description What the company answered, as the person reports it. `no_answer_yet` takes it back.
+                     * @enum {string}
+                     */
+                    outcome: "confirmed_erased" | "refused" | "needs_more_info" | "no_answer_yet";
+                };
+            };
+        };
+        responses: {
+            /** @description The request with the reported outcome */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "request": {
+                     *         "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                     *         "status": "replied_refused",
+                     *         "channel": "email",
+                     *         "createdAt": "2026-11-22T10:00:00.000Z",
+                     *         "updatedAt": "2026-11-22T10:00:00.000Z",
+                     *         "sentAt": "2026-11-22T10:00:00.000Z",
+                     *         "dueAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "company": {
+                     *         "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                     *         "name": "Sample Shop",
+                     *         "mustKeep": false,
+                     *         "kept": false,
+                     *         "selfServeUrl": "https://example.com/account/delete"
+                     *       },
+                     *       "contact": {
+                     *         "channel": "email",
+                     *         "formUrl": null
+                     *       },
+                     *       "useForm": false,
+                     *       "draft": {
+                     *         "version": 1,
+                     *         "to": "grievance@example.com",
+                     *         "subject": "Request to erase my personal data",
+                     *         "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                     *         "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                     *         "createdBy": "template",
+                     *         "createdAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "approved": true,
+                     *       "events": [
+                     *         {
+                     *           "type": "drafted",
+                     *           "actor": "system",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1,
+                     *             "createdBy": "template"
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "approved",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "sent",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1,
+                     *             "delivery": "fake"
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "outcome_set",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "from": "sent",
+                     *             "to": "replied_refused",
+                     *             "outcome": "refused"
+                     *           }
+                     *         }
+                     *       ],
+                     *       "canSend": false,
+                     *       "blockers": [],
+                     *       "replies": {
+                     *         "count": 0,
+                     *         "automaticCount": 0,
+                     *         "firstAt": null,
+                     *         "lastAt": null,
+                     *         "senderMatch": null
+                     *       },
+                     *       "outcome": {
+                     *         "value": "refused",
+                     *         "setByUser": true,
+                     *         "at": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "canSetOutcome": true,
+                     *       "canMarkSubmitted": false
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RequestView"];
+                };
+            };
+            /** @description The request did not match the schema */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or wrong CSRF token, or a request from another origin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No such request for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no outcome to report for this request yet */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2237,6 +2527,173 @@ export interface operations {
             };
             /** @description Sending is not available */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    markRequestSubmitted: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Prefixed ULID (`req_` followed by 26 characters) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "draftHash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8"
+                 *     }
+                 */
+                "application/json": {
+                    /** @description The hash of the version the person copied into the form. If it is no longer the latest the call is refused (409 `draft_changed`). */
+                    draftHash: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The request, now sent (or already marked) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "request": {
+                     *         "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                     *         "status": "sent",
+                     *         "channel": "web_form",
+                     *         "createdAt": "2026-11-22T10:00:00.000Z",
+                     *         "updatedAt": "2026-11-22T10:00:00.000Z",
+                     *         "sentAt": "2026-11-22T10:00:00.000Z",
+                     *         "dueAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "company": {
+                     *         "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                     *         "name": "Sample Shop",
+                     *         "mustKeep": false,
+                     *         "kept": false,
+                     *         "selfServeUrl": "https://example.com/account/delete"
+                     *       },
+                     *       "contact": {
+                     *         "channel": "web_form",
+                     *         "formUrl": "https://example.com/privacy/request"
+                     *       },
+                     *       "useForm": true,
+                     *       "draft": {
+                     *         "version": 1,
+                     *         "to": "https://example.com/privacy/request",
+                     *         "subject": "Request to erase my personal data",
+                     *         "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                     *         "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                     *         "createdBy": "template",
+                     *         "createdAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "approved": true,
+                     *       "events": [
+                     *         {
+                     *           "type": "drafted",
+                     *           "actor": "system",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1,
+                     *             "createdBy": "template"
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "approved",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "submitted",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1
+                     *           }
+                     *         }
+                     *       ],
+                     *       "canSend": false,
+                     *       "blockers": [],
+                     *       "replies": {
+                     *         "count": 0,
+                     *         "automaticCount": 0,
+                     *         "firstAt": null,
+                     *         "lastAt": null,
+                     *         "senderMatch": null
+                     *       },
+                     *       "outcome": {
+                     *         "value": "no_answer_yet",
+                     *         "setByUser": false,
+                     *         "at": null
+                     *       },
+                     *       "canSetOutcome": true,
+                     *       "canMarkSubmitted": false
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RequestView"];
+                };
+            };
+            /** @description The request did not match the schema */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or wrong CSRF token, or a request from another origin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No such request for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Cannot be marked as submitted */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The draft cannot be used yet */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

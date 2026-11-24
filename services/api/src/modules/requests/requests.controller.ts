@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { AppError, Problems } from '../../common/errors.js';
-import { ApproveBody, CreateDraftsBody, EditDraftBody, RequestParams, idempotencyKey } from '../../contract/schemas.js';
+import { ApproveBody, CreateDraftsBody, EditDraftBody, OutcomeBody, RequestParams, SubmittedBody, idempotencyKey } from '../../contract/schemas.js';
 import type { RequestsService } from './requests.service.js';
 
 export interface RequestsRoutesDeps {
@@ -35,6 +35,18 @@ export const requestsRoutes: FastifyPluginAsync<RequestsRoutesDeps> = async (app
   app.post('/v1/requests/:id/approve', { preHandler: requireUser }, async (request) => {
     const { id } = RequestParams.parse(request.params);
     return requests.approve(userId(request), id, ApproveBody.parse(request.body).draftHash);
+  });
+
+  // The person reports what the company answered. Never inferred (PRD F7).
+  app.put('/v1/requests/:id/outcome', { preHandler: requireUser }, async (request) => {
+    const { id } = RequestParams.parse(request.params);
+    return requests.setOutcome(userId(request), id, OutcomeBody.parse(request.body).outcome);
+  });
+
+  // The person pasted the draft into the company's web form. Nothing is sent from here.
+  app.post('/v1/requests/:id/submitted', { preHandler: requireUser }, async (request) => {
+    const { id } = RequestParams.parse(request.params);
+    return requests.markSubmitted(userId(request), id, SubmittedBody.parse(request.body).draftHash);
   });
 
   app.post('/v1/requests/:id/close', { preHandler: requireUser }, async (request) => {

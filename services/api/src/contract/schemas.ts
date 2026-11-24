@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ID_PREFIXES, ULID_PATTERN, type IdKind } from '../common/ids.js';
-import { COMPANY_CATEGORIES, INBOX_STATUSES, REQUEST_EVENT_TYPES, REQUEST_STATUSES, SCAN_STATUSES } from '../db/schema/enums.js';
+import { COMPANY_CATEGORIES, INBOX_STATUSES, REPLY_SENDER_MATCHES, REQUEST_CHANNELS, REQUEST_EVENT_TYPES, REQUEST_STATUSES, SCAN_STATUSES } from '../db/schema/enums.js';
+import { OUTCOME_VALUES } from '../modules/requests/outcomes.js';
 
 /**
  * The API contract's schemas (backend brief rule 2: schema-first). Request schemas here are the ones the
@@ -75,6 +76,7 @@ export const PROBLEM_CODES = [
   'draft_changed',
   'fictional_company',
   'invalid_transition',
+  'not_a_form_request',
   'request_not_closable',
   'request_not_editable',
   'send_in_progress',
@@ -253,6 +255,8 @@ export const RequestListItem = component(
     id: idOf('request'),
     status: z.enum(REQUEST_STATUSES),
     company: z.object({ name: z.string(), mustKeep: z.boolean() }),
+    channel: z.enum(REQUEST_CHANNELS).describe('`email`: sent from the person’s Gmail. `web_form`: the person pasted it into the company’s web form.'),
+    outcome: z.enum(OUTCOME_VALUES).nullable().describe('What the person reported (never inferred). `no_answer_yet` while waiting. Null before the request is sent.'),
     createdAt: isoDateTime,
     updatedAt: isoDateTime,
     sentAt: isoDateTime.nullable(),
@@ -267,6 +271,7 @@ export const RequestView = component(
     request: z.object({
       id: idOf('request'),
       status: z.enum(REQUEST_STATUSES),
+      channel: z.enum(REQUEST_CHANNELS),
       createdAt: isoDateTime,
       updatedAt: isoDateTime,
       sentAt: isoDateTime.nullable(),
@@ -312,6 +317,25 @@ export const RequestView = component(
         }),
       )
       .describe('Everything stopping this draft from being approved or sent right now'),
+    replies: z
+      .object({
+        count: z.number().int().min(0).describe('Replies from a person that were found on the sent thread'),
+        automaticCount: z.number().int().min(0).describe('Automatic replies (out of office and similar). They do not change the status or stop the follow-up clock.'),
+        firstAt: isoDateTime.nullable(),
+        lastAt: isoDateTime.nullable(),
+        senderMatch: z.enum(REPLY_SENDER_MATCHES).nullable().describe('Whether the first reply from a person came from the company’s own domain. Null until there is one.'),
+      })
+      .describe('Found from message headers only. Erase.me never reads or stores what a reply says; open it in Gmail.'),
+    outcome: z
+      .object({
+        value: z.enum(OUTCOME_VALUES),
+        setByUser: z.boolean().describe('True when the person reported it. Always shown as "Reported by you", never as a verified fact.'),
+        at: isoDateTime.nullable(),
+      })
+      .nullable()
+      .describe('What the person reports the company answered. Never inferred from a reply. `no_answer_yet` while waiting. Null before the request is sent, and after it bounced.'),
+    canSetOutcome: z.boolean().describe('True once the request is sent'),
+    canMarkSubmitted: z.boolean().describe('True for a web-form request whose draft is ready: the person can say they pasted it into the form'),
   }),
 );
 
@@ -335,6 +359,12 @@ export const EditDraftBody = z
   })
   .strict();
 export const ApproveBody = z.object({ draftHash: draftHash.describe('The hash of the version the user was shown') }).strict();
+export const OutcomeBody = z
+  .object({ outcome: z.enum(OUTCOME_VALUES).describe('What the company answered, as the person reports it. `no_answer_yet` takes it back.') })
+  .strict();
+export const SubmittedBody = z
+  .object({ draftHash: draftHash.describe('The hash of the version the person copied into the form. If it is no longer the latest the call is refused (409 `draft_changed`).') })
+  .strict();
 
 export const RequestParams = z.object({ id: idOf('request') });
 export const InboxParams = z.object({ id: idOf('inbox') });
