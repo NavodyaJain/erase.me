@@ -63,6 +63,8 @@ export const REPLY_LABEL_SOURCES = ['model', 'admin'] as const;
 export const REPLY_SENDER_MATCHES = ['company', 'other', 'unknown'] as const;
 /** How a request reached the company: sent by email from the person's Gmail, or copied into the company's web form. */
 export const REQUEST_CHANNELS = ['email', 'web_form'] as const;
+/** A follow-up: drafted, approved, then sent by email or (for a web form) marked as submitted by the person. */
+export const FOLLOWUP_STATUSES = ['drafted', 'approved', 'sent', 'submitted', 'cancelled'] as const;
 
 export const userStatus = pgEnum('user_status', USER_STATUSES);
 export const inboxStatus = pgEnum('inbox_status', INBOX_STATUSES);
@@ -79,3 +81,4 @@ export const replyLabel = pgEnum('reply_label', REPLY_LABELS);
 export const replyLabelSource = pgEnum('reply_label_source', REPLY_LABEL_SOURCES);
 export const replySenderMatch = pgEnum('reply_sender_match', REPLY_SENDER_MATCHES);
 export const requestChannel = pgEnum('request_channel', REQUEST_CHANNELS);
+export const followupStatus = pgEnum('followup_status', FOLLOWUP_STATUSES);

@@ -28,6 +28,7 @@ const EXPECTED_TABLES = [
   'reply_labels',
   'request_drafts',
   'request_events',
+  'request_followups',
   'request_replies',
   'requests',
   'scans',
@@ -68,11 +69,12 @@ describe('migrations', () => {
       .filter((r) => /(body|html|snippet|subject|message|content|raw|mime|attachment|preview)/i.test(r.column_name))
       .map((r) => `${r.table_name}.${r.column_name}`)
       .sort();
-    // Only our own outgoing draft text, which the user approves, and three columns whose names say "message" but which
+    // Only our own outgoing draft text, which the user approves, and four columns whose names say "message" but which
     // hold opaque ids: Gmail's id of a message, and the Message-ID header of the one we sent. Nothing from received mail.
     expect(contentLike).toEqual([
       'request_drafts.body',
       'request_drafts.subject',
+      'request_followups.gmail_message_id',
       'request_replies.gmail_message_id',
       'requests.sent_message_id',
       'requests.sent_rfc_message_id',
@@ -504,9 +506,147 @@ describe('reply tracking (Phase 2)', () => {
 
   it('has the new event types, and a failure count that cannot go negative', async () => {
     const requestId = await sentRequest('r9');
-    for (const type of ['reply_received', 'outcome_set', 'followup_drafted', 'submitted', 'followup_approved', 'followup_sent']) {
-      await addEvent(t.app, requestId, type, 'system', null);
+    for (const type of ['reply_received', 'outcome_set', 'followup_drafted', 'submitted']) await addEvent(t.app, requestId, type, 'system', null);
+    // Approving or sending a follow-up is recorded against the exact draft, like the first request: a hash is required.
+    for (const type of ['followup_approved', 'followup_sent']) {
+      expect((await pgError(addEvent(t.app, requestId, type, 'user', null))).code, type).toBe(CHECK_VIOLATION);
+      await addEvent(t.app, requestId, type, 'user', sha256('a follow-up draft'));
     }
     expect((await pgError(t.app.query(`UPDATE requests SET reply_check_failures = -1 WHERE id = $1`, [requestId]))).code).toBe(CHECK_VIOLATION);
+  });
+});
+
+describe('follow-ups (Phase 2)', () => {
+  async function sentRequest(label: string) {
+    const seed = await seedUser(t.owner, label);
+    const { requestId, hash } = await draftRequest(t.owner, seed);
+    await addEvent(t.app, requestId, 'approved', 'user', hash);
+    await markSent(t.app, requestId);
+    return { requestId, seed };
+  }
+  const addFollowup = (requestId: string, sequence = 1, status = 'drafted') =>
+    t.app.query(`INSERT INTO request_followups (id, request_id, sequence, status) VALUES ($1, $2, $3, $4) RETURNING id`, [newId('followup'), requestId, sequence, status]);
+  const followupDraft = async (requestId: string, followupId: string, version: number, text: string) => {
+    const hash = sha256(text);
+    await t.owner.query(
+      `INSERT INTO request_drafts (id, request_id, followup_id, version, to_email, subject, body, draft_hash, created_by) VALUES ($1, $2, $3, $4, 'privacy@example.com', 'Re: Request', $5, $6, 'template')`,
+      [newId('draft'), requestId, followupId, version, text, hash],
+    );
+    return hash;
+  };
+  const newFollowup = async (requestId: string, sequence = 1) => ((await addFollowup(requestId, sequence)).rows[0] as { id: string }).id;
+  const setStatus = (id: string, status: string) =>
+    t.app.query(`UPDATE request_followups SET status = $2::followup_status, sent_at = CASE WHEN $2::text IN ('sent', 'submitted') THEN now() ELSE sent_at END WHERE id = $1`, [id, status]);
+
+  it('keeps its drafts apart from the first request: each has its own versions', async () => {
+    const { requestId } = await sentRequest('f1');
+    const followupId = await newFollowup(requestId);
+    await followupDraft(requestId, followupId, 1, 'follow-up text');
+    await followupDraft(requestId, followupId, 2, 'follow-up text, edited');
+    // The first request still has its own version 1 and cannot get a second version 1.
+    expect((await pgError(t.owner.query(`INSERT INTO request_drafts (id, request_id, version, to_email, subject, body, draft_hash, created_by) VALUES ($1, $2, 1, 'a@example.com', 'S', 'B', $3, 'user')`, [newId('draft'), requestId, sha256('x')]))).code).toBe(UNIQUE_VIOLATION);
+    expect((await pgError(followupDraft(requestId, followupId, 2, 'again'))).code).toBe(UNIQUE_VIOLATION);
+  });
+
+  it('allows one follow-up being worked on at a time, a numbered sequence, and no more than three', async () => {
+    const { requestId } = await sentRequest('f2');
+    const first = await newFollowup(requestId);
+    expect((await pgError(addFollowup(requestId, 2))).code).toBe(UNIQUE_VIOLATION); // the first is still open
+    expect((await pgError(addFollowup(requestId, 1, 'cancelled'))).code).toBe(UNIQUE_VIOLATION); // the sequence number is taken
+    await t.owner.query(`UPDATE request_followups SET status = 'cancelled' WHERE id = $1`, [first]);
+    await addFollowup(requestId, 2);
+    expect((await pgError(addFollowup(requestId, 4, 'cancelled'))).code).toBe(CHECK_VIOLATION);
+    expect((await pgError(addFollowup(requestId, 0, 'cancelled'))).code).toBe(CHECK_VIOLATION);
+  });
+
+  describe('the approval guard behind the service layer', () => {
+    it('refuses to mark a follow-up sent or submitted when nothing was approved', async () => {
+      const { requestId } = await sentRequest('f3');
+      const id = await newFollowup(requestId);
+      expect((await pgError(setStatus(id, 'sent'))).code).toBe(CHECK_VIOLATION); // no draft at all
+      await followupDraft(requestId, id, 1, 'follow-up text');
+      const err = await pgError(setStatus(id, 'sent'));
+      expect(err.code).toBe(CHECK_VIOLATION);
+      expect(err.message).toMatch(/without a user approval/);
+      expect((await pgError(setStatus(id, 'submitted'))).code).toBe(CHECK_VIOLATION);
+    });
+
+    it('refuses an approval of another hash, by anyone but the user, or of the first request instead', async () => {
+      const { requestId, seed } = await sentRequest('f4');
+      const id = await newFollowup(requestId);
+      const hash = await followupDraft(requestId, id, 1, 'follow-up text');
+      await addEvent(t.app, requestId, 'followup_approved', 'user', sha256('some other text'));
+      expect((await pgError(setStatus(id, 'sent'))).code).toBe(CHECK_VIOLATION);
+      await addEvent(t.app, requestId, 'followup_approved', 'system', hash);
+      expect((await pgError(setStatus(id, 'sent'))).code).toBe(CHECK_VIOLATION);
+      await addEvent(t.app, requestId, 'followup_approved', 'admin', hash);
+      expect((await pgError(setStatus(id, 'sent'))).code).toBe(CHECK_VIOLATION);
+      await addEvent(t.app, requestId, 'approved', 'user', hash); // the first request's kind of approval does not count
+      expect((await pgError(setStatus(id, 'sent'))).code).toBe(CHECK_VIOLATION);
+      expect(seed.userId).toBeTruthy();
+    });
+
+    it('allows it after the user approves the current draft, and an edit makes the approval stop counting', async () => {
+      const { requestId } = await sentRequest('f5');
+      const id = await newFollowup(requestId);
+      const v1 = await followupDraft(requestId, id, 1, 'follow-up text');
+      await addEvent(t.app, requestId, 'followup_approved', 'user', v1);
+      const v2 = await followupDraft(requestId, id, 2, 'follow-up text, edited after approval');
+      expect(v2).not.toBe(v1);
+      expect((await pgError(setStatus(id, 'sent'))).code).toBe(CHECK_VIOLATION); // approval was of version 1
+      await addEvent(t.app, requestId, 'followup_approved', 'user', v2);
+      await setStatus(id, 'sent');
+      const { rows } = await t.owner.query<{ status: string; sent_at: Date | null }>('SELECT status, sent_at FROM request_followups WHERE id = $1', [id]);
+      expect(rows[0]?.status).toBe('sent');
+      expect(rows[0]?.sent_at).not.toBeNull();
+    });
+
+    it('does not apply to another follow-up on the same request, and refuses creating one already sent', async () => {
+      const { requestId } = await sentRequest('f6');
+      const first = await newFollowup(requestId);
+      const hash = await followupDraft(requestId, first, 1, 'first follow-up');
+      await addEvent(t.app, requestId, 'followup_approved', 'user', hash);
+      await setStatus(first, 'sent');
+      const second = await newFollowup(requestId, 2);
+      await followupDraft(requestId, second, 1, 'second follow-up');
+      expect((await pgError(setStatus(second, 'sent'))).code).toBe(CHECK_VIOLATION); // the first one's approval is not this one's
+      expect((await pgError(addFollowup(requestId, 3, 'sent'))).code).toBe(CHECK_VIOLATION); // cannot be born sent
+    });
+
+    it('lets a web-form follow-up be marked submitted after approval, and only then', async () => {
+      const { requestId } = await sentRequest('f7');
+      const id = await newFollowup(requestId);
+      const hash = await followupDraft(requestId, id, 1, 'copy-only follow-up');
+      expect((await pgError(setStatus(id, 'submitted'))).code).toBe(CHECK_VIOLATION);
+      await addEvent(t.app, requestId, 'followup_approved', 'user', hash);
+      await setStatus(id, 'submitted');
+    });
+  });
+
+  it('refuses a sent follow-up with no time, a malformed hash or message id, and the app role cannot delete', async () => {
+    const { requestId } = await sentRequest('f8');
+    const id = await newFollowup(requestId);
+    expect((await pgError(t.owner.query(`ALTER TABLE request_followups DISABLE TRIGGER request_followups_send_requires_approval`).then(() => t.owner.query(`UPDATE request_followups SET status = 'sent' WHERE id = $1`, [id])))).code).toBe(CHECK_VIOLATION);
+    await t.owner.query(`ALTER TABLE request_followups ENABLE TRIGGER request_followups_send_requires_approval`);
+    expect((await pgError(t.app.query(`UPDATE request_followups SET approved_hash = 'nope' WHERE id = $1`, [id]))).code).toBe(CHECK_VIOLATION);
+    expect((await pgError(t.app.query(`UPDATE request_followups SET gmail_message_id = 'has space' WHERE id = $1`, [id]))).code).toBe(CHECK_VIOLATION);
+    expect((await pgError(t.app.query('DELETE FROM request_followups'))).code).toBe(INSUFFICIENT_PRIVILEGE);
+  });
+
+  it('keeps the first request send guard and its drafts as they were', async () => {
+    const { requestId } = await draftRequest(t.owner, await seedUser(t.owner, 'f9'));
+    expect((await pgError(markSent(t.app, requestId))).code).toBe(CHECK_VIOLATION);
+  });
+
+  it('counts a follow-up send as a claim of its own: one active per follow-up, and the scope and follow-up must go together', async () => {
+    const { requestId, seed } = await sentRequest('f10');
+    const id = await newFollowup(requestId);
+    const claim = (scope: string, followupId: string | null, key: string) =>
+      t.app.query(`INSERT INTO idempotency_keys (id, user_id, scope, key, request_id, followup_id) VALUES ($1, $2, $3, $4, $5, $6)`, [newId('idempotencyKey'), seed.userId, scope, key, requestId, followupId]);
+    await claim('followup_send', id, 'followup-key-00000001');
+    expect((await pgError(claim('followup_send', id, 'followup-key-00000002'))).code).toBe(UNIQUE_VIOLATION); // one active send per follow-up
+    expect((await pgError(claim('followup_send', null, 'followup-key-00000003'))).code).toBe(CHECK_VIOLATION);
+    expect((await pgError(claim('send', id, 'followup-key-00000004'))).code).toBe(CHECK_VIOLATION);
+    expect((await pgError(claim('other', null, 'followup-key-00000005'))).code).toBe(CHECK_VIOLATION);
   });
 });

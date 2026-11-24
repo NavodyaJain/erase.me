@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { boolean, check, foreignKey, index, integer, jsonb, numeric, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
 import { users } from './accounts.js';
 import { userCompanies } from './companies.js';
-import { actorType, draftAuthor, replyLabel, replyLabelSource, replySenderMatch, requestChannel, requestEventType, requestStatus } from './enums.js';
+import { actorType, draftAuthor, followupStatus, replyLabel, replyLabelSource, replySenderMatch, requestChannel, requestEventType, requestStatus } from './enums.js';
 import { createdAt, emptyTextArray, idCheck, ts, updatedAt } from './_shared.js';
 
 const SHA256_HEX = sql.raw(`'^[0-9a-f]{64}$'`);
@@ -64,6 +64,44 @@ export const requests = pgTable(
 );
 
 /**
+ * A follow-up to a request that had no reply (PRD F7, Phase 2). It is part of the same request and Gmail thread, not a
+ * new request, so the one-open-request-per-company rule is unchanged. It has its own draft, its own approval of that exact
+ * draft, and its own send, and a database trigger (migration 0013) refuses to mark it sent or submitted without that
+ * approval, exactly as for the first request. Holds ids, a hash, a status and times: never draft text or addresses.
+ */
+export const requestFollowups = pgTable(
+  'request_followups',
+  {
+    id: text('id').primaryKey(),
+    requestId: text('request_id')
+      .notNull()
+      .references(() => requests.id),
+    /** 1 for the first follow-up. The most that can exist is set by FOLLOWUP_MAX (never more than 3). */
+    sequence: integer('sequence').notNull(),
+    status: followupStatus('status').notNull().default('drafted'),
+    /** The hash of the draft the person approved. */
+    approvedHash: text('approved_hash'),
+    /** When it was sent, or when the person said they pasted it into the company's web form. */
+    sentAt: ts('sent_at'),
+    /** Gmail's id of the sent message. Null for a web form. */
+    gmailMessageId: text('gmail_message_id'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('request_followups_request_sequence_key').on(t.requestId, t.sequence),
+    // One follow-up being worked on at a time per request.
+    uniqueIndex('request_followups_one_open').on(t.requestId).where(sql`${t.status} in ('drafted', 'approved')`),
+    index('request_followups_request_id_idx').on(t.requestId),
+    idCheck(t, 'request_followups', 'fup'),
+    check('request_followups_sequence_range', sql`${t.sequence} between 1 and 3`),
+    check('request_followups_approved_hash_format', sql`${t.approvedHash} IS NULL OR ${t.approvedHash} ~ ${SHA256_HEX}`),
+    check('request_followups_done_has_time', sql`${t.status} NOT IN ('sent', 'submitted') OR ${t.sentAt} IS NOT NULL`),
+    check('request_followups_message_id_format', sql`${t.gmailMessageId} IS NULL OR ${t.gmailMessageId} ~ '^[A-Za-z0-9._-]{1,128}$'`),
+  ],
+);
+
+/**
  * Draft text the user reviews and approves (PRD section 8: "request drafts and approved text: yes").
  * This is Erase.me's own outgoing text, never email received from a company. Rows are immutable:
  * an edit inserts a new version, which changes the hash and requires approval again (F6-AC2).
@@ -76,6 +114,8 @@ export const requestDrafts = pgTable(
       .notNull()
       .references(() => requests.id),
     version: integer('version').notNull(),
+    /** Set for a follow-up's draft; null for the first request's. Each has its own run of versions. */
+    followupId: text('followup_id').references(() => requestFollowups.id),
     toEmail: text('to_email').notNull(),
     subject: text('subject').notNull(),
     body: text('body').notNull(),
@@ -85,7 +125,10 @@ export const requestDrafts = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
-    uniqueIndex('request_drafts_request_version_key').on(t.requestId, t.version),
+    // The first request's versions, and each follow-up's, are numbered apart.
+    uniqueIndex('request_drafts_request_version_key').on(t.requestId, t.version).where(sql`${t.followupId} IS NULL`),
+    uniqueIndex('request_drafts_followup_version_key').on(t.followupId, t.version).where(sql`${t.followupId} IS NOT NULL`),
+    index('request_drafts_followup_id_idx').on(t.followupId),
     idCheck(t, 'request_drafts', 'drf'),
     check('request_drafts_version_positive', sql`${t.version} >= 1`),
     check('request_drafts_hash_format', sql`${t.draftHash} ~ ${SHA256_HEX}`),
@@ -114,7 +157,9 @@ export const requestEvents = pgTable(
     index('request_events_request_created_idx').on(t.requestId, t.createdAt),
     idCheck(t, 'request_events', 'evt'),
     check('request_events_hash_format', sql`${t.draftHash} IS NULL OR ${t.draftHash} ~ ${SHA256_HEX}`),
-    check('request_events_approval_has_hash', sql`${t.type} NOT IN ('approved', 'sent') OR ${t.draftHash} IS NOT NULL`),
+    // Compared as text: a migration run from scratch adds the follow-up event types and uses them in one transaction, and
+    // Postgres will not use an enum value in the transaction that added it.
+    check('request_events_approval_has_hash', sql`${t.type}::text NOT IN ('approved', 'sent', 'followup_approved', 'followup_sent') OR ${t.draftHash} IS NOT NULL`),
     check('request_events_payload_object', sql`jsonb_typeof(${t.payload}) = 'object'`),
   ],
 );

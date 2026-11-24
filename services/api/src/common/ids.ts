@@ -12,6 +12,7 @@ export const ID_PREFIXES = {
   event: 'evt',
   replyLabel: 'rlb',
   reply: 'rpl',
+  followup: 'fup',
   audit: 'aud',
   session: 'ses',
   oauthState: 'ost',
