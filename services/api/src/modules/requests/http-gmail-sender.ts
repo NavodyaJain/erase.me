@@ -21,15 +21,19 @@ const wrap76 = (b64: string): string => b64.replace(/.{1,76}/g, '$&\r\n').trimEn
  * Builds the raw RFC 2822 message Gmail's `messages.send` takes. Subject and body travel as base64 UTF-8, so no
  * character in them can add a header. Address and subject values containing a line break are refused.
  */
-export function buildRawMessage(m: Pick<OutgoingMessage, 'from' | 'to' | 'subject' | 'body'>): string {
+export function buildRawMessage(m: Pick<OutgoingMessage, 'from' | 'to' | 'subject' | 'body' | 'inReplyTo'>): string {
   if (hasLineBreak(m.from) || hasLineBreak(m.to) || hasLineBreak(m.subject) || /[<>,;]/.test(m.to) || /[<>,;]/.test(m.from)) {
     throw new SenderRejectedError();
   }
+  // The id of the message a follow-up answers: a plain id, never anything that could add a header.
+  // eslint-disable-next-line no-control-regex -- refusing control characters is the point
+  if (m.inReplyTo !== undefined && !/^[^<>\s\u0000-\u001f\u007f]{1,255}$/.test(m.inReplyTo)) throw new SenderRejectedError();
   const subject = `=?UTF-8?B?${Buffer.from(m.subject, 'utf8').toString('base64')}?=`;
   const lines = [
     `From: ${m.from}`,
     `To: ${m.to}`,
     `Subject: ${subject}`,
+    ...(m.inReplyTo ? [`In-Reply-To: <${m.inReplyTo}>`, `References: <${m.inReplyTo}>`] : []),
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset="UTF-8"',
     'Content-Transfer-Encoding: base64',
@@ -68,7 +72,7 @@ export class HttpGmailSender implements RequestSender {
       res = await this.http(this.url, {
         method: 'POST',
         headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ raw }),
+        body: JSON.stringify({ raw, ...(message.threadId ? { threadId: message.threadId } : {}) }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch {

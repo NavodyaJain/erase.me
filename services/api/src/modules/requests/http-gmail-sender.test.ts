@@ -37,6 +37,27 @@ describe('buildRawMessage', () => {
     expect(() => buildRawMessage({ ...message, ...over })).toThrow(SenderRejectedError);
   });
 
+  it('adds no threading headers to a first request', () => {
+    expect(raw).not.toMatch(/In-Reply-To|References/i);
+  });
+
+  it('answers the first message in a follow-up: In-Reply-To and References name its Message-ID, and the subject carries "Re:"', () => {
+    const followUp = buildRawMessage({ ...message, subject: 'Re: Request to erase my personal data', inReplyTo: 'cab123+x@mail.example.com' });
+    const head = followUp.split('\r\n\r\n')[0] ?? '';
+    expect(head).toContain('In-Reply-To: <cab123+x@mail.example.com>');
+    expect(head).toContain('References: <cab123+x@mail.example.com>');
+  });
+
+  it.each([
+    ['a line break (a way to add a header)', 'x@y.example\r\nBcc: z@evil.example'],
+    ['angle brackets', '<x@y.example>'],
+    ['a space', 'x y@z.example'],
+    ['nothing', ''],
+    ['a control character', 'x\u0000y@z.example'],
+  ])('refuses an In-Reply-To with %s', (_label, inReplyTo) => {
+    expect(() => buildRawMessage({ ...message, inReplyTo })).toThrow(SenderRejectedError);
+  });
+
   it('keeps a body line that looks like a header from becoming one', () => {
     const tricky = buildRawMessage({ ...message, body: 'Bcc: x@evil.example\nHello' });
     const head = tricky.split('\r\n\r\n')[0] ?? '';
@@ -72,6 +93,24 @@ describe('HttpGmailSender', () => {
     expect((seen.init?.headers as Record<string, string>).authorization).toBe('Bearer access-token-value');
     const raw = (JSON.parse(String(seen.init?.body)) as { raw: string }).raw;
     expect(decodeRaw(raw)).toContain('To: privacy@brand.example');
+  });
+
+  it('sends a follow-up into the same Gmail thread, and does not add a thread id to a first request', async () => {
+    const followUp = { ...message, threadId: 'thread-1', inReplyTo: 'first@mail.example.com' };
+    const seen: { init?: RequestInit } = {};
+    await sender(new Response(JSON.stringify({ id: 'm2', threadId: 'thread-1' }), { status: 200 }), seen).send(followUp);
+    const posted = JSON.parse(String(seen.init?.body)) as { raw: string; threadId?: string };
+    expect(posted.threadId).toBe('thread-1');
+    expect(decodeRaw(posted.raw)).toContain('In-Reply-To: <first@mail.example.com>');
+
+    const first: { init?: RequestInit } = {};
+    await sender(ok(), first).send(message);
+    expect(JSON.parse(String(first.init?.body))).not.toHaveProperty('threadId');
+  });
+
+  it('refuses a follow-up whose In-Reply-To is not a plain id, before anything is sent', async () => {
+    const noFetch = new HttpGmailSender({ getAccessToken: () => Promise.resolve('t'), fetch: () => Promise.reject(new Error('must not be called')) });
+    await expect(noFetch.send({ ...message, threadId: 'thread-1', inReplyTo: 'a b' })).rejects.toBeInstanceOf(SenderRejectedError);
   });
 
   it('reads the Message-ID header of the sent message with one headers-only call, so a reply can be matched to it', async () => {

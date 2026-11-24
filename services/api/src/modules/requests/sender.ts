@@ -9,6 +9,12 @@ export interface OutgoingMessage {
   subject: string;
   body: string;
   requestId: string;
+  /**
+   * Set for a follow-up, so it lands in the same Gmail conversation as the first message: Gmail's thread id, and the
+   * Message-ID of the message it follows (without the angle brackets).
+   */
+  threadId?: string;
+  inReplyTo?: string;
 }
 
 export interface SentMessage {
@@ -59,7 +65,7 @@ export class FakeGmailSender implements RequestSender {
     await this.beforeSend?.(message);
     if (this.keepMessages) this.messages.push(message);
     const id = randomBytes(6).toString('hex');
-    return { threadId: `fake-thread-${id}`, messageId: `fake-message-${id}`, rfcMessageId: `fake-rfc-${id}@fake.invalid`, delivery: 'fake' };
+    return { threadId: message.threadId ?? `fake-thread-${id}`, messageId: `fake-message-${id}`, rfcMessageId: `fake-rfc-${id}@fake.invalid`, delivery: 'fake' };
   }
 }
 
