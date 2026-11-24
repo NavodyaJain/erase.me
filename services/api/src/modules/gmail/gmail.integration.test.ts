@@ -430,8 +430,15 @@ describe('scan', () => {
   });
 
   it('uses the inbox token only in memory: access tokens are never stored', async () => {
-    const { rows } = await t.owner.query<{ hit: string }>(`SELECT 'x' AS hit FROM inboxes WHERE token_ciphertext LIKE '%at-%' OR token_ciphertext LIKE '%access-%'`);
-    expect(rows).toHaveLength(0);
+    // Look for the exact access tokens this run was handed, not a pattern: a sealed refresh token is random text that can contain
+    // "at-" by chance (about 1 row in 2,500), which is not a stored token.
+    const issued = [...h.google.issuedAccessTokens];
+    expect(issued.length).toBeGreaterThan(0); // the search below must have something to look for
+    const tables = (await t.owner.query<{ table_name: string }>(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`)).rows.map((r) => r.table_name);
+    for (const table of tables) {
+      const { rows } = await t.owner.query<{ hit: string }>(`SELECT 'x' AS hit FROM "${table}" x WHERE to_jsonb(x)::text LIKE ANY ($1::text[]) LIMIT 1`, [issued.map((v) => `%${v}%`)]);
+      expect(rows, `an access token is stored in ${table}`).toHaveLength(0);
+    }
   });
 });
 

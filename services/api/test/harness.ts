@@ -51,6 +51,14 @@ export class FakeGoogle implements GoogleOAuthClient {
     this.grants.set(code, g);
   }
 
+  /** Every access token this fake has handed out, so a test can look for those exact values. */
+  readonly issuedAccessTokens = new Set<string>();
+
+  private issue(token: string): string {
+    this.issuedAccessTokens.add(token);
+    return token;
+  }
+
   exchangeCode(code: string, codeVerifier: string, expectedNonce: string): Promise<CodeExchangeResult> {
     const g = this.grants.get(code);
     if (!g) return Promise.reject(new GoogleOAuthError('invalid_grant'));
@@ -61,14 +69,14 @@ export class FakeGoogle implements GoogleOAuthClient {
     return Promise.resolve({
       identity: { sub: g.sub, email: g.email, name: g.name ?? 'Test Person' },
       grantedScopes: g.scopes ?? ['openid', 'email', GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE],
-      accessToken: `access-${randomBytes(4).toString('hex')}`,
+      accessToken: this.issue(`access-${randomBytes(4).toString('hex')}`),
       ...(refresh ? { refreshToken: refresh } : {}),
     });
   }
 
   refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; expiresInSec: number }> {
     if (this.revoked.has(refreshToken)) return Promise.reject(new GoogleOAuthError('invalid_grant'));
-    return Promise.resolve({ accessToken: `at-${refreshToken}`, expiresInSec: 3600 });
+    return Promise.resolve({ accessToken: this.issue(`at-${refreshToken}`), expiresInSec: 3600 });
   }
 
   revoke(token: string): Promise<boolean> {
