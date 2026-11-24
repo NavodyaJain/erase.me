@@ -512,7 +512,13 @@ export class RequestsService {
       const req = await tx.lockRequest(userId, requestId);
       if (!req || req.status !== 'approved') throw new AppError(409, 'invalid_transition', 'This request cannot move to that state', 'The request changed while it was being sent.');
       assertTransition(req.status, 'sent');
-      await tx.markSent(req.id, { threadId: sent.threadId, sentAt, dueAt });
+      await tx.markSent(req.id, {
+        threadId: sent.threadId,
+        sentAt,
+        dueAt,
+        sentMessageId: sent.messageId,
+        ...(sent.rfcMessageId ? { sentRfcMessageId: sent.rfcMessageId } : {}),
+      });
       await tx.insertEvent({
         requestId: req.id,
         type: eventFor('approved', 'sent'),

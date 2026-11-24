@@ -327,6 +327,20 @@ describe('send needs an approval of the exact current draft', () => {
     expect((await requestRow(r.id))?.status).toBe('approved');
   });
 
+  it('records the ids of the sent message (Gmail id and Message-ID) so a reply can be told from our own message', async () => {
+    const a = await actor(h, 'ids1');
+    const r = await approved(h, a);
+    expect((await A(h).send(a.s, r.id, key())).statusCode).toBe(200);
+    const { rows } = await t.owner.query<{ sent_message_id: string | null; sent_rfc_message_id: string | null; thread_id: string | null; channel: string }>(
+      'SELECT sent_message_id, sent_rfc_message_id, thread_id, channel FROM requests WHERE id = $1',
+      [r.id],
+    );
+    expect(rows[0]?.sent_message_id).toMatch(/^fake-message-/);
+    expect(rows[0]?.sent_rfc_message_id).toMatch(/^fake-rfc-.*@fake\.invalid$/);
+    expect(rows[0]?.thread_id).toMatch(/^fake-thread-/);
+    expect(rows[0]?.channel).toBe('email');
+  });
+
   it('approves, sends once, and records every step as an event', async () => {
     const a = await actor(h, 'guard3');
     const r = await approved(h, a);

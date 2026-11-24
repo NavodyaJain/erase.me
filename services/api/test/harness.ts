@@ -16,7 +16,7 @@ import {
   type CodeExchangeResult,
   type GoogleOAuthClient,
 } from '../src/modules/auth/google-oauth.js';
-import type { GmailClient, GmailMessageMeta, MessagePage } from '../src/modules/gmail/gmail.client.js';
+import type { GmailClient, GmailMessageMeta, GmailThread, GmailThreadMessage, MessagePage } from '../src/modules/gmail/gmail.client.js';
 import type { GmailApiError } from '../src/modules/gmail/gmail.client.js';
 import type { SenderChoice } from '../src/modules/requests/sender.js';
 import { captureLogs } from './capture.js';
@@ -122,6 +122,24 @@ export class FakeGmail implements GmailClient {
       ...(next < this.messages.length ? { nextPageToken: String(next) } : {}),
       estimatedTotal: this.messages.length,
     };
+  }
+
+  /** Threads by id, for the reply check. A thread that is not here does not exist (Gmail answers 404). */
+  readonly threads = new Map<string, GmailThreadMessage[]>();
+  /** Every thread id asked for, in order, and the token each call used. */
+  readonly threadCalls: Array<{ threadId: string; accessToken: string }> = [];
+  /** Throw this on the next thread call for this thread id (once), or for any thread when the key is '*'. */
+  readonly failThread = new Map<string, GmailApiError>();
+
+  getThreadMetadata(accessToken: string, threadId: string): Promise<GmailThread | null> {
+    this.threadCalls.push({ threadId, accessToken });
+    const failure = this.failThread.get(threadId) ?? this.failThread.get('*');
+    if (failure) {
+      this.failThread.delete(threadId);
+      return Promise.reject(failure);
+    }
+    const messages = this.threads.get(threadId);
+    return Promise.resolve(messages ? { id: threadId, messages: messages.map((m) => ({ ...m })) } : null);
   }
 
   getMessageMetadata(accessToken: string, id: string): Promise<GmailMessageMeta | null> {

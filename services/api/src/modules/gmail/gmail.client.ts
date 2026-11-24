@@ -6,6 +6,13 @@ const MAX_ATTEMPTS = 6;
 /** The slowest pace the client falls back to when Gmail keeps throttling: one request per second. */
 const SLOWEST_INTERVAL_MS = 1000;
 const METADATA_HEADERS = ['From', 'Reply-To', 'Subject', 'Date', 'List-Unsubscribe', 'List-Id'] as const;
+/**
+ * The only headers read from a thread when checking for replies. No Subject, and no body: a reply is recognised by who
+ * sent it, which message it answers and whether it is automatic. Reply checks also ask Gmail for a partial response
+ * (`THREAD_FIELDS`), so a snippet or body is not transferred in the first place.
+ */
+const THREAD_HEADERS = ['From', 'Message-ID', 'In-Reply-To', 'References', 'Date', 'Auto-Submitted', 'Precedence', 'X-Autoreply', 'X-Autorespond'] as const;
+const THREAD_FIELDS = 'id,messages(id,internalDate,payload/headers)';
 
 export type GmailApiErrorCode = 'auth' | 'quota' | 'unavailable';
 
@@ -15,7 +22,7 @@ export type GmailApiErrorCode = 'auth' | 'quota' | 'unavailable';
  * quote mailbox content. Values are restricted to identifier-like strings.
  */
 export interface GmailFailure {
-  call: 'token.refresh' | 'messages.list' | 'messages.get';
+  call: 'token.refresh' | 'messages.list' | 'messages.get' | 'threads.get';
   httpStatus?: number;
   /** For example `accessNotConfigured`, `rateLimitExceeded`, `SERVICE_DISABLED`. */
   reason?: string;
@@ -82,10 +89,34 @@ export interface MessagePage {
 }
 
 /** What the scan needs from Gmail. The fake Gmail server and test doubles implement the same interface. */
+/**
+ * One message of a sent request's thread, as headers only (Phase 2). Held in memory while the reply check decides
+ * whether it is a reply; only the message id, the time, the sender's domain and two flags are ever stored.
+ */
+export interface GmailThreadMessage {
+  id: string;
+  receivedAt: Date;
+  /** The sender's address in lower case. Compared with the person's own addresses and the company's domains, never stored or logged. */
+  fromAddress: string | undefined;
+  /** This message's own Message-ID header, the one it answers, and the chain it belongs to. */
+  messageId: string | undefined;
+  inReplyTo: string | undefined;
+  references: string[];
+  /** An automatic reply (out of office and similar), judged from headers alone. */
+  automatic: boolean;
+}
+
+export interface GmailThread {
+  id: string;
+  messages: GmailThreadMessage[];
+}
+
 export interface GmailClient {
   listMessageIds(accessToken: string, q: { query: string; pageToken?: string; maxResults: number }): Promise<MessagePage>;
   /** Metadata only. Returns null when the message no longer exists. */
   getMessageMetadata(accessToken: string, id: string): Promise<GmailMessageMeta | null>;
+  /** The headers of every message in a thread, for finding replies. No subject, snippet or body. Returns null when the thread no longer exists. */
+  getThreadMetadata(accessToken: string, threadId: string): Promise<GmailThread | null>;
 }
 
 const ListResponse = z.object({
@@ -96,6 +127,46 @@ const ListResponse = z.object({
 
 // Lenient on purpose: Gmail returns odd values for badly dated mail (for example a non-numeric or
 // non-positive `internalDate`), and one such message must not fail a whole scan.
+// Unknown keys are dropped on purpose (zod strips them): if Gmail ever sends a snippet or a body part, it ends here.
+const ThreadResponse = z.object({
+  id: z.string(),
+  messages: z
+    .array(
+      z.object({
+        id: z.string(),
+        internalDate: z.string().optional(),
+        payload: z.object({ headers: z.array(z.object({ name: z.string(), value: z.string().optional() })).default([]) }).optional(),
+      }),
+    )
+    .optional(),
+});
+
+/** `Some Name <someone@example.com>` or a bare address, to the lower-case address. Undefined if there is none. */
+export function addressOf(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const angle = /<\s*([^<>\s@]+@[^<>\s@]+)\s*>/.exec(value);
+  const bare = /^\s*([^<>\s@,;"]+@[^<>\s@,;"]+)\s*$/.exec(value);
+  const found = angle?.[1] ?? bare?.[1];
+  return found ? found.toLowerCase() : undefined;
+}
+
+/** `<a@x> <b@y>` to the ids inside the angle brackets. */
+export function messageIdsIn(value: string | undefined): string[] {
+  return [...(value ?? '').matchAll(/<\s*([^<>\s]+)\s*>/g)].map((m) => (m[1] ?? '').toLowerCase());
+}
+
+/**
+ * Whether headers say a message was sent automatically. `Auto-Submitted` other than `no` (RFC 3834), the common
+ * `X-Autoreply` and `X-Autorespond` markers, and a `Precedence` of auto_reply, bulk, junk or list. The subject is not
+ * read: wording like "Out of office" is not used.
+ */
+export function isAutomatic(h: (name: string) => string | undefined): boolean {
+  const auto = h('Auto-Submitted')?.trim().toLowerCase();
+  if (auto !== undefined && auto !== '' && auto !== 'no') return true;
+  if (h('X-Autoreply') !== undefined || h('X-Autorespond') !== undefined) return true;
+  return ['auto_reply', 'bulk', 'junk', 'list'].includes(h('Precedence')?.trim().toLowerCase() ?? '');
+}
+
 const MessageResponse = z.object({
   id: z.string(),
   internalDate: z.string().optional(),
@@ -213,9 +284,35 @@ export class HttpGmailClient implements GmailClient {
     };
   }
 
+  async getThreadMetadata(accessToken: string, threadId: string): Promise<GmailThread | null> {
+    // format=metadata with an explicit header list and a partial response: no snippet, no subject, no body.
+    const params = new URLSearchParams({ format: 'metadata', fields: THREAD_FIELDS });
+    for (const h of THREAD_HEADERS) params.append('metadataHeaders', h);
+    const res = await this.get('threads.get', `${this.base}/threads/${encodeURIComponent(threadId)}?${params.toString()}`, accessToken, true);
+    if (res === null) return null;
+    const parsed = ThreadResponse.safeParse(res);
+    if (!parsed.success) throw new GmailApiError('unavailable', { call: 'threads.get', cause: 'bad_response' });
+    const messages: GmailThreadMessage[] = [];
+    for (const m of parsed.data.messages ?? []) {
+      const header = (name: string) => m.payload?.headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value;
+      const receivedAt = resolveReceivedAt(m.internalDate, header('Date'), Date.now());
+      if (!receivedAt) continue; // a message that cannot be placed in time cannot be told apart from older ones
+      messages.push({
+        id: m.id,
+        receivedAt,
+        fromAddress: addressOf(header('From')),
+        messageId: messageIdsIn(header('Message-ID'))[0],
+        inReplyTo: messageIdsIn(header('In-Reply-To'))[0],
+        references: messageIdsIn(header('References')),
+        automatic: isAutomatic(header),
+      });
+    }
+    return { id: parsed.data.id, messages };
+  }
+
   /** GET with exponential backoff on 429 and 5xx (TRD 6.6). `allowMissing` turns a 404 into null. */
   private async get(
-    call: 'messages.list' | 'messages.get',
+    call: 'messages.list' | 'messages.get' | 'threads.get',
     url: string,
     accessToken: string,
     allowMissing = false,

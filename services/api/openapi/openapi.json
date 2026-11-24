@@ -3589,6 +3589,7 @@
                       "drafted",
                       "approved",
                       "sent",
+                      "reply_received",
                       "replied_deleted",
                       "replied_info_requested",
                       "replied_refused",
@@ -4124,6 +4125,7 @@
               "drafted",
               "approved",
               "sent",
+              "reply_received",
               "replied_deleted",
               "replied_info_requested",
               "replied_refused",
@@ -4211,6 +4213,7 @@
                   "drafted",
                   "approved",
                   "sent",
+                  "reply_received",
                   "replied_deleted",
                   "replied_info_requested",
                   "replied_refused",
@@ -4400,7 +4403,12 @@
                     "bounced",
                     "reply_label",
                     "followup_drafted",
-                    "closed"
+                    "closed",
+                    "reply_received",
+                    "outcome_set",
+                    "followup_approved",
+                    "followup_sent",
+                    "submitted"
                   ]
                 },
                 "actor": {

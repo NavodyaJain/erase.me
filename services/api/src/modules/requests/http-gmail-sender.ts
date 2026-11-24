@@ -5,6 +5,7 @@ const SEND_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
 const TIMEOUT_MS = 20_000;
 
 const SendResponse = z.object({ id: z.string().min(1), threadId: z.string().min(1) });
+const HeaderResponse = z.object({ payload: z.object({ headers: z.array(z.object({ name: z.string(), value: z.string().optional() })) }).optional() });
 
 export interface HttpGmailSenderOptions {
   /** A short-lived access token for the inbox. Held in memory only. */
@@ -77,6 +78,28 @@ export class HttpGmailSender implements RequestSender {
     if (!res.ok) throw new SenderOutcomeUnknownError();
     const parsed = SendResponse.safeParse(await res.json().catch(() => null));
     if (!parsed.success) throw new SenderOutcomeUnknownError();
-    return { threadId: parsed.data.threadId, messageId: parsed.data.id, delivery: 'real' };
+    const rfcMessageId = await this.readMessageIdHeader(token, parsed.data.id);
+    return { threadId: parsed.data.threadId, messageId: parsed.data.id, ...(rfcMessageId ? { rfcMessageId } : {}), delivery: 'real' };
+  }
+
+  /**
+   * The Message-ID header Gmail gave the sent message, so a later reply can be matched to it (In-Reply-To). One extra
+   * headers-only call, best effort: if it fails the request is still sent and replies are matched by thread alone.
+   */
+  private async readMessageIdHeader(token: string, id: string): Promise<string | undefined> {
+    try {
+      const params = new URLSearchParams({ format: 'metadata', fields: 'payload/headers', metadataHeaders: 'Message-ID' });
+      const res = await this.http(`${this.url.replace(/\/send$/, '')}/${encodeURIComponent(id)}?${params.toString()}`, {
+        headers: { authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      if (!res.ok) return undefined;
+      const body = HeaderResponse.safeParse(await res.json().catch(() => null));
+      const value = body.success ? body.data.payload?.headers.find((h) => h.name.toLowerCase() === 'message-id')?.value : undefined;
+      const match = value ? /<\s*([^<>\s]+)\s*>/.exec(value) : null;
+      return match?.[1]?.toLowerCase();
+    } catch {
+      return undefined;
+    }
   }
 }

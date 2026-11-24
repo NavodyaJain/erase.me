@@ -45,15 +45,23 @@ describe('buildRawMessage', () => {
 });
 
 describe('HttpGmailSender', () => {
-  const sender = (res: Response | Error, seen: { url?: string; init?: RequestInit } = {}) =>
-    new HttpGmailSender({
+  // The first call is the send. After a successful send the sender makes one more, headers-only call for the Message-ID.
+  const sender = (res: Response | Error, seen: { url?: string; init?: RequestInit; urls?: string[] } = {}, lookup: Response | Error = new Response('{}', { status: 404 })) => {
+    let calls = 0;
+    return new HttpGmailSender({
       getAccessToken: () => Promise.resolve('access-token-value'),
       fetch: (url, init) => {
-        seen.url = String(url);
-        seen.init = init;
-        return res instanceof Error ? Promise.reject(res) : Promise.resolve(res);
+        calls += 1;
+        (seen.urls ??= []).push(String(url));
+        const answer = calls === 1 ? res : lookup;
+        if (calls === 1) {
+          seen.url = String(url);
+          seen.init = init;
+        }
+        return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
       },
     });
+  };
   const ok = () => new Response(JSON.stringify({ id: 'm1', threadId: 't1' }), { status: 200 });
 
   it('posts the raw message with the bearer token and returns the thread id, labelled real', async () => {
@@ -64,6 +72,29 @@ describe('HttpGmailSender', () => {
     expect((seen.init?.headers as Record<string, string>).authorization).toBe('Bearer access-token-value');
     const raw = (JSON.parse(String(seen.init?.body)) as { raw: string }).raw;
     expect(decodeRaw(raw)).toContain('To: privacy@brand.example');
+  });
+
+  it('reads the Message-ID header of the sent message with one headers-only call, so a reply can be matched to it', async () => {
+    const seen: { urls?: string[] } = {};
+    const lookup = new Response(JSON.stringify({ payload: { headers: [{ name: 'Message-ID', value: '<CAB123+x@mail.Example.COM>' }] } }), { status: 200 });
+    const sent = await sender(ok(), seen, lookup).send(message);
+    expect(sent).toEqual({ threadId: 't1', messageId: 'm1', rfcMessageId: 'cab123+x@mail.example.com', delivery: 'real' });
+    const url = new URL(seen.urls?.[1] ?? '');
+    expect(url.pathname).toBe('/gmail/v1/users/me/messages/m1');
+    expect(url.searchParams.get('format')).toBe('metadata');
+    expect(url.searchParams.getAll('metadataHeaders')).toEqual(['Message-ID']);
+    expect(url.searchParams.get('fields')).toBe('payload/headers');
+  });
+
+  it.each([
+    ['a refused lookup', new Response('', { status: 403 })],
+    ['a missing message', new Response('{}', { status: 404 })],
+    ['an unreadable answer', new Response('not json', { status: 200 })],
+    ['an answer with no Message-ID', new Response(JSON.stringify({ payload: { headers: [] } }), { status: 200 })],
+    ['a network failure', new Error('socket hang up')],
+  ])('still reports the request as sent when the Message-ID lookup gives %s, with no Message-ID', async (_name, lookup) => {
+    const sent = await sender(ok(), {}, lookup).send(message);
+    expect(sent).toEqual({ threadId: 't1', messageId: 'm1', delivery: 'real' });
   });
 
   it.each([400, 401, 403, 404, 429])('treats a %s answer as a refusal: nothing was sent', async (status) => {

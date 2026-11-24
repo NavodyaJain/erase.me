@@ -200,10 +200,19 @@ function methods(x: Executor) {
       await x.update(requests).set({ status, updatedAt: sql`now()` }).where(eq(requests.id, requestId));
     },
 
-    async markSent(requestId: string, p: { threadId: string; sentAt: Date; dueAt: Date }): Promise<void> {
+    async markSent(requestId: string, p: { threadId: string; sentAt: Date; dueAt: Date; sentMessageId?: string; sentRfcMessageId?: string }): Promise<void> {
       await x
         .update(requests)
-        .set({ status: 'sent', threadId: p.threadId, sentAt: p.sentAt, dueAt: p.dueAt, day30FollowupAt: p.dueAt, updatedAt: sql`now()` })
+        .set({
+          status: 'sent',
+          threadId: p.threadId,
+          sentAt: p.sentAt,
+          dueAt: p.dueAt,
+          day30FollowupAt: p.dueAt,
+          sentMessageId: p.sentMessageId ?? null,
+          sentRfcMessageId: p.sentRfcMessageId ?? null,
+          updatedAt: sql`now()`,
+        })
         .where(eq(requests.id, requestId));
     },
 

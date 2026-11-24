@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GmailApiError, HttpGmailClient, readGoogleError, resolveReceivedAt } from './gmail.client.js';
+import { addressOf, GmailApiError, HttpGmailClient, isAutomatic, messageIdsIn, readGoogleError, resolveReceivedAt } from './gmail.client.js';
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers });
@@ -221,5 +221,141 @@ describe('failure detail for logs (which call, HTTP status, Google reason and st
     await expect(c.listMessageIds('t', { query: 'q', maxResults: 1 })).rejects.toMatchObject({
       failure: { call: 'messages.list', cause: 'network' },
     });
+  });
+});
+
+describe('HttpGmailClient.getThreadMetadata (reply checks)', () => {
+  const NOW = 1_714_521_600_000;
+  const h = (name: string, value: string) => ({ name, value });
+  const thread = (messages: unknown[]) => json({ id: 'thr1', messages });
+
+  it('asks for headers only: format=metadata, a fixed header list without Subject, and a partial response', async () => {
+    const { c, requests } = client([thread([])]);
+    await c.getThreadMetadata('tok', 'thr1');
+    const url = new URL(requests[0]?.url ?? '');
+    expect(url.pathname).toBe('/gmail/v1/users/me/threads/thr1');
+    expect(url.searchParams.get('format')).toBe('metadata');
+    expect(url.searchParams.get('fields')).toBe('id,messages(id,internalDate,payload/headers)');
+    expect(url.searchParams.getAll('metadataHeaders')).toEqual([
+      'From', 'Message-ID', 'In-Reply-To', 'References', 'Date', 'Auto-Submitted', 'Precedence', 'X-Autoreply', 'X-Autorespond',
+    ]);
+    expect(url.searchParams.getAll('metadataHeaders').map((x) => x.toLowerCase())).not.toContain('subject');
+    expect(url.searchParams.get('format')).not.toMatch(/full|raw/);
+    expect(requests[0]?.auth).toBe('Bearer tok');
+  });
+
+  it('reads the sender, the ids and the date from headers', async () => {
+    const { c } = client([
+      thread([
+        {
+          id: 'm1',
+          internalDate: String(NOW),
+          payload: {
+            headers: [
+              h('From', 'Privacy Team <Privacy@Company.Example>'),
+              h('Message-ID', '<Reply-1@Company.Example>'),
+              h('In-Reply-To', '<our-message@erase.example>'),
+              h('References', '<our-message@erase.example> <other@x.example>'),
+            ],
+          },
+        },
+      ]),
+    ]);
+    const t = await c.getThreadMetadata('t', 'thr1');
+    expect(t).toEqual({
+      id: 'thr1',
+      messages: [
+        {
+          id: 'm1',
+          receivedAt: new Date(NOW),
+          fromAddress: 'privacy@company.example',
+          messageId: 'reply-1@company.example',
+          inReplyTo: 'our-message@erase.example',
+          references: ['our-message@erase.example', 'other@x.example'],
+          automatic: false,
+        },
+      ],
+    });
+  });
+
+  it('drops a snippet, a body or a subject if Gmail ever sends one: none of it reaches the result', async () => {
+    const { c } = client([
+      thread([
+        {
+          id: 'm1',
+          internalDate: String(NOW),
+          snippet: 'SNIPPET-TEXT-must-not-survive',
+          payload: {
+            headers: [h('From', 'a@b.example'), h('Subject', 'SUBJECT-TEXT-must-not-survive')],
+            body: { data: 'BODY-TEXT-must-not-survive' },
+            parts: [{ body: { data: 'PART-TEXT-must-not-survive' } }],
+          },
+        },
+      ]),
+    ]);
+    const text = JSON.stringify(await c.getThreadMetadata('t', 'thr1'));
+    for (const secret of ['SNIPPET-TEXT', 'SUBJECT-TEXT', 'BODY-TEXT', 'PART-TEXT']) expect(text).not.toContain(secret);
+  });
+
+  it('marks automatic replies from headers, and a person as not automatic', async () => {
+    const msg = (id: string, headers: Array<{ name: string; value: string }>) => ({ id, internalDate: String(NOW), payload: { headers } });
+    const { c } = client([
+      thread([
+        msg('a', [h('From', 'x@y.example'), h('Auto-Submitted', 'auto-replied')]),
+        msg('b', [h('From', 'x@y.example'), h('Auto-Submitted', 'no')]),
+        msg('c', [h('From', 'x@y.example'), h('X-Autoreply', 'yes')]),
+        msg('d', [h('From', 'x@y.example'), h('Precedence', 'bulk')]),
+        msg('e', [h('From', 'x@y.example')]),
+      ]),
+    ]);
+    const t = await c.getThreadMetadata('t', 'thr1');
+    expect(t?.messages.map((m) => [m.id, m.automatic])).toEqual([['a', true], ['b', false], ['c', true], ['d', true], ['e', false]]);
+  });
+
+  it('skips a message that cannot be placed in time, and returns null for a thread that is gone', async () => {
+    const { c } = client([thread([{ id: 'undated', payload: { headers: [h('From', 'a@b.example')] } }]), new Response('{}', { status: 404 })]);
+    expect((await c.getThreadMetadata('t', 'thr1'))?.messages).toEqual([]);
+    expect(await c.getThreadMetadata('t', 'gone')).toBeNull();
+  });
+
+  it('stops on a revoked or refused grant, and retries a server error with backoff', async () => {
+    const denied = client([new Response('{"error":{"status":"PERMISSION_DENIED","errors":[{"reason":"forbidden"}]}}', { status: 403 })]);
+    await expect(denied.c.getThreadMetadata('t', 'thr1')).rejects.toMatchObject({ code: 'auth', failure: { call: 'threads.get', httpStatus: 403 } });
+    const unauthorised = client([new Response('', { status: 401 })]);
+    await expect(unauthorised.c.getThreadMetadata('t', 'thr1')).rejects.toBeInstanceOf(GmailApiError);
+    const flaky = client([new Response('', { status: 503 }), thread([])]);
+    expect(await flaky.c.getThreadMetadata('t', 'thr1')).toEqual({ id: 'thr1', messages: [] });
+    expect(flaky.sleeps).toHaveLength(1);
+  });
+
+  it('says so when the answer is not a thread', async () => {
+    const { c } = client([json({ messages: 'nope' })]);
+    await expect(c.getThreadMetadata('t', 'thr1')).rejects.toMatchObject({ code: 'unavailable', failure: { call: 'threads.get', cause: 'bad_response' } });
+  });
+});
+
+describe('header helpers for reply checks', () => {
+  it('takes the address out of a From header, in lower case, or nothing', () => {
+    expect(addressOf('Some One <Some.One@Example.COM>')).toBe('some.one@example.com');
+    expect(addressOf('plain@example.com')).toBe('plain@example.com');
+    expect(addressOf('"Name, With Comma" <n@example.com>')).toBe('n@example.com');
+    expect(addressOf('no address here')).toBeUndefined();
+    expect(addressOf(undefined)).toBeUndefined();
+  });
+
+  it('lists the ids inside angle brackets, in lower case', () => {
+    expect(messageIdsIn('<A@x.example> <B@y.example>')).toEqual(['a@x.example', 'b@y.example']);
+    expect(messageIdsIn(undefined)).toEqual([]);
+    expect(messageIdsIn('not an id')).toEqual([]);
+  });
+
+  it('judges automatic mail from headers alone', () => {
+    const of = (headers: Record<string, string>) => (name: string) => headers[name];
+    expect(isAutomatic(of({ 'Auto-Submitted': 'auto-generated' }))).toBe(true);
+    expect(isAutomatic(of({ 'Auto-Submitted': 'no' }))).toBe(false);
+    expect(isAutomatic(of({ Precedence: 'auto_reply' }))).toBe(true);
+    expect(isAutomatic(of({ Precedence: 'first-class' }))).toBe(false);
+    expect(isAutomatic(of({ 'X-Autorespond': '1' }))).toBe(true);
+    expect(isAutomatic(of({}))).toBe(false);
   });
 });

@@ -13,7 +13,10 @@ export interface OutgoingMessage {
 
 export interface SentMessage {
   threadId: string;
+  /** Gmail's id of the sent message. */
   messageId: string;
+  /** The Message-ID header of the sent message, when it could be read. Replies are recognised by it. */
+  rfcMessageId?: string;
   delivery: 'fake' | 'real';
 }
 
@@ -56,7 +59,7 @@ export class FakeGmailSender implements RequestSender {
     await this.beforeSend?.(message);
     if (this.keepMessages) this.messages.push(message);
     const id = randomBytes(6).toString('hex');
-    return { threadId: `fake-thread-${id}`, messageId: `fake-message-${id}`, delivery: 'fake' };
+    return { threadId: `fake-thread-${id}`, messageId: `fake-message-${id}`, rfcMessageId: `fake-rfc-${id}@fake.invalid`, delivery: 'fake' };
   }
 }
 

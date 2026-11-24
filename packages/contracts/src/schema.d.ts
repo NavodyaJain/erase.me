@@ -384,7 +384,7 @@ export interface components {
                 /** @description Prefixed ULID (`req_` followed by 26 characters) */
                 id: string;
                 /** @enum {string} */
-                status: "drafted" | "approved" | "sent" | "replied_deleted" | "replied_info_requested" | "replied_refused" | "no_reply" | "closed" | "bounced";
+                status: "drafted" | "approved" | "sent" | "reply_received" | "replied_deleted" | "replied_info_requested" | "replied_refused" | "no_reply" | "closed" | "bounced";
             } | null;
         };
         CompanyList: {
@@ -552,7 +552,7 @@ export interface components {
             /** @description Prefixed ULID (`req_` followed by 26 characters) */
             id: string;
             /** @enum {string} */
-            status: "drafted" | "approved" | "sent" | "replied_deleted" | "replied_info_requested" | "replied_refused" | "no_reply" | "closed" | "bounced";
+            status: "drafted" | "approved" | "sent" | "reply_received" | "replied_deleted" | "replied_info_requested" | "replied_refused" | "no_reply" | "closed" | "bounced";
             company: {
                 name: string;
                 mustKeep: boolean;
@@ -575,7 +575,7 @@ export interface components {
                 /** @description Prefixed ULID (`req_` followed by 26 characters) */
                 id: string;
                 /** @enum {string} */
-                status: "drafted" | "approved" | "sent" | "replied_deleted" | "replied_info_requested" | "replied_refused" | "no_reply" | "closed" | "bounced";
+                status: "drafted" | "approved" | "sent" | "reply_received" | "replied_deleted" | "replied_info_requested" | "replied_refused" | "no_reply" | "closed" | "bounced";
                 /**
                  * Format: date-time
                  * @description UTC timestamp, ISO 8601
@@ -624,7 +624,7 @@ export interface components {
             approved: boolean;
             events: {
                 /** @enum {string} */
-                type: "drafted" | "edited" | "approved" | "sent" | "bounced" | "reply_label" | "followup_drafted" | "closed";
+                type: "drafted" | "edited" | "approved" | "sent" | "bounced" | "reply_label" | "followup_drafted" | "closed" | "reply_received" | "outcome_set" | "followup_approved" | "followup_sent" | "submitted";
                 /** @enum {string} */
                 actor: "user" | "system" | "admin";
                 /**

@@ -1,5 +1,5 @@
 import { CONNECT_SCOPES, SIGNIN_SCOPES, type AuthorizationParams, type CodeExchangeResult, type GoogleOAuthClient } from '../src/modules/auth/google-oauth.js';
-import type { GmailClient, GmailMessageMeta, MessagePage } from '../src/modules/gmail/gmail.client.js';
+import type { GmailClient, GmailMessageMeta, GmailThread, MessagePage } from '../src/modules/gmail/gmail.client.js';
 
 /** The person every e2e test signs in as. Fictional, on example.com. */
 export const E2E_IDENTITY = { sub: 'e2e-sub-0001', email: 'e2e.user@example.com', name: 'E2E User' } as const;
@@ -66,6 +66,11 @@ export class FakeGmail implements GmailClient {
     const end = Math.min(start + q.maxResults, E2E_MAILBOX.length);
     const ids = E2E_MAILBOX.slice(start, end).map((_m, i) => `e2e-msg-${start + i}`);
     return Promise.resolve({ ids, ...(end < E2E_MAILBOX.length ? { nextPageToken: String(end) } : {}), estimatedTotal: E2E_MAILBOX.length });
+  }
+
+  /** No replies exist in the e2e mailbox yet: every sent thread is empty. (Later e2e tests add replies through a control route.) */
+  getThreadMetadata(_token: string, threadId: string): Promise<GmailThread | null> {
+    return Promise.resolve({ id: threadId, messages: [] });
   }
 
   getMessageMetadata(_token: string, id: string): Promise<GmailMessageMeta | null> {
