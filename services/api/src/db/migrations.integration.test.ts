@@ -28,13 +28,14 @@ const EXPECTED_TABLES = [
   'reply_labels',
   'request_drafts',
   'request_events',
+  'request_replies',
   'requests',
   'scans',
   'sessions',
   'user_companies',
   'users',
 ];
-const APPEND_ONLY = ['audit_log', 'request_drafts', 'request_events'];
+const APPEND_ONLY = ['audit_log', 'request_drafts', 'request_events', 'request_replies'];
 
 let t: TestDb;
 beforeAll(async () => {
@@ -67,8 +68,15 @@ describe('migrations', () => {
       .filter((r) => /(body|html|snippet|subject|message|content|raw|mime|attachment|preview)/i.test(r.column_name))
       .map((r) => `${r.table_name}.${r.column_name}`)
       .sort();
-    // Only our own outgoing draft text, which the user approves. Nothing from received mail.
-    expect(contentLike).toEqual(['request_drafts.body', 'request_drafts.subject']);
+    // Only our own outgoing draft text, which the user approves, and three columns whose names say "message" but which
+    // hold opaque ids: Gmail's id of a message, and the Message-ID header of the one we sent. Nothing from received mail.
+    expect(contentLike).toEqual([
+      'request_drafts.body',
+      'request_drafts.subject',
+      'request_replies.gmail_message_id',
+      'requests.sent_message_id',
+      'requests.sent_rfc_message_id',
+    ]);
   });
 });
 
@@ -410,5 +418,95 @@ describe('constraints', () => {
       ]);
     expect((await pgError(insert(1.5))).constraint).toBe('reply_labels_confidence_range');
     await insert(0.82);
+  });
+});
+
+describe('reply tracking (Phase 2)', () => {
+  /** A sent request, made by moving a drafted one through approval as the real service does. */
+  async function sentRequest(label: string): Promise<string> {
+    const { requestId, hash } = await draftRequest(t.owner, await seedUser(t.owner, label));
+    await addEvent(t.app, requestId, 'approved', 'user', hash);
+    await markSent(t.app, requestId);
+    return requestId;
+  }
+  const addReply = (requestId: string, over: { messageId?: string; domain?: string | null; match?: string; automatic?: boolean } = {}) =>
+    t.app.query(
+      `INSERT INTO request_replies (id, request_id, gmail_message_id, received_at, sender_domain, sender_match, automatic)
+       VALUES ($1, $2, $3, now(), $4, $5, $6)`,
+      [newId('reply'), requestId, over.messageId ?? 'msg-1', over.domain === undefined ? 'company.example' : over.domain, over.match ?? 'company', over.automatic ?? false],
+    );
+
+  it('moves a sent request on to reply_received, and records the reply as metadata', async () => {
+    const requestId = await sentRequest('r1');
+    await t.app.query(`UPDATE requests SET status = 'reply_received', first_reply_at = now() WHERE id = $1`, [requestId]);
+    await addReply(requestId, { domain: 'mail.company.example', match: 'company' });
+    const { rows } = await t.owner.query<{ sender_domain: string; sender_match: string; automatic: boolean }>(
+      'SELECT sender_domain, sender_match, automatic FROM request_replies WHERE request_id = $1',
+      [requestId],
+    );
+    expect(rows).toEqual([{ sender_domain: 'mail.company.example', sender_match: 'company', automatic: false }]);
+  });
+
+  it('records a reply once per message: the same Gmail message cannot be added twice', async () => {
+    const requestId = await sentRequest('r2');
+    await addReply(requestId, { messageId: 'same-message' });
+    expect((await pgError(addReply(requestId, { messageId: 'same-message' }))).code).toBe(UNIQUE_VIOLATION);
+    await addReply(requestId, { messageId: 'another-message' });
+  });
+
+  it('refuses anything that is not a plain domain: no address, name, subject or text can be stored in a reply row', async () => {
+    const requestId = await sentRequest('r3');
+    for (const bad of ['someone@company.example', 'Some One <a@b.example>', 'has space.example', 'Subject: erase my data', '-lead.example', 'trail.example-', 'a'.repeat(254)]) {
+      expect((await pgError(addReply(requestId, { domain: bad, messageId: `m-${bad.length}` }))).code, bad).toBe(CHECK_VIOLATION);
+    }
+    await addReply(requestId, { domain: null, match: 'unknown', messageId: 'no-domain' });
+  });
+
+  it('refuses a message id that is not a plain id, and a reply for a request that does not exist', async () => {
+    const requestId = await sentRequest('r4');
+    for (const bad of ['has space', 'a/b', 'x'.repeat(129), '']) {
+      expect((await pgError(addReply(requestId, { messageId: bad }))).code, bad).toBe(CHECK_VIOLATION);
+    }
+    expect((await pgError(addReply(newId('request')))).code).toBe(FK_VIOLATION);
+  });
+
+  it('lets the app role add and read replies, never change or delete them', async () => {
+    const requestId = await sentRequest('r5');
+    await addReply(requestId, { messageId: 'kept' });
+    expect((await t.app.query('SELECT 1 FROM request_replies WHERE request_id = $1', [requestId])).rowCount).toBe(1);
+    for (const sql of [`UPDATE request_replies SET automatic = true`, 'DELETE FROM request_replies', 'TRUNCATE request_replies']) {
+      expect((await pgError(t.app.query(sql))).code, sql).toBe(INSUFFICIENT_PRIVILEGE);
+    }
+  });
+
+  it('keeps the send guard: a request still cannot leave drafted without approval, whatever the new statuses', async () => {
+    const { requestId } = await draftRequest(t.owner, await seedUser(t.owner, 'r6'));
+    for (const status of ['sent', 'reply_received', 'replied_deleted', 'no_reply']) {
+      const err = await pgError(t.app.query(`UPDATE requests SET status = '${status}', sent_at = now(), thread_id = 't', due_at = now() WHERE id = $1`, [requestId]));
+      expect(err.code, status).toBe(CHECK_VIOLATION);
+    }
+  });
+
+  it('accepts a request copied into a web form: sent with no Gmail thread, and refuses a thread on a form request', async () => {
+    const { requestId, hash } = await draftRequest(t.owner, await seedUser(t.owner, 'r7'));
+    await t.app.query(`UPDATE requests SET channel = 'web_form' WHERE id = $1`, [requestId]);
+    await addEvent(t.app, requestId, 'approved', 'user', hash);
+    await t.app.query(`UPDATE requests SET status = 'sent', sent_at = now(), due_at = now() + interval '30 days' WHERE id = $1`, [requestId]);
+    expect((await pgError(t.app.query(`UPDATE requests SET thread_id = 'thread-x' WHERE id = $1`, [requestId]))).code).toBe(CHECK_VIOLATION);
+  });
+
+  it('still refuses an email request that is sent without a thread', async () => {
+    const { requestId, hash } = await draftRequest(t.owner, await seedUser(t.owner, 'r8'));
+    await addEvent(t.app, requestId, 'approved', 'user', hash);
+    const err = await pgError(t.app.query(`UPDATE requests SET status = 'sent', sent_at = now(), due_at = now() WHERE id = $1`, [requestId]));
+    expect(err.code).toBe(CHECK_VIOLATION);
+  });
+
+  it('has the new event types, and a failure count that cannot go negative', async () => {
+    const requestId = await sentRequest('r9');
+    for (const type of ['reply_received', 'outcome_set', 'followup_drafted', 'submitted', 'followup_approved', 'followup_sent']) {
+      await addEvent(t.app, requestId, type, 'system', null);
+    }
+    expect((await pgError(t.app.query(`UPDATE requests SET reply_check_failures = -1 WHERE id = $1`, [requestId]))).code).toBe(CHECK_VIOLATION);
   });
 });

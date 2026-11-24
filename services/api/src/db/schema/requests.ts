@@ -1,8 +1,8 @@
 import { sql } from 'drizzle-orm';
-import { check, foreignKey, index, integer, jsonb, numeric, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, check, foreignKey, index, integer, jsonb, numeric, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
 import { users } from './accounts.js';
 import { userCompanies } from './companies.js';
-import { actorType, draftAuthor, replyLabel, replyLabelSource, requestEventType, requestStatus } from './enums.js';
+import { actorType, draftAuthor, replyLabel, replyLabelSource, replySenderMatch, requestChannel, requestEventType, requestStatus } from './enums.js';
 import { createdAt, emptyTextArray, idCheck, ts, updatedAt } from './_shared.js';
 
 const SHA256_HEX = sql.raw(`'^[0-9a-f]{64}$'`);
@@ -25,6 +25,15 @@ export const requests = pgTable(
     sentAt: ts('sent_at'),
     dueAt: ts('due_at'),
     day30FollowupAt: ts('day30_followup_at'),
+    /** `email`: sent from the person's Gmail. `web_form`: copied into the company's form by the person; nothing can be tracked by thread. */
+    channel: requestChannel('channel').notNull().default('email'),
+    /** Gmail's id of the message we sent, and its RFC 2822 Message-ID, used to tell a reply from our own message (Phase 2). */
+    sentMessageId: text('sent_message_id'),
+    sentRfcMessageId: text('sent_rfc_message_id'),
+    /** When replies were last checked, how many checks in a row failed, and when the first reply was seen. */
+    replyCheckedAt: ts('reply_checked_at'),
+    replyCheckFailures: integer('reply_check_failures').notNull().default(0),
+    firstReplyAt: ts('first_reply_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -42,11 +51,15 @@ export const requests = pgTable(
       .on(t.userCompanyId)
       .where(sql`${t.status} not in ('closed', 'bounced')`),
     idCheck(t, 'requests', 'req'),
-    // A request that has been sent carries its send details (F6-AC3).
+    // A request that has been sent carries its send details (F6-AC3). One copied into a web form has no Gmail thread.
     check(
       'requests_sent_has_details',
-      sql`${t.status} in ('drafted', 'approved', 'closed', 'bounced') OR (${t.sentAt} IS NOT NULL AND ${t.threadId} IS NOT NULL AND ${t.dueAt} IS NOT NULL)`,
+      sql`${t.status} in ('drafted', 'approved', 'closed', 'bounced') OR (${t.sentAt} IS NOT NULL AND ${t.dueAt} IS NOT NULL AND (${t.threadId} IS NOT NULL OR ${t.channel} = 'web_form'))`,
     ),
+    check('requests_form_has_no_thread', sql`${t.channel} = 'email' OR ${t.threadId} IS NULL`),
+    check('requests_reply_check_failures_nonneg', sql`${t.replyCheckFailures} >= 0`),
+    // The reply check picks the longest-unchecked sent requests first.
+    index('requests_reply_poll_idx').on(t.status, t.replyCheckedAt),
   ],
 );
 
@@ -125,5 +138,39 @@ export const replyLabels = pgTable(
     index('reply_labels_request_id_idx').on(t.requestId),
     idCheck(t, 'reply_labels', 'rlb'),
     check('reply_labels_confidence_range', sql`${t.confidence} between 0 and 1`),
+  ],
+);
+
+/**
+ * A reply that arrived on a sent request's Gmail thread, found from message headers only (Phase 2). It holds
+ * Gmail's own message id, when it arrived, and the sender's domain compared with the company. It never holds the
+ * message text, the subject, a snippet or an address: the CHECK constraints below refuse anything that is not a plain
+ * domain name or an id. The app role can add rows and read them; it cannot change or delete them.
+ */
+export const requestReplies = pgTable(
+  'request_replies',
+  {
+    id: text('id').primaryKey(),
+    requestId: text('request_id')
+      .notNull()
+      .references(() => requests.id),
+    gmailMessageId: text('gmail_message_id').notNull(),
+    receivedAt: ts('received_at').notNull(),
+    /** The registrable domain only, never the address. */
+    senderDomain: text('sender_domain'),
+    senderMatch: replySenderMatch('sender_match').notNull(),
+    /** An automatic reply (out of office and similar). It does not change the request's status. */
+    automatic: boolean('automatic').notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('request_replies_request_message_key').on(t.requestId, t.gmailMessageId),
+    index('request_replies_request_id_idx').on(t.requestId),
+    idCheck(t, 'request_replies', 'rpl'),
+    check('request_replies_message_id_format', sql`${t.gmailMessageId} ~ '^[A-Za-z0-9._-]{1,128}$'`),
+    check(
+      'request_replies_domain_only',
+      sql`${t.senderDomain} IS NULL OR (char_length(${t.senderDomain}) <= 253 AND ${t.senderDomain} ~ '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$')`,
+    ),
   ],
 );

@@ -11,6 +11,7 @@ export const ID_PREFIXES = {
   draft: 'drf',
   event: 'evt',
   replyLabel: 'rlb',
+  reply: 'rpl',
   audit: 'aud',
   session: 'ses',
   oauthState: 'ost',

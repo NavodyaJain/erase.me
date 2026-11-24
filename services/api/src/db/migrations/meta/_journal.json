@@ -78,6 +78,20 @@
       "when": 1795363741194,
       "tag": "0010_company_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795528676549,
+      "tag": "0011_reply_tracking_enums",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795528719038,
+      "tag": "0012_request_replies",
+      "breakpoints": true
     }
   ]
 }
