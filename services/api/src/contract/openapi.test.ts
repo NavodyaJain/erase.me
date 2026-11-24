@@ -183,3 +183,18 @@ describe('the code list matches the source', () => {
     expect(undocumented).toEqual([]);
   });
 });
+
+describe('the README for people building a client', () => {
+  const readme = readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../openapi/README.md'), 'utf8');
+
+  it('mentions every error code in the contract, so a new code cannot be added without saying what to do about it', () => {
+    const missing = PROBLEM_CODES.filter((code) => !readme.includes(`\`${code}\``));
+    expect(missing).toEqual([]);
+  });
+
+  it('describes the outcome as reported by the person, never as a fact', () => {
+    expect(readme).toContain('Reported by you');
+    expect(readme).toMatch(/never infers it/);
+  });
+});
+

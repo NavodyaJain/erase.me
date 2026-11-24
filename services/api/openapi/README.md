@@ -39,6 +39,7 @@ Branch on `code`. `title` and `detail` are sentences for a person; they never co
 | 404 | `not_found` | No such resource for this user. Another user's resource looks the same. |
 | 409 | `draft_changed` | **Stale hash.** The draft changed since the person saw it (edit, or approve with an old `draftHash`). Reload the request and show the latest version. |
 | 409 | `use_form` | **Web-form company.** It cannot be sent by email. Show the draft to copy and link to `formUrl`. |
+| 409 | `not_a_form_request` | **Email company.** `POST /v1/requests/{id}/submitted` is only for a web-form company. Offer to review, approve and send the draft instead. |
 | 409 | `must_keep` | The company is needed to keep an account working (for example the account provider). No deletion request is offered. Explain; do not promise anything. |
 | 409 | `kept` | The user chose "keep this". Offer to undo it (`DELETE /v1/companies/{id}/keep`) to continue. |
 | 409 | `no_contact`, `contact_bounced`, `contact_changed` | No verified grievance contact (or it stopped working or changed). The request is blocked until it is checked or recreated. |
@@ -46,10 +47,22 @@ Branch on `code`. `title` and `detail` are sentences for a person; they never co
 | 422 | `draft_unsafe` | The text looks like it holds an ID-like number, or still has an `[OPEN]` placeholder. `findings` names the kinds. Ask the person to edit it. |
 | 422 | `idempotency_key_reuse` | That key was used for a different request. Make a new key. |
 | 429 | `rate_limited`, `daily_cap_reached` | Slow down; or the daily limit for sent requests was reached. |
+| 500 | `internal_error` | Something failed on our side. Nothing in the answer is about the person's data. Try again later, and give support the `requestId`. |
 | 502 | `send_failed` | Gmail did not accept the message; nothing was sent. Retrying with the same key is safe. |
 | 502 | `send_outcome_unknown` | Gmail did not confirm. The request is **not** marked sent and is **not** retried automatically. Tell the person to check the Sent folder in Gmail. |
 | 503 | `real_send_blocked`, `send_disabled` | Sending is switched off here (real sending is off until it is enabled and the statute wording is verified). The draft can still be edited and approved. |
 | 503 | `auth_not_configured`, `encryption_not_configured`, `not_ready` | The server is missing configuration. |
+
+### New in Phase 2: reporting an outcome and marking a form request as submitted
+
+| Call | Answers | What each error means for the screen |
+| --- | --- | --- |
+| `PUT /v1/requests/{id}/outcome` | 200 the request; 400 `validation_failed` (not one of the four outcomes, or an extra field); 404 `not_found`; 409 `invalid_transition` | `invalid_transition`: the request has not been sent yet (a draft or approved one), or it is closed or bounced, so there is no outcome to report. Do not offer the control; `canSetOutcome` says when it applies. |
+| `POST /v1/requests/{id}/submitted` | 200 the request (also when it was already marked); 400 `validation_failed`; 404 `not_found`; 409 `not_a_form_request`, `draft_changed`, `must_keep`, `kept`, `company_excluded`, `no_contact`, `contact_bounced`, `contact_changed`, `draft_integrity`, `already_sent`, `invalid_transition`; 422 `draft_unsafe` | The guards of approve and send run again. `draft_changed`: show the latest draft and ask for the copy again; do not retry by itself. `draft_unsafe` with `open_placeholder`: the unresolved `[OPEN]` line is still in the draft. `canMarkSubmitted` says when the action applies. |
+
+The outcome is what the person **reports**: `confirmed_erased`, `refused`, `needs_more_info`, or `no_answer_yet` to take a report back. Erase.me never infers it, not from a reply it found, who sent it or what it said. Always show it as **"Reported by you"**, never as a verified fact, and say nothing about what the company did or will do. `replies` on a request view is only counts and times found from message headers (`count` replies from a person, `automaticCount` automatic ones, which do not change the status); Erase.me does not read or keep what a reply says, so point the person to Gmail to read it.
+
+`POST /v1/requests/{id}/submitted` sends nothing. The person pasted the draft into the company's web form and says so, naming the exact draft they copied (`draftHash`). The request then becomes `sent` with `channel: "web_form"`, which starts the clock for a reply. A web form has no Gmail thread, so there are no reply checks for it and the person reports the outcome.
 
 ## Outcomes that are not errors
 
