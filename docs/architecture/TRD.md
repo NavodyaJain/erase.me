@@ -192,7 +192,12 @@ user_companies(id, user_id FK, company_id FK, inbox_id FK, first_seen, last_seen
 subscriptions(id, user_company_id FK, billing_period, amount_minor, currency, next_renewal,
               looks_unused bool, evidence jsonb)               -- deferred (F4)
 requests(id, user_id FK, user_company_id FK, status, thread_id, sent_at, due_at,
-         day30_followup_at, created_at)
+         day30_followup_at, created_at,
+         sent_message_id, sent_rfc_message_id, channel[email|web_form],
+         reply_checked_at, reply_check_failures, first_reply_at)       -- Phase 2 additions
+request_replies(id, request_id FK, gmail_message_id, received_at, sender_domain,
+                sender_match[company|other|unknown], automatic bool, created_at)
+                                                                -- Phase 2: metadata only, never text, subject or address
 request_drafts(id, request_id FK, version, to_email, subject, body, draft_hash,
                created_by[ai|user], created_at)
 request_events(id, request_id FK, type[drafted|edited|approved|sent|bounced|reply_label|
@@ -236,7 +241,7 @@ Constraints and rules
 | `scan-inbox` | User connects/rescans | Paginates Gmail, extracts signals, resumable cursor, idempotent upserts |
 | `enrich-company` | New company found | Resolve canonical company, category, contact (AI + catalog) |
 | `send-request` | User sends | Gmail send, store thread id, handle quota/retry |
-| `poll-replies` | Every 15 minutes per inbox with open requests **[ASSUMPTION]** (Gmail push via Pub/Sub later) | Fetch thread messages, call AI classifier in memory, store label only |
+| `poll-replies` | Every 15 minutes (`REPLY_POLL_MINUTES`) for requests that are sent, not yet answered and younger than `REPLY_POLL_MAX_AGE_DAYS`; paused for a user whose account is pending deletion (Gmail push via Pub/Sub later) | `threads.get` with headers only (no snippet, no body); record a reply as metadata (message id, time, sender domain, whether automatic). **Phase 2 has no classifier**: the user sets the outcome. |
 | `bounce-detect` | With poll-replies | Mark `bounced`, flag company contact |
 | `day30-followup` | Daily | Create follow-up drafts and notifications |
 | `refresh-registry` | Hourly | Recompute `registry_stats` |
@@ -250,7 +255,7 @@ All jobs: idempotent, retried with exponential backoff, dead-letter queue, metri
 - Scan strategy: list messages in batches using targeted queries (for example `category:updates OR subject:(welcome OR receipt OR invoice OR "verify your")`, plus `list:` header signals), then fetch **metadata only** (`format=metadata`, headers From, Subject, Date, List-Unsubscribe, List-Id). Bodies are not fetched in scan.
 - Respect per-user and per-project quotas; exponential backoff on 429/5xx; cap concurrent requests.
 - Sending: Gmail `messages.send` with `threadId` and a stable Erase.me label (`Erase.me/Requests`) applied to sent messages; used to find replies.
-- Reply polling: `threads.get` for stored thread ids. Message text is read into memory, sent to the AI classifier, and discarded. **[DECISION PROPOSED]**.
+- Reply polling: `threads.get` with `format=metadata`, a fixed list of `metadataHeaders` and a partial-response `fields` filter, for stored thread ids. **Decision (Phase 2): message text is never fetched at all**, which is stricter than "read in memory and discard". It needs no scope beyond `gmail.readonly` (Google lists `gmail.readonly` among the scopes for `users.threads.get`). The label `Erase.me/Requests` stays skipped (it needs a label or modify scope). The AI classifier (Phase 3) will need the reply text and so will need a new decision, because it contradicts this one.
 - Scopes **[ASSUMPTION]**: `openid email profile` for sign-in; `https://www.googleapis.com/auth/gmail.readonly` and `https://www.googleapis.com/auth/gmail.send` for inboxes. The Gmail read scope is a *restricted* scope: public production use needs Google OAuth verification and an annual third-party security assessment. In test mode, up to 100 named test users. Confirm current requirements in Google's documentation before launch.
 
 ## 7. AI service (services/ai)
@@ -464,6 +469,6 @@ cd services/ai && uv sync && uv run fastapi dev app/main.py
 3. Hosting vendors for API/AI/Postgres/Redis.
 4. Embedding model and LLM provider terms (retention).
 5. Gmail push notifications (Pub/Sub) vs polling.
-6. Whether to persist reply subject lines for debugging (default: no).
-7. Reply-text-in-memory decision (confirm).
+6. Whether to persist reply subject lines for debugging (default: no; decided no).
+7. Reply-text-in-memory decision (Phase 2: reply text is not fetched at all; revisit for the Phase 3 classifier).
 8. Backups and retention periods.

@@ -32,6 +32,8 @@ Object.assign(process.env, {
   REDIS_URL: 'redis://localhost:6379',
   AI_SERVICE_URL: 'http://localhost:8000',
   ALLOW_REAL_SEND: 'false',
+  // Background tasks stay off here: tests run them on request, so nothing happens on a timer.
+  JOBS_ENABLED: 'false',
   LOG_LEVEL: 'warn',
 });
 

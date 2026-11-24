@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EnvError, googleRedirectUri, isRealSendEnabled, loadEnv } from './env.js';
+import { EnvError, googleRedirectUri, isRealSendEnabled, jobsEnabled, loadEnv } from './env.js';
 
 const base = {
   DATABASE_URL: 'postgres://erase_api:pw@localhost:5432/erase',
@@ -99,6 +99,42 @@ describe('loadEnv', () => {
     expect(loadEnv({ ...base, ACTIVITY_RECENT_DAYS: '', ACTIVITY_OLD_DAYS: '' }).ACTIVITY_OLD_DAYS).toBe(365);
     expect(failure({ ...base, ACTIVITY_RECENT_DAYS: '200', ACTIVITY_OLD_DAYS: '100' }).issues.map((i) => i.variable)).toEqual(['ACTIVITY_OLD_DAYS']);
     expect(failure({ ...base, ACTIVITY_RECENT_DAYS: '0' }).issues.map((i) => i.variable)).toEqual(['ACTIVITY_RECENT_DAYS']);
+  });
+
+  it('reads the tracking settings: follow-up after 30 days, one follow-up, poll every 15 minutes, retention 30 and 7 days', () => {
+    expect(loadEnv(base)).toMatchObject({
+      FOLLOWUP_AFTER_DAYS: 30,
+      FOLLOWUP_MAX: 1,
+      REPLY_POLL_MINUTES: 15,
+      REPLY_POLL_MAX_AGE_DAYS: 120,
+      INBOX_RETENTION_DAYS: 30,
+      ACCOUNT_PURGE_AFTER_DAYS: 7,
+    });
+    expect(loadEnv({ ...base, FOLLOWUP_AFTER_DAYS: '14', FOLLOWUP_MAX: '0', ACCOUNT_PURGE_AFTER_DAYS: '0' })).toMatchObject({
+      FOLLOWUP_AFTER_DAYS: 14,
+      FOLLOWUP_MAX: 0,
+      ACCOUNT_PURGE_AFTER_DAYS: 0,
+    });
+    expect(loadEnv({ ...base, FOLLOWUP_AFTER_DAYS: '', REPLY_POLL_MINUTES: '' })).toMatchObject({ FOLLOWUP_AFTER_DAYS: 30, REPLY_POLL_MINUTES: 15 });
+  });
+
+  it.each([
+    ['FOLLOWUP_AFTER_DAYS', '0'],
+    ['FOLLOWUP_MAX', '4'],
+    ['REPLY_POLL_MINUTES', '0'],
+    ['REPLY_POLL_MAX_AGE_DAYS', '1000'],
+    ['INBOX_RETENTION_DAYS', '-1'],
+    ['ACCOUNT_PURGE_AFTER_DAYS', '31'],
+  ])('refuses %s=%s, naming only the variable', (name, value) => {
+    expect(failure({ ...base, [name]: value }).issues.map((i) => i.variable)).toEqual([name]);
+  });
+
+  it('runs the background tasks by default, except in tests, and JOBS_ENABLED overrides both ways', () => {
+    expect(jobsEnabled(loadEnv(base))).toBe(true);
+    expect(jobsEnabled(loadEnv({ ...base, NODE_ENV: 'test' }))).toBe(false);
+    expect(jobsEnabled(loadEnv({ ...base, NODE_ENV: 'test', JOBS_ENABLED: 'true' }))).toBe(true);
+    expect(jobsEnabled(loadEnv({ ...base, JOBS_ENABLED: 'false' }))).toBe(false);
+    expect(failure({ ...base, JOBS_ENABLED: 'yes' }).issues.map((i) => i.variable)).toEqual(['JOBS_ENABLED']);
   });
 
   it('derives the Google redirect URI from API_PUBLIC_URL with the registered callback path', () => {

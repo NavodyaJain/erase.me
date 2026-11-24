@@ -196,10 +196,10 @@ Each feature lists user stories, rules and acceptance criteria (AC). IDs are use
 - As a user I get a proof pack I can download.
 
 **Rules**
-- Status machine: `drafted → approved → sent → (replied_deleted | replied_info_requested | replied_refused | no_reply) → closed`; plus `bounced`.
-- Reply classification: the AI service labels a reply as Deleted, Asked for more information, Refused, or Other. Only the label, a confidence score and short signal tags are stored. **[ASSUMPTION / DECISION PROPOSED]** The reply text is processed in memory and never persisted. The user can always open the actual reply in their own Gmail.
+- Status machine: `drafted → approved → sent → reply_received → (replied_deleted | replied_info_requested | replied_refused) → closed`, with `no_reply` when nothing has arrived by the follow-up day; plus `bounced`. `reply_received` means a message from someone else arrived on the sent thread (found from headers only). The outcome (`replied_*`) is **set by the user**: Confirmed erased, Refused, Needs more info, or No answer yet. Erase.me never infers it, and it is shown as "Reported by you". An automatic reply (out-of-office and similar) is recorded with its own "Automatic reply" label; it does not change the status and does not stop the follow-up clock.
+- Reply classification (**Phase 3**; Phase 2 has none, and the user sets the outcome): the AI service labels a reply as Deleted, Asked for more information, Refused, or Other. Only the label, a confidence score and short signal tags are stored. **[ASSUMPTION / DECISION PROPOSED]** The reply text is processed in memory and never persisted. The user can always open the actual reply in their own Gmail.
 - Low-confidence labels (confidence below 0.7 **[ASSUMPTION]**) go to the admin review queue and show as "Replied" to the user until confirmed.
-- Day-30 rule: if there is no reply at day 30, a follow-up draft is prepared and the user is notified. Optionally a day-14 nudge to the user (not to the company).
+- Day-30 rule (`FOLLOWUP_AFTER_DAYS`): if there is no reply at day 30, "Follow up?" is shown with a hedged draft prepared for the user. The user approves the exact draft, with the same hash approval, idempotency and Keep-this and must-keep checks as the first request. One follow-up per request (`FOLLOWUP_MAX`), shown in the app only, no day-14 nudge.
 - Proof pack: a PDF with request text, send time, company contact, replies' labels and timestamps, and a hash of each draft. It contains no email text beyond what the user already approved.
 
 **AC**
@@ -339,7 +339,7 @@ Pages: Home, Roadmap, Research, Case study, Build log (with decisions).
 | Support ticket text | Yes | User-provided |
 | Audit log | Yes | No personal content, only references |
 
-Retention **[ASSUMPTION]**: on user account deletion, personal data is deleted within 30 days; aggregated registry counts are kept in anonymised form. **[OPEN]** retention after inbox disconnect without account deletion (default: keep detected companies for 30 days, then delete).
+Retention: "Delete my data" (the existing delete-account flow) can be undone for 7 days (`ACCOUNT_PURGE_AFTER_DAYS`), with polling, follow-ups and sending paused for that user meanwhile, or the person can choose "Delete now". After that all personal data is deleted; only a tombstone row with no personal data (no email and no hash of it) remains. Detected companies are deleted 30 days after an inbox is disconnected (`INBOX_RETENTION_DAYS`). Earlier assumption, now met: on user account deletion, personal data is deleted within 30 days; aggregated registry counts are kept in anonymised form. **[OPEN]** retention after inbox disconnect without account deletion (default: keep detected companies for 30 days, then delete).
 
 ## 9. Deferred features and triggers
 

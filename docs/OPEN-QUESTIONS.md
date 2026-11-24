@@ -79,6 +79,18 @@ Left for later: the dev page shows the hint and "kept" but has no Keep button; t
 
 Left for later: `must_keep` is enforced at create, approve and send. The reply states, follow-up and proof pack stay unbuilt, and no job moves a request past `sent`.
 
+## Phase 2: tracking after send (decisions, 2026-11-24)
+
+Approved plan, with these answers:
+- Reply tracking needs **no Gmail scope beyond `gmail.readonly` and `gmail.send`**, which we already request. Google lists `gmail.readonly` among the scopes of `users.threads.get`, and `format=metadata` with `metadataHeaders` is supported. The reply check asks for a partial response (`fields`), so no snippet or body is transferred, and the client drops any it is given.
+- The outcome (Confirmed erased, Refused, Needs more info, No answer yet) is set by the user, also when no reply was detected. Erase.me never infers it. "No answer yet" returns the request to sent, or to no_reply once the follow-up day has passed. Outcomes are shown as "Reported by you" and must not be published as company facts.
+- An automatic reply gets its own "Automatic reply" label. It does not change the status and does not stop the follow-up clock.
+- One follow-up per request, in the app only, no day-14 nudge. The follow-up wording is drafted for the owner's review before anything can be sent, and its statute wording stays behind the same citation gate.
+- "Mark as submitted" for web-form requests is in scope. Bounce detection is not.
+- "Delete my data" is the existing delete-account flow: 7 days to undo, or "Delete now". Polling, follow-up sweeps and all sends for that user pause during the 7 days, and the "Your data" screen says so. Token revoke is attempted for each inbox; a failure is recorded (counts only) and the person is told to remove access in their Google account settings. A tombstone user row stays with no personal data (no email, no hash of it).
+- Purge runs through `SECURITY DEFINER` functions. Closed requests' drafts are not purged on a timer.
+- Jobs run in the API process behind a scheduler interface (Postgres advisory lock per task). BullMQ and Redis stay deferred.
+
 ## Design drift found by the banned-word lint
 
 The boards state "leaked" as fact. PRD 4.4 says use "may have shared". Boards are unedited; fix when those screens are built.

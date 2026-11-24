@@ -76,6 +76,20 @@ const EnvSchema = z
     // Real sends are off by default. Dev and test send only to the fake Gmail.
     ALLOW_REAL_SEND: bool,
     REAL_SEND_DAILY_CAP: z.coerce.number().int().min(0).default(5),
+    // Tracking after a request is sent (Phase 2). Replies are found from message headers only.
+    // Days after sending with no reply before "Follow up?" is offered.
+    FOLLOWUP_AFTER_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+    // Follow-ups allowed per request. 0 turns follow-ups off.
+    FOLLOWUP_MAX: z.coerce.number().int().min(0).max(3).default(1),
+    // How often replies are checked, and how long after sending a request is still checked.
+    REPLY_POLL_MINUTES: z.coerce.number().int().min(1).max(1440).default(15),
+    REPLY_POLL_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(730).default(120),
+    // Detected companies are kept this many days after an inbox is disconnected, then deleted.
+    INBOX_RETENTION_DAYS: z.coerce.number().int().min(0).max(365).default(30),
+    // After "Delete my data" the person has this many days to undo it. Polling, follow-ups and sending are paused meanwhile.
+    ACCOUNT_PURGE_AFTER_DAYS: z.coerce.number().int().min(0).max(30).default(7),
+    // Runs the background tasks (reply checks and so on) inside the API process. Unset: on, except when NODE_ENV is test.
+    JOBS_ENABLED: z.enum(['true', 'false'], { message: 'must be "true" or "false"' }).optional(),
   })
   .superRefine((env, ctx) => {
     const issue = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
@@ -107,6 +121,10 @@ const EnvSchema = z
   });
 
 export type Env = z.infer<typeof EnvSchema>;
+
+/** Whether this process runs the background tasks. Off by default only in tests. */
+export const jobsEnabled = (env: Pick<Env, 'JOBS_ENABLED' | 'NODE_ENV'>): boolean =>
+  env.JOBS_ENABLED === undefined ? env.NODE_ENV !== 'test' : env.JOBS_ENABLED === 'true';
 
 export interface EnvIssue {
   variable: string;
