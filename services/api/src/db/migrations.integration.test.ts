@@ -24,6 +24,7 @@ const EXPECTED_TABLES = [
   'companies',
   'idempotency_keys',
   'inboxes',
+  'job_runs',
   'oauth_states',
   'reply_labels',
   'request_drafts',
@@ -97,7 +98,8 @@ describe('app role privileges', () => {
     expect([...new Set(rows.map((r) => r.table_name))].sort()).toEqual(EXPECTED_TABLES);
     for (const table of EXPECTED_TABLES) {
       const privs = (granted.get(table) ?? []).sort();
-      expect(privs, table).toEqual(APPEND_ONLY.includes(table) ? ['INSERT', 'SELECT'] : ['INSERT', 'SELECT', 'UPDATE']);
+      const expected = table === 'job_runs' ? ['SELECT'] : APPEND_ONLY.includes(table) ? ['INSERT', 'SELECT'] : ['INSERT', 'SELECT', 'UPDATE'];
+      expect(privs, table).toEqual(expected); // job_runs is written only by the purge functions
     }
   });
 

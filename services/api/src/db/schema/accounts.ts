@@ -14,9 +14,20 @@ export const users = pgTable(
     status: userStatus('status').notNull().default('active'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    /** When the personal data was purged and the row became a tombstone. */
     deletedAt: ts('deleted_at'),
+    /** "Delete my data" was asked for. Until `deletion_due_at` it can be undone; polling, follow-ups and sending are paused. */
+    deletionRequestedAt: ts('deletion_requested_at'),
+    deletionDueAt: ts('deletion_due_at'),
+    /** How many inboxes Google did not confirm a token revoke for. A count only. */
+    tokenRevokeFailed: integer('token_revoke_failed').notNull().default(0),
   },
-  (t) => [uniqueIndex('users_google_sub_key').on(t.googleSub), idCheck(t, 'users', 'usr')],
+  (t) => [
+    uniqueIndex('users_google_sub_key').on(t.googleSub),
+    idCheck(t, 'users', 'usr'),
+    check('users_deletion_dates', sql`${t.deletionDueAt} IS NULL OR ${t.deletionRequestedAt} IS NOT NULL`),
+    check('users_token_revoke_failed_range', sql`${t.tokenRevokeFailed} >= 0`),
+  ],
 );
 
 /**
