@@ -4,6 +4,7 @@ import {
   createApiClient,
   createIdempotencyKey,
   IDEMPOTENCY_KEY_PATTERN,
+  isDeletionPending,
   isDraftUnsafe,
   isFollowupLimitReached,
   isFollowupNotDue,
@@ -11,6 +12,7 @@ import {
   isNotOffered,
   isSendUnavailable,
   isStaleDraft,
+  isUndoWindowClosed,
   isUseForm,
   type RequestView,
 } from '../src/index';
@@ -379,5 +381,50 @@ describe('follow-ups', () => {
   it("answers another user's request, or one with no follow-up yet, as 404 not_found", async () => {
     const api = base({ [`POST /v1/requests/${REQUEST_ID}/followup/approve`]: problem(404, 'not_found', 'Not found') });
     await expect(client(api).requests.approveFollowup(REQUEST_ID, HASH)).rejects.toMatchObject({ status: 404, code: 'not_found' });
+  });
+});
+
+describe('account deletion', () => {
+  const pending = { status: 'deleting', requestedAt: '2026-11-22T10:00:00.000Z', deleteAfter: '2026-11-29T10:00:00.000Z', canUndo: true, paused: true, googleAccess: { notRevoked: 0, message: null }, gmailCopies: 'Copies stay in your own Gmail.', notice: 'n' };
+  const base = (extra: Record<string, unknown>) => fakeApi({ 'GET /v1/me': { body: ME }, ...extra } as Parameters<typeof fakeApi>[0]);
+  const client = (api: ReturnType<typeof fakeApi>) => createApiClient({ baseUrl: BASE, fetch: api.fetch });
+
+  it('asks for deletion with the CSRF token and returns where it stands, without ending the client session', async () => {
+    const api = base({ 'DELETE /v1/me': { status: 202, body: pending }, 'GET /v1/me/deletion': { body: pending } });
+    const c = client(api);
+    expect(await c.account.requestDeletion()).toEqual(pending);
+    const call = api.requests.filter((r) => r.method === 'DELETE').at(-1);
+    expect(call?.path).toBe('/v1/me');
+    expect(call?.headers.get('x-csrf-token')).toBe(ME.csrfToken);
+    // The session stays, limited, so the client can still read where deletion stands.
+    expect(await c.account.deletion()).toEqual(pending);
+  });
+
+  it('undoes it, and refuses with the right code after the undo period', async () => {
+    const active = { ...pending, status: 'active', requestedAt: null, deleteAfter: null, canUndo: false, paused: false };
+    const ok = base({ 'POST /v1/me/deletion/undo': { body: active } });
+    expect(await client(ok).account.undoDeletion()).toEqual(active);
+    const late = base({ 'POST /v1/me/deletion/undo': problem(409, 'undo_window_closed', 'The undo period is over') });
+    const err = await client(late).account.undoDeletion().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(isUndoWindowClosed(err)).toBe(true);
+    expect(isDeletionPending(err)).toBe(false);
+  });
+
+  it('delete now returns the result and forgets the CSRF token, because every session has ended', async () => {
+    const gone = { ...pending, status: 'deleted', canUndo: false };
+    const api = base({ 'POST /v1/me/deletion/now': { body: gone } });
+    const c = client(api);
+    expect(await c.account.deleteNow()).toEqual(gone);
+    expect(api.requests.filter((r) => r.path === '/v1/me').length).toBe(1);
+    await expect(c.account.deleteNow()).resolves.toEqual(gone);
+    expect(api.requests.filter((r) => r.path === '/v1/me').length).toBe(2); // asked for a new token, since the old one was dropped
+  });
+
+  it('turns deletion_pending on any other call into an ApiError the app can recognise', async () => {
+    const api = base({ 'GET /v1/requests': problem(403, 'deletion_pending', 'Your data is scheduled to be deleted') });
+    const err = await client(api).requests.list().catch((e: unknown) => e);
+    expect(isDeletionPending(err)).toBe(true);
+    expect(err).toMatchObject({ status: 403, code: 'deletion_pending' });
   });
 });

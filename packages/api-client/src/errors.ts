@@ -52,6 +52,12 @@ export function isUseForm(e: unknown): e is ApiError & { code: 'use_form'; exten
 /** The company takes requests by email, so there is no web form to mark as submitted. Review the draft, approve it and send it instead. */
 export const isNotFormRequest = (e: unknown): boolean => isApiError(e) && e.status === 409 && e.code === 'not_a_form_request';
 
+/** The person asked to delete their data and the undo period has not ended. Show the Your data screen with Undo. */
+export const isDeletionPending = (e: unknown): boolean => isApiError(e) && e.status === 403 && e.code === 'deletion_pending';
+
+/** The undo period is over: the data is being or has been deleted. */
+export const isUndoWindowClosed = (e: unknown): boolean => isApiError(e) && e.status === 409 && e.code === 'undo_window_closed';
+
 /** It is too early for a follow-up. The date it is offered is in the request's `followup.dueAt`. */
 export const isFollowupNotDue = (e: unknown): boolean => isApiError(e) && e.status === 409 && e.code === 'followup_not_due';
 

@@ -1,4 +1,4 @@
-import type { CompanyItem, DraftOutcome, FollowupSendResponse, Inbox, Me, paths, RequestListItem, RequestView, Scan, SendResponse } from '@erase/contracts';
+import type { AccountDeletion, CompanyItem, DraftOutcome, FollowupSendResponse, Inbox, Me, paths, RequestListItem, RequestView, Scan, SendResponse } from '@erase/contracts';
 import createClient from 'openapi-fetch';
 import { ApiError, isApiError } from './errors';
 
@@ -112,10 +112,23 @@ export function createApiClient(opts: ApiClientOptions) {
       await mutate(() => http.POST('/v1/auth/logout'));
       csrfToken = undefined;
     },
-    /** Starts account deletion. Every session ends at once. */
-    deleteAccount: async (): Promise<void> => {
-      await mutate(() => http.DELETE('/v1/me'));
-      csrfToken = undefined;
+    account: {
+      /**
+       * Where "Delete my data" stands, for the Your data screen. While it is pending (`status: "deleting"`) reply checks, follow-ups
+       * and sending are paused, `deleteAfter` says when the data is deleted, and `googleAccess.message` (when set) tells the person
+       * to remove Erase.me in their Google account settings. `gmailCopies` says their own Gmail copies are not touched.
+       */
+      deletion: (): Promise<AccountDeletion> => call(() => http.GET('/v1/me/deletion')),
+      /** Starts the undo period (7 days by default). The session stays, limited: every other call answers 403 `deletion_pending`. */
+      requestDeletion: (): Promise<AccountDeletion> => mutate(() => http.DELETE('/v1/me')),
+      /** Cancels it inside the undo period. 409 `undo_window_closed` after it, `not_pending_deletion` when none is pending. */
+      undoDeletion: (): Promise<AccountDeletion> => mutate(() => http.POST('/v1/me/deletion/undo')),
+      /** Skips the undo period and deletes now. Every session ends, so the client forgets its CSRF token. */
+      deleteNow: async (): Promise<AccountDeletion> => {
+        const result = await mutate(() => http.POST('/v1/me/deletion/now'));
+        csrfToken = undefined;
+        return result;
+      },
     },
 
     inboxes: {

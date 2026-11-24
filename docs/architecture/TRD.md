@@ -245,7 +245,7 @@ Constraints and rules
 | `bounce-detect` | With poll-replies | Mark `bounced`, flag company contact |
 | `day30-followup` | Daily | Create follow-up drafts and notifications |
 | `refresh-registry` | Hourly | Recompute `registry_stats` |
-| `purge-deleted` | Daily | Hard-delete data past retention |
+| `purge` | Hourly, under a Postgres advisory lock | Calls the `SECURITY DEFINER` purge functions (the app role has no DELETE): ended sessions and sign-in attempts; disconnected inboxes past `INBOX_RETENTION_DAYS`; accounts past the undo period (`ACCOUNT_PURGE_AFTER_DAYS`), leaving a tombstone row with no personal data; closed requests only if `REQUEST_RETENTION_DAYS` is above 0 (off by default). Each function has fixed SQL, a pinned `search_path`, a batch limit and a dry-run mode, and writes counts only to `job_runs`. Copies of sent requests in the person's own Gmail are never touched. |
 | `notify` | Events | Email notifications to user (no personal content) |
 
 All jobs: idempotent, retried with exponential backoff, dead-letter queue, metrics.
