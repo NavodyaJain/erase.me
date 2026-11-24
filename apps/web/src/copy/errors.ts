@@ -25,6 +25,8 @@ export const ERROR_MESSAGES: Record<Known, string> = {
   fictional_company: 'This is a sample company, so it cannot be sent for real.',
   not_a_form_request: 'This company takes requests by email, not through a web form. Review the draft, approve it and send it instead.',
   invalid_transition: 'This request cannot move to that step. Reload to see where it is.',
+  followup_not_due: 'It is too early to follow up. Replies can take time. The request shows the date a follow-up is offered.',
+  followup_limit_reached: 'This request has had the follow-up it is allowed, so no more are offered.',
   request_not_closable: 'This request has already been sent, so it cannot be closed here.',
   request_not_editable: 'This request can no longer be edited.',
   send_in_progress: 'A send for this request is already running, or its result is not known. Check the Sent folder in Gmail before trying again.',

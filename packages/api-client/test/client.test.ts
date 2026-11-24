@@ -5,6 +5,8 @@ import {
   createIdempotencyKey,
   IDEMPOTENCY_KEY_PATTERN,
   isDraftUnsafe,
+  isFollowupLimitReached,
+  isFollowupNotDue,
   isNotFormRequest,
   isNotOffered,
   isSendUnavailable,
@@ -289,5 +291,93 @@ describe('reporting an outcome and marking a form request as submitted', () => {
     expect(isNotOffered(err)).toBe(code === 'must_keep' || code === 'kept');
     expect(isNotFormRequest(err)).toBe(code === 'not_a_form_request');
     expect(isDraftUnsafe(err)).toBe(code === 'draft_unsafe');
+  });
+});
+
+describe('follow-ups', () => {
+  const key = 'followup-key-0001';
+  const view = { request: { id: REQUEST_ID, status: 'no_reply', channel: 'email' }, followup: { state: 'drafted', draft: { hash: HASH } } };
+  const base = (extra: Record<string, unknown>) => fakeApi({ 'GET /v1/me': { body: ME }, ...extra } as Parameters<typeof fakeApi>[0]);
+  const client = (api: ReturnType<typeof fakeApi>) => createApiClient({ baseUrl: BASE, fetch: api.fetch });
+  const last = (api: ReturnType<typeof fakeApi>, method: string) => api.requests.filter((r) => r.method === method).at(-1);
+
+  it('prepares the follow-up with a POST that carries the session cookie and the CSRF token, and no body', async () => {
+    const api = base({ [`POST /v1/requests/${REQUEST_ID}/followup`]: { body: view } });
+    expect(await client(api).requests.createFollowup(REQUEST_ID)).toEqual(view);
+    const call = last(api, 'POST');
+    expect(call?.path).toBe(`/v1/requests/${REQUEST_ID}/followup`);
+    expect(call?.headers.get('x-csrf-token')).toBe(ME.csrfToken);
+    expect(call?.credentials).toBe('include');
+    expect(call?.headers.has('idempotency-key')).toBe(false);
+  });
+
+  it('edits the draft with the version being edited, and approves exactly the version shown', async () => {
+    const api = base({
+      [`PATCH /v1/requests/${REQUEST_ID}/followup/draft`]: { body: view },
+      [`POST /v1/requests/${REQUEST_ID}/followup/approve`]: { body: view },
+      [`POST /v1/requests/${REQUEST_ID}/followup/submitted`]: { body: view },
+    });
+    const c = client(api);
+    await c.requests.editFollowupDraft(REQUEST_ID, { baseHash: HASH, subject: 'Re: S', body: 'B' });
+    expect(last(api, 'PATCH')?.path).toBe(`/v1/requests/${REQUEST_ID}/followup/draft`);
+    expect(last(api, 'PATCH')?.body).toEqual({ baseHash: HASH, subject: 'Re: S', body: 'B' });
+    await c.requests.approveFollowup(REQUEST_ID, HASH);
+    await c.requests.markFollowupSubmitted(REQUEST_ID, HASH);
+    const posts = api.requests.filter((r) => r.method === 'POST');
+    expect(posts.map((r) => [r.path.split('/').slice(-2).join('/'), r.body])).toEqual([
+      ['followup/approve', { draftHash: HASH }],
+      ['followup/submitted', { draftHash: HASH }],
+    ]);
+  });
+
+  it('sends with the Idempotency-Key it is given, exactly, and returns the answer with its delivery label', async () => {
+    const answer = { followup: { sequence: 1, status: 'sent', sentAt: '2026-12-23T10:00:00.000Z' }, delivery: 'fake', notice: 'No email was sent.' };
+    const api = base({ [`POST /v1/requests/${REQUEST_ID}/followup/send`]: { body: answer } });
+    expect(await client(api).requests.sendFollowup(REQUEST_ID, key)).toEqual(answer);
+    expect(last(api, 'POST')?.headers.get('idempotency-key')).toBe(key);
+    expect(last(api, 'POST')?.headers.get('x-csrf-token')).toBe(ME.csrfToken);
+  });
+
+  it('refuses to send without a usable key, before anything is sent', () => {
+    const api = base({});
+    expect(() => client(api).requests.sendFollowup(REQUEST_ID, 'short')).toThrow(TypeError);
+    expect(() => client(api).requests.sendFollowup(REQUEST_ID, 'has spaces in it')).toThrow(TypeError);
+    expect(api.requests.some((r) => r.path.includes('/followup/send'))).toBe(false);
+  });
+
+  it('uses the same key on a retry, so the API can answer the first result again', async () => {
+    const api = base({ [`POST /v1/requests/${REQUEST_ID}/followup/send`]: { body: { followup: { sequence: 1, status: 'sent', sentAt: 'x' }, delivery: 'fake' } } });
+    const c = client(api);
+    await c.requests.sendFollowup(REQUEST_ID, key);
+    await c.requests.sendFollowup(REQUEST_ID, key);
+    const keys = api.requests.filter((r) => r.path.endsWith('/followup/send')).map((r) => r.headers.get('idempotency-key'));
+    expect(keys).toEqual([key, key]);
+  });
+
+  it.each([
+    ['followup_not_due', 409],
+    ['followup_limit_reached', 409],
+    ['draft_changed', 409],
+    ['use_form', 409],
+    ['approval_required', 409],
+    ['already_sent', 409],
+    ['invalid_transition', 409],
+    ['real_send_blocked', 503],
+    ['send_outcome_unknown', 502],
+  ])('turns a %s answer into an ApiError with that code, and the helpers pick out the right one', async (code, status) => {
+    const api = base({ [`POST /v1/requests/${REQUEST_ID}/followup`]: problem(status, code, 'Refused', code === 'use_form' ? { formUrl: 'https://example.com/privacy/request' } : {}) });
+    const err = await client(api).requests.createFollowup(REQUEST_ID).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status, code });
+    expect(isFollowupNotDue(err)).toBe(code === 'followup_not_due');
+    expect(isFollowupLimitReached(err)).toBe(code === 'followup_limit_reached');
+    expect(isStaleDraft(err)).toBe(code === 'draft_changed');
+    expect(isUseForm(err)).toBe(code === 'use_form');
+    expect(isSendUnavailable(err)).toBe(code === 'real_send_blocked');
+  });
+
+  it("answers another user's request, or one with no follow-up yet, as 404 not_found", async () => {
+    const api = base({ [`POST /v1/requests/${REQUEST_ID}/followup/approve`]: problem(404, 'not_found', 'Not found') });
+    await expect(client(api).requests.approveFollowup(REQUEST_ID, HASH)).rejects.toMatchObject({ status: 404, code: 'not_found' });
   });
 });

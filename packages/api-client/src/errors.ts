@@ -52,6 +52,12 @@ export function isUseForm(e: unknown): e is ApiError & { code: 'use_form'; exten
 /** The company takes requests by email, so there is no web form to mark as submitted. Review the draft, approve it and send it instead. */
 export const isNotFormRequest = (e: unknown): boolean => isApiError(e) && e.status === 409 && e.code === 'not_a_form_request';
 
+/** It is too early for a follow-up. The date it is offered is in the request's `followup.dueAt`. */
+export const isFollowupNotDue = (e: unknown): boolean => isApiError(e) && e.status === 409 && e.code === 'followup_not_due';
+
+/** The request has had the follow-ups it is allowed (or follow-ups are switched off). Do not offer another. */
+export const isFollowupLimitReached = (e: unknown): boolean => isApiError(e) && e.status === 409 && e.code === 'followup_limit_reached';
+
 /** The draft changed since the person saw it: reload the request and show the latest version. */
 export const isStaleDraft = (e: unknown): boolean => isApiError(e) && e.status === 409 && e.code === 'draft_changed';
 

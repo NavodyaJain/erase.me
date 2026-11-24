@@ -1,4 +1,4 @@
-import type { CompanyItem, DraftOutcome, Inbox, Me, paths, RequestListItem, RequestView, Scan, SendResponse } from '@erase/contracts';
+import type { CompanyItem, DraftOutcome, FollowupSendResponse, Inbox, Me, paths, RequestListItem, RequestView, Scan, SendResponse } from '@erase/contracts';
 import createClient from 'openapi-fetch';
 import { ApiError, isApiError } from './errors';
 
@@ -161,6 +161,32 @@ export function createApiClient(opts: ApiClientOptions) {
        * For a web-form company: the person pasted the draft into the form. Nothing is sent. `draftHash` is the version
        * they copied (409 `draft_changed` if it is no longer the latest).
        */
+      /**
+       * Prepares the follow-up to a request that has had no reply (offered `followup.dueAt`, 30 days after sending by default).
+       * Asking again returns the draft that exists. Nothing is sent. 409 `followup_not_due` before the day, `followup_limit_reached`
+       * after the allowed follow-ups.
+       */
+      createFollowup: (id: string): Promise<RequestView> => mutate(() => http.POST('/v1/requests/{id}/followup', { params: { path: { id } } })),
+      /** A new version of the follow-up draft. `baseHash` is the version being edited (409 `draft_changed` if it is no longer the latest, never retried by itself). */
+      editFollowupDraft: (id: string, input: EditDraftInput): Promise<RequestView> =>
+        mutate(() => http.PATCH('/v1/requests/{id}/followup/draft', { params: { path: { id } }, body: input })),
+      /** Approves exactly the follow-up version the person was shown (`draftHash`). A web-form follow-up is not approved here (409 `use_form`). */
+      approveFollowup: (id: string, draftHash: string): Promise<RequestView> =>
+        mutate(() => http.POST('/v1/requests/{id}/followup/approve', { params: { path: { id } }, body: { draftHash } })),
+      /**
+       * Sends an approved follow-up in the first message's Gmail conversation. Needs an Idempotency-Key, like `send`: make one with
+       * `createIdempotencyKey()` when the person confirms and reuse it for every retry. In development and test it answers
+       * `delivery: "fake"`: nothing left the machine.
+       */
+      sendFollowup: (id: string, idempotencyKey: string): Promise<FollowupSendResponse> => {
+        if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+          throw new TypeError('The idempotency key must be 8 to 128 characters: letters, digits and . _ : -');
+        }
+        return mutate(() => http.POST('/v1/requests/{id}/followup/send', { params: { path: { id }, header: { 'Idempotency-Key': idempotencyKey } } }));
+      },
+      /** For a web-form request: the person pasted the follow-up into the form. Nothing is sent. `draftHash` is the version they copied. */
+      markFollowupSubmitted: (id: string, draftHash: string): Promise<RequestView> =>
+        mutate(() => http.POST('/v1/requests/{id}/followup/submitted', { params: { path: { id } }, body: { draftHash } })),
       markSubmitted: (id: string, draftHash: string): Promise<RequestView> =>
         mutate(() => http.POST('/v1/requests/{id}/submitted', { params: { path: { id } }, body: { draftHash } })),
       /**
