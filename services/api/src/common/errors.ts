@@ -35,6 +35,8 @@ export const Problems = {
   notFound: (detail?: string) => new AppError(404, 'not_found', 'Not found', detail),
   unauthorized: () => new AppError(401, 'unauthorized', 'Sign in required'),
   forbidden: () => new AppError(403, 'forbidden', 'Not allowed'),
+  deletionPending: () =>
+    new AppError(403, 'deletion_pending', 'Your data is scheduled to be deleted', 'Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.'),
   tooManyRequests: () => new AppError(429, 'rate_limited', 'Too many requests'),
   badRequest: (code: string, title: string, detail?: string) => new AppError(400, code, title, detail),
   unavailable: (code: string, title: string, detail?: string) => new AppError(503, code, title, detail),

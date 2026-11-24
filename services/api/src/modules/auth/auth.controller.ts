@@ -4,7 +4,7 @@ import { Problems } from '../../common/errors.js';
 import { CallbackQuery } from '../../contract/schemas.js';
 import type { RateLimiter } from '../../common/rate-limit.js';
 import type { Env } from '../../config/env.js';
-import type { AccountService } from './account.service.js';
+import type { AccountDeletionView, AccountService } from './account.service.js';
 import { SESSION_COOKIE } from './auth.guard.js';
 import type { AuthService, CallbackOutcome } from './auth.service.js';
 import type { SessionService } from './session.service.js';
@@ -20,11 +20,13 @@ export interface AuthRoutesDeps {
   account: AccountService;
   sessions: SessionService;
   requireUser: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  /** Like requireUser, but also lets a person whose deletion is pending in: they must be able to see it and undo it. */
+  requireAccount: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   limiter: RateLimiter;
 }
 
 export const authRoutes: FastifyPluginAsync<AuthRoutesDeps> = async (app, deps) => {
-  const { env, auth, account, sessions, requireUser, limiter, postAuthRedirect } = deps;
+  const { env, auth, account, sessions, requireAccount, limiter, postAuthRedirect } = deps;
   const secure = env.API_PUBLIC_URL.startsWith('https:');
   const domain = env.COOKIE_DOMAIN;
   const cookieBase = { secure, ...(domain ? { domain } : {}) };
@@ -49,7 +51,8 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesDeps> = async (app, deps) 
       state: query.state,
       error: query.error,
       cookieState: cookies[OAUTH_STATE_COOKIE],
-      sessionUserId: session?.user.id,
+      // Someone whose deletion is pending cannot connect an inbox: nothing new is added until they undo it.
+      sessionUserId: session && !session.user.deletion ? session.user.id : undefined,
       requestId: request.id,
     });
     const clearState = serializeCookie(OAUTH_STATE_COOKIE, '', { ...cookieBase, path: OAUTH_COOKIE_PATH, maxAgeSec: 0 });
@@ -60,7 +63,7 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesDeps> = async (app, deps) 
     return reply.header('set-cookie', cookiesOut).redirect(redirectFor(postAuthRedirect, outcome), 302);
   });
 
-  app.post('/v1/auth/logout', { preHandler: requireUser }, async (request, reply) => {
+  app.post('/v1/auth/logout', { preHandler: requireAccount }, async (request, reply) => {
     if (request.auth) await sessions.revoke(request.auth.sessionId);
     return reply
       .header('set-cookie', serializeCookie(SESSION_COOKIE, '', { ...cookieBase, maxAgeSec: 0 }))
@@ -68,19 +71,38 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesDeps> = async (app, deps) 
       .send();
   });
 
-  app.get('/v1/me', { preHandler: requireUser }, async (request) => {
+  app.get('/v1/me', { preHandler: requireAccount }, async (request) => {
     const a = request.auth;
     if (!a) throw Problems.unauthorized();
     return { id: a.user.id, email: a.user.email, name: a.user.name, csrfToken: a.csrfToken };
   });
 
-  app.delete('/v1/me', { preHandler: requireUser }, async (request, reply) => {
+  const body = (view: AccountDeletionView) => ({
+    ...view,
+    requestedAt: view.requestedAt?.toISOString() ?? null,
+    deleteAfter: view.deleteAfter?.toISOString() ?? null,
+  });
+
+  // The routes a person can use while their deletion is pending: see it, undo it, or finish it now.
+  app.delete('/v1/me', { preHandler: requireAccount }, async (request, reply) => {
     if (!request.auth) throw Problems.unauthorized();
-    await account.requestDeletion(request.auth.user.id, request.id);
-    return reply
-      .header('set-cookie', serializeCookie(SESSION_COOKIE, '', { ...cookieBase, maxAgeSec: 0 }))
-      .status(202)
-      .send({ status: 'deleting' });
+    return reply.status(202).send(body(await account.requestDeletion(request.auth.user.id, request.id)));
+  });
+
+  app.get('/v1/me/deletion', { preHandler: requireAccount }, async (request) => {
+    if (!request.auth) throw Problems.unauthorized();
+    return body(await account.status(request.auth.user.id));
+  });
+
+  app.post('/v1/me/deletion/undo', { preHandler: requireAccount }, async (request) => {
+    if (!request.auth) throw Problems.unauthorized();
+    return body(await account.undo(request.auth.user.id, request.id));
+  });
+
+  app.post('/v1/me/deletion/now', { preHandler: requireAccount }, async (request, reply) => {
+    if (!request.auth) throw Problems.unauthorized();
+    const view = await account.deleteNow(request.auth.user.id, request.id);
+    return reply.header('set-cookie', serializeCookie(SESSION_COOKIE, '', { ...cookieBase, maxAgeSec: 0 })).send(body(view));
   });
 };
 

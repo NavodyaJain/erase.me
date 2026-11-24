@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { newId } from '../../common/ids.js';
 import type { Db } from '../../db/client.js';
 import { oauthStates, sessions, users } from '../../db/schema/index.js';
@@ -7,6 +7,16 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
+  /** Set while the person has asked to delete their data and the undo period has not ended. */
+  deletion?: { requestedAt: Date; dueAt: Date } | null;
+}
+
+export interface DeletionRow {
+  status: 'active' | 'suspended' | 'deleting';
+  requestedAt: Date | null;
+  dueAt: Date | null;
+  purgedAt: Date | null;
+  tokenRevokeFailed: number;
 }
 
 export interface SessionRecord {
@@ -70,10 +80,24 @@ export function createAuthRepository(db: Db) {
         .onConflictDoUpdate({
           target: users.googleSub,
           set: { email: p.email, name: p.name, updatedAt: sql`now()` },
-          setWhere: eq(users.status, 'active'),
+          // A person inside the undo period may sign in, to undo it. A purged account (tombstone) and a suspended one may not.
+          setWhere: sql`${users.status} = 'active' OR (${users.status} = 'deleting' AND ${users.deletedAt} IS NULL AND ${users.deletionDueAt} > now())`,
         })
-        .returning({ id: users.id, email: users.email, name: users.name, status: users.status });
-      return row && row.status === 'active' ? { id: row.id, email: row.email, name: row.name } : undefined;
+        .returning({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          status: users.status,
+          requestedAt: users.deletionRequestedAt,
+          dueAt: users.deletionDueAt,
+          purgedAt: users.deletedAt,
+        });
+      if (!row) return undefined;
+      if (row.status === 'active') return { id: row.id, email: row.email, name: row.name };
+      if (row.status === 'deleting' && !row.purgedAt && row.requestedAt && row.dueAt) {
+        return { id: row.id, email: row.email, name: row.name, deletion: { requestedAt: row.requestedAt, dueAt: row.dueAt } };
+      }
+      return undefined;
     },
 
     async createSession(row: { userId: string; tokenHash: string; expiresAt: Date }): Promise<string> {
@@ -91,6 +115,8 @@ export function createAuthRepository(db: Db) {
           userId: users.id,
           email: users.email,
           name: users.name,
+          requestedAt: users.deletionRequestedAt,
+          dueAt: users.deletionDueAt,
         })
         .from(sessions)
         .innerJoin(users, eq(users.id, sessions.userId))
@@ -99,7 +125,8 @@ export function createAuthRepository(db: Db) {
             eq(sessions.tokenHash, tokenHash),
             isNull(sessions.revokedAt),
             gt(sessions.expiresAt, now),
-            eq(users.status, 'active'),
+            inArray(users.status, ['active', 'deleting']),
+            isNull(users.deletedAt),
           ),
         );
       return row
@@ -107,7 +134,12 @@ export function createAuthRepository(db: Db) {
             id: row.id,
             lastSeenAt: row.lastSeenAt,
             expiresAt: row.expiresAt,
-            user: { id: row.userId, email: row.email, name: row.name },
+            user: {
+              id: row.userId,
+              email: row.email,
+              name: row.name,
+              deletion: row.requestedAt && row.dueAt ? { requestedAt: row.requestedAt, dueAt: row.dueAt } : null,
+            },
           }
         : undefined;
     },
@@ -130,28 +162,55 @@ export function createAuthRepository(db: Db) {
         .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
     },
 
-    async markUserDeleting(userId: string): Promise<boolean> {
+    /**
+     * Starts the undo period. Only an active account can start it; the row says when it was asked and when the purge becomes
+     * allowed. False when it is already running, so asking again keeps the first request and its end date.
+     */
+    async requestDeletion(userId: string, requestedAt: Date, dueAt: Date): Promise<boolean> {
       const rows = await db
         .update(users)
-        .set({ status: 'deleting', updatedAt: sql`now()` })
-        .where(and(eq(users.id, userId), ne(users.status, 'deleting')))
+        .set({ status: 'deleting', deletionRequestedAt: requestedAt, deletionDueAt: dueAt, updatedAt: sql`now()` })
+        .where(and(eq(users.id, userId), eq(users.status, 'active')))
         .returning({ id: users.id });
       return rows.length > 0;
     },
 
-    /** Replaces personal fields. The row stays so foreign keys and the append-only history remain valid. */
-    async anonymiseUser(userId: string, now: Date): Promise<void> {
-      await db
+    /** Ends the undo period early: the purge may run at once. Uses the database clock, which the purge functions also use. */
+    async deleteNow(userId: string): Promise<boolean> {
+      const rows = await db
         .update(users)
-        .set({
-          googleSub: `deleted:${userId}`,
-          email: `${userId}@deleted.invalid`,
-          name: 'Deleted user',
-          status: 'deleting',
-          deletedAt: now,
-          updatedAt: now,
+        .set({ deletionDueAt: sql`now()`, updatedAt: sql`now()` })
+        .where(and(eq(users.id, userId), eq(users.status, 'deleting'), isNull(users.deletedAt)))
+        .returning({ id: users.id });
+      return rows.length > 0;
+    },
+
+    /** Only inside the undo period. False when it has ended, is not running, or the data is already purged. */
+    async undoDeletion(userId: string, now: Date): Promise<boolean> {
+      const rows = await db
+        .update(users)
+        .set({ status: 'active', deletionRequestedAt: null, deletionDueAt: null, tokenRevokeFailed: 0, updatedAt: sql`now()` })
+        .where(and(eq(users.id, userId), eq(users.status, 'deleting'), isNull(users.deletedAt), gt(users.deletionDueAt, now)))
+        .returning({ id: users.id });
+      return rows.length > 0;
+    },
+
+    async setTokenRevokeFailed(userId: string, count: number): Promise<void> {
+      await db.update(users).set({ tokenRevokeFailed: count }).where(eq(users.id, userId));
+    },
+
+    async deletionRow(userId: string): Promise<DeletionRow | undefined> {
+      const [row] = await db
+        .select({
+          status: users.status,
+          requestedAt: users.deletionRequestedAt,
+          dueAt: users.deletionDueAt,
+          purgedAt: users.deletedAt,
+          tokenRevokeFailed: users.tokenRevokeFailed,
         })
+        .from(users)
         .where(eq(users.id, userId));
+      return row;
     },
   };
 }

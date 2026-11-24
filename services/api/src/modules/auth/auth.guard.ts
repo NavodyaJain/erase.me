@@ -18,11 +18,13 @@ declare module 'fastify' {
  * the CSRF header, and rejects a browser Origin that is not the web app (TRD 8.1).
  * The user id always comes from the session, never from the request.
  */
-export function createAuthGuard(sessions: SessionService, webOrigin: string) {
+export function createAuthGuard(sessions: SessionService, webOrigin: string, opts: { allowPendingDeletion?: boolean } = {}) {
   return async function requireUser(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
     const token = parseCookies(request.headers.cookie)[SESSION_COOKIE];
     const auth = await sessions.authenticate(token);
     if (!auth) throw Problems.unauthorized();
+    // Inside the undo period only the account routes work: nothing is read, checked or sent for this person.
+    if (auth.user.deletion && !opts.allowPendingDeletion) throw Problems.deletionPending();
     if (!SAFE_METHODS.has(request.method)) {
       const origin = request.headers.origin;
       const header = request.headers[CSRF_HEADER];

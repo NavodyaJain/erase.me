@@ -15,7 +15,6 @@ import { GmailApiError } from './gmail.client.js';
 import type { GmailRepository, InboxRow } from './gmail.repository.js';
 
 export const MAX_INBOXES_PER_USER = 5; // F1-AC4
-const RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // docs/OPEN-QUESTIONS.md: keep 30 days after disconnect
 const ACCESS_TOKEN_SAFETY_MS = 60_000;
 
 export interface InboxView {
@@ -35,6 +34,8 @@ export class InboxService implements InboxDisconnector {
     private readonly google: GoogleOAuthClient | undefined,
     private readonly audit: AuditRepository,
     private readonly now: () => Date = () => new Date(),
+    /** Detected companies are kept this many days after a disconnect (INBOX_RETENTION_DAYS), then the purge removes them. */
+    private readonly retentionDays = 30,
   ) {}
 
   async list(userId: string): Promise<InboxView[]> {
@@ -105,8 +106,16 @@ export class InboxService implements InboxDisconnector {
     return this.disconnectRow(inbox);
   }
 
-  async disconnectAllForUser(userId: string): Promise<void> {
-    for (const inbox of await this.repo.listTokenHolders(userId)) await this.disconnectRow(inbox);
+  /** Revokes and disconnects every inbox that still holds a token. Counts only: how many, and how many Google did not confirm. */
+  async disconnectAllForUser(userId: string): Promise<{ inboxes: number; notRevoked: number }> {
+    let inboxes = 0;
+    let notRevoked = 0;
+    for (const inbox of await this.repo.listTokenHolders(userId)) {
+      const { revokedAtGoogle } = await this.disconnectRow(inbox);
+      inboxes += 1;
+      if (!revokedAtGoogle) notRevoked += 1;
+    }
+    return { inboxes, notRevoked };
   }
 
   private async disconnectRow(inbox: InboxRow): Promise<{ revokedAtGoogle: boolean }> {
@@ -122,7 +131,7 @@ export class InboxService implements InboxDisconnector {
     }
     const now = this.now();
     await this.repo.failActiveScansForInbox(inbox.id, 'inbox_disconnected', now);
-    await this.repo.markDisconnected(inbox.id, now, new Date(now.getTime() + RETENTION_MS));
+    await this.repo.markDisconnected(inbox.id, now, new Date(now.getTime() + this.retentionDays * 24 * 60 * 60 * 1000));
     this.accessTokens.delete(inbox.id);
     await this.audit.record({
       actorType: 'user',

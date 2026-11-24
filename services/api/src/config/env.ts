@@ -86,6 +86,8 @@ const EnvSchema = z
     REPLY_POLL_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(730).default(120),
     // Detected companies are kept this many days after an inbox is disconnected, then deleted.
     INBOX_RETENTION_DAYS: z.coerce.number().int().min(0).max(365).default(30),
+    // Closed requests older than this many days are deleted. 0 (the default) keeps them: nothing is deleted on a timer.
+    REQUEST_RETENTION_DAYS: z.coerce.number().int().min(0).max(3650).default(0),
     // After "Delete my data" the person has this many days to undo it. Polling, follow-ups and sending are paused meanwhile.
     ACCOUNT_PURGE_AFTER_DAYS: z.coerce.number().int().min(0).max(30).default(7),
     // Runs the background tasks (reply checks and so on) inside the API process. Unset: on, except when NODE_ENV is test.

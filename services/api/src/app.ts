@@ -9,7 +9,8 @@ import { TokenVault } from './crypto/token-vault.js';
 import type { Db } from './db/client.js';
 import type { InProcessJobQueue } from './jobs/queue.js';
 import { createAuditRepository } from './modules/audit/audit.repository.js';
-import { AccountService, DELETE_ACCOUNT_JOB } from './modules/auth/account.service.js';
+import { AccountService } from './modules/auth/account.service.js';
+import { createPurgeRepository, PurgeService } from './modules/purge/purge.service.js';
 import { authRoutes } from './modules/auth/auth.controller.js';
 import { createAuthGuard } from './modules/auth/auth.guard.js';
 import { createAuthRepository } from './modules/auth/auth.repository.js';
@@ -68,6 +69,8 @@ export interface AppServices {
   scans: ScanService;
   inboxes: InboxService;
   account: AccountService;
+  /** The purge functions, run by the scheduler and by tests. */
+  purge: PurgeService;
   requests: RequestsService;
   companies: CompaniesService;
   sessions: SessionService;
@@ -151,7 +154,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     const sessions = new SessionService(authRepo, now);
     const vault = m.keys ? new TokenVault(m.keys) : undefined;
     const gmailRepo = createGmailRepository(m.db);
-    const inboxes = new InboxService(gmailRepo, vault, m.google, audit, now);
+    const inboxes = new InboxService(gmailRepo, vault, m.google, audit, now, deps.env.INBOX_RETENTION_DAYS);
     const scans = new ScanService(gmailRepo, inboxes, m.gmail, m.queue, now, {
       info: (o, msg) => app.log.info(o, msg),
       warn: (o, msg) => app.log.warn(o, msg),
@@ -164,7 +167,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       connect: (userId, result) => inboxes.connect(userId, result),
       now,
     });
-    const account = new AccountService(authRepo, sessions, inboxes, m.queue, audit, now);
+    const purge = new PurgeService(createPurgeRepository(m.db), { requestRetentionDays: deps.env.REQUEST_RETENTION_DAYS });
+    const account = new AccountService(authRepo, sessions, inboxes, purge, audit, now, deps.env.ACCOUNT_PURGE_AFTER_DAYS);
     // One sender choice for the first request and its follow-up, so both stay behind the same real-send gates.
     const senderChoice =
       m.sender ??
@@ -214,12 +218,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       log: { info: (o, msg) => app.log.info(o, msg), warn: (o, msg) => app.log.warn(o, msg) },
     });
     m.queue.register(SCAN_JOB, (p) => scans.run(p.scanId ?? ''));
-    m.queue.register(DELETE_ACCOUNT_JOB, (p) => account.runDeletion(p.userId ?? ''));
-    app.decorate('services', { scans, inboxes, account, requests: requestsService, companies: companiesService, sessions, auth, replies, followups: followupsService });
+    app.decorate('services', { scans, inboxes, account, purge, requests: requestsService, companies: companiesService, sessions, auth, replies, followups: followupsService });
 
     const requireUser = createAuthGuard(sessions, deps.env.WEB_ORIGIN);
+    const requireAccount = createAuthGuard(sessions, deps.env.WEB_ORIGIN, { allowPendingDeletion: true });
     const limiter = createRateLimiter({ max: m.authRateLimitPerMinute ?? 30, windowMs: 60_000 });
-    void app.register(authRoutes, { env: deps.env, auth, postAuthRedirect: m.postAuthRedirect ?? deps.env.WEB_ORIGIN, account, sessions, requireUser, limiter });
+    void app.register(authRoutes, { env: deps.env, auth, postAuthRedirect: m.postAuthRedirect ?? deps.env.WEB_ORIGIN, account, sessions, requireUser, requireAccount, limiter });
     void app.register(companiesRoutes, { companies: companiesService, requireUser });
     void app.register(requestsRoutes, { requests: requestsService, followups: followupsService, requireUser });
     void app.register(gmailRoutes, { env: deps.env, auth, inboxes, scans, requireUser });

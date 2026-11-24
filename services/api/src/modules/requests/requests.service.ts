@@ -414,6 +414,7 @@ export class RequestsService {
     const phaseA = await this.deps.repo.transaction(async (tx) => {
       const req = await tx.lockRequest(userId, requestId);
       if (!req) throw Problems.notFound();
+      if (await tx.deletionPending(userId)) throw Problems.deletionPending();
 
       const prior = await tx.findClaim(userId, 'send', key);
       if (prior) {

@@ -7,6 +7,7 @@ import { LocalKeyProvider } from './crypto/key-provider.js';
 import { InProcessJobQueue } from './jobs/queue.js';
 import { PgTaskLock, Scheduler } from './jobs/scheduler.js';
 import { HttpGoogleOAuthClient, type GoogleOAuthClient } from './modules/auth/google-oauth.js';
+import { purgeTask } from './modules/purge/purge.service.js';
 import { loadCatalog } from './modules/companies/catalog.js';
 import { createCompaniesRepository } from './modules/companies/companies.repository.js';
 import { HttpGmailClient, type GmailClient } from './modules/gmail/gmail.client.js';
@@ -74,6 +75,10 @@ export async function start(opts: StartOptions = {}): Promise<void> {
   const followups = app.services?.followups;
   // Hourly: a request is due its follow-up once FOLLOWUP_AFTER_DAYS have passed, so the check never needs to be faster.
   if (followups) scheduler.add({ name: 'followup-sweep', everyMs: 60 * 60_000, run: () => followups.sweep() });
+
+  const purge = app.services?.purge;
+  // Hourly: removes ended sessions, disconnected inboxes past their retention and accounts past the undo period. Counts are logged, nothing else.
+  if (purge) scheduler.add(purgeTask(purge));
 
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, 'shutting down');

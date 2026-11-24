@@ -230,6 +230,7 @@ export class FollowupsService {
 
     const phaseA = await this.deps.repo.transaction(async (tx) => {
       const { req, ctx, firstDraft } = await this.load(tx, userId, requestId);
+      if (await tx.deletionPending(userId)) throw Problems.deletionPending();
       const followup = await this.current(tx, req.id);
 
       const prior = await tx.findClaim(userId, 'followup_send', key);

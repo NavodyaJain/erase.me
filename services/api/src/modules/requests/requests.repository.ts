@@ -212,6 +212,12 @@ function methods(x: Executor) {
       return row as RequestRow | undefined;
     },
 
+    /** True while the person has asked to delete their data. Nothing is sent for them then, even by a call already on its way. */
+    async deletionPending(userId: string): Promise<boolean> {
+      const rows = await x.select({ status: users.status }).from(users).where(eq(users.id, userId));
+      return rows[0]?.status !== 'active';
+    },
+
     /** Takes the row lock that serialises edit, approve, close and send on one request. */
     async lockRequest(userId: string, requestId: string): Promise<RequestRow | undefined> {
       const [row] = await x
