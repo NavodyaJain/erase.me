@@ -77,6 +77,8 @@ export const PROBLEM_CODES = [
   'fictional_company',
   'invalid_transition',
   'not_a_form_request',
+  'followup_not_due',
+  'followup_limit_reached',
   'request_not_closable',
   'request_not_editable',
   'send_in_progress',
@@ -336,6 +338,37 @@ export const RequestView = component(
       .describe('What the person reports the company answered. Never inferred from a reply. `no_answer_yet` while waiting. Null before the request is sent, and after it bounced.'),
     canSetOutcome: z.boolean().describe('True once the request is sent'),
     canMarkSubmitted: z.boolean().describe('True for a web-form request whose draft is ready: the person can say they pasted it into the form'),
+    followup: z
+      .object({
+        state: z
+          .enum(['none', 'not_due', 'due', 'drafted', 'approved', 'sent', 'submitted'])
+          .describe('`none`: no follow-up applies (not sent, a reply arrived, an outcome was reported, or follow-ups are off). `not_due`: waiting. `due`: "Follow up?" can be offered. Then `drafted`, `approved`, and `sent` (email) or `submitted` (web form, copied by the person).'),
+        dueAt: isoDateTime.nullable().describe('When a follow-up becomes due. Null when none can be.'),
+        remaining: z.number().int().min(0).describe('How many more follow-ups this request may have'),
+        sequence: z.number().int().min(1).nullable(),
+        sentAt: isoDateTime.nullable().describe('When it was sent, or when the person said they pasted it into the form'),
+        draft: z
+          .object({ version: z.number().int().min(1), to: z.string(), subject: z.string(), body: z.string(), hash: draftHash, createdBy: z.enum(['template', 'ai', 'user']), createdAt: isoDateTime })
+          .nullable()
+          .describe('The follow-up the person reviews and approves. The recipient is fixed: the same place as the first message.'),
+        approved: z.boolean().describe('True when the person approved exactly this version of the follow-up'),
+        canCreate: z.boolean().describe('True when "Follow up?" can be offered'),
+        canSend: z.boolean().describe('True for an approved email follow-up that nothing blocks'),
+        canMarkSubmitted: z.boolean().describe('True for a web-form follow-up that is ready: copy it into the form, then say so. Nothing is sent.'),
+        blockers: z
+          .array(z.object({ code: z.enum(BLOCKER_CODES), message: z.string(), findings: z.array(z.enum(SAFETY_FINDINGS)).optional(), formUrl: z.url().optional() }))
+          .describe('Everything stopping this follow-up right now'),
+      })
+      .describe('The follow-up to a request that has had no reply by the follow-up day. One per request. An automatic reply does not stop the clock; a reply from a person or a reported outcome ends the wait.'),
+  }),
+);
+
+export const FollowupSendResponse = component(
+  'FollowupSendResponse',
+  z.object({
+    followup: z.object({ sequence: z.number().int().min(1), status: z.literal('sent'), sentAt: isoDateTime }),
+    delivery: z.enum(['fake', 'real']).describe('`fake` in development and test: nothing left the machine'),
+    notice: z.string().optional().describe('Present when nothing really left the machine'),
   }),
 );
 

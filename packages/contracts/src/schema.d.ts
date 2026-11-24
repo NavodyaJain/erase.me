@@ -324,6 +324,106 @@ export interface paths {
         patch: operations["editRequestDraft"];
         trace?: never;
     };
+    "/v1/requests/{id}/followup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prepare the follow-up to a request with no reply
+         * @description Offered once `FOLLOWUP_AFTER_DAYS` (30 by default) have passed since the message was sent, and no reply from a person has arrived. An automatic reply (out of office and similar) does not stop the clock; a reply from a person or an outcome the person reported ends the wait. One follow-up per request (`FOLLOWUP_MAX`). Makes the draft from a fixed, polite template that asks for a reply and claims no deadline was missed; the statute paragraph stays behind the same verified-citation gate as the first message. The request moves from `sent` to `no_reply`. Asking again returns the draft that exists. The guards of the first request run again: a must-keep or kept company, a verified contact that has not changed. Nothing is sent. For a web-form request the follow-up is copy-only.
+         */
+        post: operations["createFollowup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{id}/followup/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve the follow-up draft
+         * @description Records the person’s approval of exactly the follow-up version they were shown (`draftHash`). A changed draft answers 409 `draft_changed`, and the call is never retried by itself. The guards run again, including the unresolved [OPEN] line. A web-form follow-up is not approved here: it answers 409 `use_form`; copy it and use `/followup/submitted`.
+         */
+        post: operations["approveFollowup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{id}/followup/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit the follow-up draft
+         * @description Creates a new version of the follow-up draft with a new hash and puts an approved follow-up back to `drafted`: the earlier approval no longer counts. The recipient cannot be edited. Text containing an ID-like number is refused and not stored. If the draft changed since the person saw it (`baseHash` is not the latest) the edit is refused with `draft_changed` and not retried.
+         */
+        patch: operations["editFollowupDraft"];
+        trace?: never;
+    };
+    "/v1/requests/{id}/followup/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send an approved follow-up, in the same Gmail conversation
+         * @description Needs an `Idempotency-Key`: a repeat with the same key returns the first answer and never sends twice. Needs the person’s approval of the exact current follow-up draft (also enforced in the database), the first request’s guards, and the same real-send gates as the first message. Real sending also stays off until the follow-up wording has been signed off. In development and test the fake sender answers `delivery: "fake"` and nothing leaves the machine. A reply or a reported outcome since the draft was made stops it. An unknown outcome (a timeout) leaves the follow-up unsent and is not retried automatically.
+         */
+        post: operations["sendFollowup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{id}/followup/submitted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Say the follow-up was pasted into the company’s web form
+         * @description For a web-form request only. Nothing is sent from here: the person copied the follow-up into the form and says so, naming the exact draft they copied (`draftHash`). It is recorded like an approval and a send: the guards run again and the follow-up becomes `submitted`. Saying it again changes nothing. An email request answers 409 `not_a_form_request`.
+         */
+        post: operations["markFollowupSubmitted"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/requests/{id}/outcome": {
         parameters: {
             query?: never;
@@ -468,6 +568,25 @@ export interface components {
              */
             selfServeUrl?: string;
         };
+        FollowupSendResponse: {
+            followup: {
+                sequence: number;
+                /** @constant */
+                status: "sent";
+                /**
+                 * Format: date-time
+                 * @description UTC timestamp, ISO 8601
+                 */
+                sentAt: string;
+            };
+            /**
+             * @description `fake` in development and test: nothing left the machine
+             * @enum {string}
+             */
+            delivery: "fake" | "real";
+            /** @description Present when nothing really left the machine */
+            notice?: string;
+        };
         Inbox: {
             /** @description Prefixed ULID (`inb_` followed by 26 characters) */
             id: string;
@@ -510,7 +629,7 @@ export interface components {
              * @description A stable machine-readable code. Branch on this, not on `title` or `detail`.
              * @enum {string}
              */
-            code: "validation_failed" | "malformed_request" | "idempotency_key_required" | "idempotency_key_invalid" | "unauthorized" | "forbidden" | "not_found" | "inbox_limit" | "inbox_not_connected" | "already_sent" | "approval_required" | "draft_changed" | "fictional_company" | "invalid_transition" | "not_a_form_request" | "request_not_closable" | "request_not_editable" | "send_in_progress" | "company_excluded" | "must_keep" | "kept" | "no_contact" | "contact_bounced" | "contact_changed" | "use_form" | "draft_integrity" | "draft_unsafe" | "idempotency_key_reuse" | "rate_limited" | "daily_cap_reached" | "internal_error" | "send_failed" | "send_outcome_unknown" | "auth_not_configured" | "encryption_not_configured" | "send_disabled" | "real_send_blocked" | "not_ready";
+            code: "validation_failed" | "malformed_request" | "idempotency_key_required" | "idempotency_key_invalid" | "unauthorized" | "forbidden" | "not_found" | "inbox_limit" | "inbox_not_connected" | "already_sent" | "approval_required" | "draft_changed" | "fictional_company" | "invalid_transition" | "not_a_form_request" | "followup_not_due" | "followup_limit_reached" | "request_not_closable" | "request_not_editable" | "send_in_progress" | "company_excluded" | "must_keep" | "kept" | "no_contact" | "contact_bounced" | "contact_changed" | "use_form" | "draft_integrity" | "draft_unsafe" | "idempotency_key_reuse" | "rate_limited" | "daily_cap_reached" | "internal_error" | "send_failed" | "send_outcome_unknown" | "auth_not_configured" | "encryption_not_configured" | "send_disabled" | "real_send_blocked" | "not_ready";
             /** @description A sentence a person can act on. Never contains draft text, addresses or tokens. */
             detail?: string;
             /** @description The request path, without the query string */
@@ -719,6 +838,54 @@ export interface components {
             canSetOutcome: boolean;
             /** @description True for a web-form request whose draft is ready: the person can say they pasted it into the form */
             canMarkSubmitted: boolean;
+            /** @description The follow-up to a request that has had no reply by the follow-up day. One per request. An automatic reply does not stop the clock; a reply from a person or a reported outcome ends the wait. */
+            followup: {
+                /**
+                 * @description `none`: no follow-up applies (not sent, a reply arrived, an outcome was reported, or follow-ups are off). `not_due`: waiting. `due`: "Follow up?" can be offered. Then `drafted`, `approved`, and `sent` (email) or `submitted` (web form, copied by the person).
+                 * @enum {string}
+                 */
+                state: "none" | "not_due" | "due" | "drafted" | "approved" | "sent" | "submitted";
+                /** @description When a follow-up becomes due. Null when none can be. */
+                dueAt: string | null;
+                /** @description How many more follow-ups this request may have */
+                remaining: number;
+                sequence: number | null;
+                /** @description When it was sent, or when the person said they pasted it into the form */
+                sentAt: string | null;
+                /** @description The follow-up the person reviews and approves. The recipient is fixed: the same place as the first message. */
+                draft: {
+                    version: number;
+                    to: string;
+                    subject: string;
+                    body: string;
+                    /** @description sha256 (hex) of the recipient, subject and body of a draft, exactly as shown */
+                    hash: string;
+                    /** @enum {string} */
+                    createdBy: "template" | "ai" | "user";
+                    /**
+                     * Format: date-time
+                     * @description UTC timestamp, ISO 8601
+                     */
+                    createdAt: string;
+                } | null;
+                /** @description True when the person approved exactly this version of the follow-up */
+                approved: boolean;
+                /** @description True when "Follow up?" can be offered */
+                canCreate: boolean;
+                /** @description True for an approved email follow-up that nothing blocks */
+                canSend: boolean;
+                /** @description True for a web-form follow-up that is ready: copy it into the form, then say so. Nothing is sent. */
+                canMarkSubmitted: boolean;
+                /** @description Everything stopping this follow-up right now */
+                blockers: {
+                    /** @enum {string} */
+                    code: "company_excluded" | "must_keep" | "kept" | "no_contact" | "contact_bounced" | "contact_changed" | "use_form" | "draft_integrity" | "draft_unsafe" | "send_disabled" | "real_send_blocked";
+                    message: string;
+                    findings?: ("aadhaar" | "pan" | "passport" | "voter_id" | "gstin" | "card" | "open_placeholder")[];
+                    /** Format: uri */
+                    formUrl?: string;
+                }[];
+            };
         };
         Scan: {
             /** @description Prefixed ULID (`scn_` followed by 26 characters) */
@@ -1770,7 +1937,20 @@ export interface operations {
                      *       },
                      *       "outcome": null,
                      *       "canSetOutcome": false,
-                     *       "canMarkSubmitted": false
+                     *       "canMarkSubmitted": false,
+                     *       "followup": {
+                     *         "state": "none",
+                     *         "dueAt": null,
+                     *         "remaining": 1,
+                     *         "sequence": null,
+                     *         "sentAt": null,
+                     *         "draft": null,
+                     *         "approved": false,
+                     *         "canCreate": false,
+                     *         "canSend": false,
+                     *         "canMarkSubmitted": false,
+                     *         "blockers": []
+                     *       }
                      *     }
                      */
                     "application/json": components["schemas"]["RequestView"];
@@ -1890,7 +2070,20 @@ export interface operations {
                      *       },
                      *       "outcome": null,
                      *       "canSetOutcome": false,
-                     *       "canMarkSubmitted": false
+                     *       "canMarkSubmitted": false,
+                     *       "followup": {
+                     *         "state": "none",
+                     *         "dueAt": null,
+                     *         "remaining": 1,
+                     *         "sequence": null,
+                     *         "sentAt": null,
+                     *         "draft": null,
+                     *         "approved": false,
+                     *         "canCreate": false,
+                     *         "canSend": false,
+                     *         "canMarkSubmitted": false,
+                     *         "blockers": []
+                     *       }
                      *     }
                      */
                     "application/json": components["schemas"]["RequestView"];
@@ -2033,7 +2226,20 @@ export interface operations {
                      *       },
                      *       "outcome": null,
                      *       "canSetOutcome": false,
-                     *       "canMarkSubmitted": false
+                     *       "canMarkSubmitted": false,
+                     *       "followup": {
+                     *         "state": "none",
+                     *         "dueAt": null,
+                     *         "remaining": 1,
+                     *         "sequence": null,
+                     *         "sentAt": null,
+                     *         "draft": null,
+                     *         "approved": false,
+                     *         "canCreate": false,
+                     *         "canSend": false,
+                     *         "canMarkSubmitted": false,
+                     *         "blockers": []
+                     *       }
                      *     }
                      */
                     "application/json": components["schemas"]["RequestView"];
@@ -2183,7 +2389,20 @@ export interface operations {
                      *       },
                      *       "outcome": null,
                      *       "canSetOutcome": false,
-                     *       "canMarkSubmitted": false
+                     *       "canMarkSubmitted": false,
+                     *       "followup": {
+                     *         "state": "none",
+                     *         "dueAt": null,
+                     *         "remaining": 1,
+                     *         "sequence": null,
+                     *         "sentAt": null,
+                     *         "draft": null,
+                     *         "approved": false,
+                     *         "canCreate": false,
+                     *         "canSend": false,
+                     *         "canMarkSubmitted": false,
+                     *         "blockers": []
+                     *       }
                      *     }
                      */
                     "application/json": components["schemas"]["RequestView"];
@@ -2235,6 +2454,879 @@ export interface operations {
                 };
             };
             /** @description The text looks like it contains an ID number */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createFollowup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Prefixed ULID (`req_` followed by 26 characters) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request, with its follow-up draft */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "request": {
+                     *         "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                     *         "status": "no_reply",
+                     *         "channel": "email",
+                     *         "createdAt": "2026-11-22T10:00:00.000Z",
+                     *         "updatedAt": "2026-11-22T10:00:00.000Z",
+                     *         "sentAt": "2026-11-22T10:00:00.000Z",
+                     *         "dueAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "company": {
+                     *         "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                     *         "name": "Sample Shop",
+                     *         "mustKeep": false,
+                     *         "kept": false,
+                     *         "selfServeUrl": "https://example.com/account/delete"
+                     *       },
+                     *       "contact": {
+                     *         "channel": "email",
+                     *         "formUrl": null
+                     *       },
+                     *       "useForm": false,
+                     *       "draft": {
+                     *         "version": 1,
+                     *         "to": "grievance@example.com",
+                     *         "subject": "Request to erase my personal data",
+                     *         "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                     *         "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                     *         "createdBy": "template",
+                     *         "createdAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "approved": true,
+                     *       "events": [
+                     *         {
+                     *           "type": "drafted",
+                     *           "actor": "system",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1,
+                     *             "createdBy": "template"
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "approved",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "sent",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1,
+                     *             "delivery": "fake"
+                     *           }
+                     *         }
+                     *       ],
+                     *       "canSend": false,
+                     *       "blockers": [],
+                     *       "replies": {
+                     *         "count": 0,
+                     *         "automaticCount": 0,
+                     *         "firstAt": null,
+                     *         "lastAt": null,
+                     *         "senderMatch": null
+                     *       },
+                     *       "outcome": {
+                     *         "value": "no_answer_yet",
+                     *         "setByUser": false,
+                     *         "at": null
+                     *       },
+                     *       "canSetOutcome": true,
+                     *       "canMarkSubmitted": false,
+                     *       "followup": {
+                     *         "state": "drafted",
+                     *         "dueAt": "2026-11-22T10:00:00.000Z",
+                     *         "remaining": 0,
+                     *         "sequence": 1,
+                     *         "sentAt": null,
+                     *         "draft": {
+                     *           "version": 1,
+                     *           "to": "grievance@example.com",
+                     *           "subject": "Re: Request to erase my personal data",
+                     *           "body": "To the Grievance Officer, Sample Shop\n\nI am following up on my email of 22 November 2026, in which I asked about personal data that Sample Shop likely holds about me. I have not seen a reply yet. Messages can go astray, so I am writing again in case it did not reach the right person.\n\nMy details\nName: Asha Rao\nEmail address: asha.rao@example.com\n\nMy request\nMy request is the same as before: I would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a reply, even a short one, that tells me:\n1. whether you received my first message;\n2. whether the data has been erased, or when you expect to be able to tell me; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you have already replied, thank you. Please point me to your answer, as I may have missed it.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you for your time.\nAsha Rao",
+                     *           "hash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                     *           "createdBy": "template",
+                     *           "createdAt": "2026-11-22T10:00:00.000Z"
+                     *         },
+                     *         "approved": false,
+                     *         "canCreate": false,
+                     *         "canSend": false,
+                     *         "canMarkSubmitted": false,
+                     *         "blockers": [
+                     *           {
+                     *             "code": "draft_unsafe",
+                     *             "message": "The text still has an [OPEN] placeholder. Replace it with the wording you want to send, or remove the line.",
+                     *             "findings": [
+                     *               "open_placeholder"
+                     *             ]
+                     *           }
+                     *         ]
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RequestView"];
+                };
+            };
+            /** @description The request did not match the schema */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or wrong CSRF token, or a request from another origin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No such request for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No follow-up can be prepared now */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    approveFollowup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Prefixed ULID (`req_` followed by 26 characters) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "draftHash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+                 *     }
+                 */
+                "application/json": {
+                    /** @description The hash of the version the user was shown */
+                    draftHash: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Approved (or already approved) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "request": {
+                     *         "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                     *         "status": "no_reply",
+                     *         "channel": "email",
+                     *         "createdAt": "2026-11-22T10:00:00.000Z",
+                     *         "updatedAt": "2026-11-22T10:00:00.000Z",
+                     *         "sentAt": "2026-11-22T10:00:00.000Z",
+                     *         "dueAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "company": {
+                     *         "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                     *         "name": "Sample Shop",
+                     *         "mustKeep": false,
+                     *         "kept": false,
+                     *         "selfServeUrl": "https://example.com/account/delete"
+                     *       },
+                     *       "contact": {
+                     *         "channel": "email",
+                     *         "formUrl": null
+                     *       },
+                     *       "useForm": false,
+                     *       "draft": {
+                     *         "version": 1,
+                     *         "to": "grievance@example.com",
+                     *         "subject": "Request to erase my personal data",
+                     *         "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                     *         "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                     *         "createdBy": "template",
+                     *         "createdAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "approved": true,
+                     *       "events": [
+                     *         {
+                     *           "type": "drafted",
+                     *           "actor": "system",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1,
+                     *             "createdBy": "template"
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "approved",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "sent",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1,
+                     *             "delivery": "fake"
+                     *           }
+                     *         }
+                     *       ],
+                     *       "canSend": false,
+                     *       "blockers": [],
+                     *       "replies": {
+                     *         "count": 0,
+                     *         "automaticCount": 0,
+                     *         "firstAt": null,
+                     *         "lastAt": null,
+                     *         "senderMatch": null
+                     *       },
+                     *       "outcome": {
+                     *         "value": "no_answer_yet",
+                     *         "setByUser": false,
+                     *         "at": null
+                     *       },
+                     *       "canSetOutcome": true,
+                     *       "canMarkSubmitted": false,
+                     *       "followup": {
+                     *         "state": "approved",
+                     *         "dueAt": "2026-11-22T10:00:00.000Z",
+                     *         "remaining": 0,
+                     *         "sequence": 1,
+                     *         "sentAt": null,
+                     *         "draft": {
+                     *           "version": 1,
+                     *           "to": "grievance@example.com",
+                     *           "subject": "Re: Request to erase my personal data",
+                     *           "body": "To the Grievance Officer, Sample Shop\n\nI am following up on my email of 22 November 2026, in which I asked about personal data that Sample Shop likely holds about me. I have not seen a reply yet. Messages can go astray, so I am writing again in case it did not reach the right person.\n\nMy details\nName: Asha Rao\nEmail address: asha.rao@example.com\n\nMy request\nMy request is the same as before: I would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a reply, even a short one, that tells me:\n1. whether you received my first message;\n2. whether the data has been erased, or when you expect to be able to tell me; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you have already replied, thank you. Please point me to your answer, as I may have missed it.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you for your time.\nAsha Rao",
+                     *           "hash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                     *           "createdBy": "template",
+                     *           "createdAt": "2026-11-22T10:00:00.000Z"
+                     *         },
+                     *         "approved": true,
+                     *         "canCreate": false,
+                     *         "canSend": false,
+                     *         "canMarkSubmitted": false,
+                     *         "blockers": []
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RequestView"];
+                };
+            };
+            /** @description The request did not match the schema */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or wrong CSRF token, or a request from another origin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No follow-up for this request for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not approvable now */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The draft cannot be used yet */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    editFollowupDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Prefixed ULID (`req_` followed by 26 characters) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "baseHash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                 *       "subject": "Re: Request to erase my personal data",
+                 *       "body": "I am following up on my email. I would be grateful for a short reply."
+                 *     }
+                 */
+                "application/json": {
+                    /** @description The hash of the version being edited. If it is no longer the latest the edit is refused (409 `draft_changed`). */
+                    baseHash: string;
+                    subject: string;
+                    body: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The request with its new follow-up draft version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "request": {
+                     *         "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                     *         "status": "no_reply",
+                     *         "channel": "email",
+                     *         "createdAt": "2026-11-22T10:00:00.000Z",
+                     *         "updatedAt": "2026-11-22T10:00:00.000Z",
+                     *         "sentAt": "2026-11-22T10:00:00.000Z",
+                     *         "dueAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "company": {
+                     *         "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                     *         "name": "Sample Shop",
+                     *         "mustKeep": false,
+                     *         "kept": false,
+                     *         "selfServeUrl": "https://example.com/account/delete"
+                     *       },
+                     *       "contact": {
+                     *         "channel": "email",
+                     *         "formUrl": null
+                     *       },
+                     *       "useForm": false,
+                     *       "draft": {
+                     *         "version": 1,
+                     *         "to": "grievance@example.com",
+                     *         "subject": "Request to erase my personal data",
+                     *         "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                     *         "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                     *         "createdBy": "template",
+                     *         "createdAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "approved": true,
+                     *       "events": [
+                     *         {
+                     *           "type": "drafted",
+                     *           "actor": "system",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1,
+                     *             "createdBy": "template"
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "approved",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "sent",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1,
+                     *             "delivery": "fake"
+                     *           }
+                     *         }
+                     *       ],
+                     *       "canSend": false,
+                     *       "blockers": [],
+                     *       "replies": {
+                     *         "count": 0,
+                     *         "automaticCount": 0,
+                     *         "firstAt": null,
+                     *         "lastAt": null,
+                     *         "senderMatch": null
+                     *       },
+                     *       "outcome": {
+                     *         "value": "no_answer_yet",
+                     *         "setByUser": false,
+                     *         "at": null
+                     *       },
+                     *       "canSetOutcome": true,
+                     *       "canMarkSubmitted": false,
+                     *       "followup": {
+                     *         "state": "drafted",
+                     *         "dueAt": "2026-11-22T10:00:00.000Z",
+                     *         "remaining": 0,
+                     *         "sequence": 1,
+                     *         "sentAt": null,
+                     *         "draft": {
+                     *           "version": 1,
+                     *           "to": "grievance@example.com",
+                     *           "subject": "Re: Request to erase my personal data",
+                     *           "body": "To the Grievance Officer, Sample Shop\n\nI am following up on my email of 22 November 2026, in which I asked about personal data that Sample Shop likely holds about me. I have not seen a reply yet. Messages can go astray, so I am writing again in case it did not reach the right person.\n\nMy details\nName: Asha Rao\nEmail address: asha.rao@example.com\n\nMy request\nMy request is the same as before: I would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a reply, even a short one, that tells me:\n1. whether you received my first message;\n2. whether the data has been erased, or when you expect to be able to tell me; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you have already replied, thank you. Please point me to your answer, as I may have missed it.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you for your time.\nAsha Rao",
+                     *           "hash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                     *           "createdBy": "template",
+                     *           "createdAt": "2026-11-22T10:00:00.000Z"
+                     *         },
+                     *         "approved": false,
+                     *         "canCreate": false,
+                     *         "canSend": false,
+                     *         "canMarkSubmitted": false,
+                     *         "blockers": [
+                     *           {
+                     *             "code": "draft_unsafe",
+                     *             "message": "The text still has an [OPEN] placeholder. Replace it with the wording you want to send, or remove the line.",
+                     *             "findings": [
+                     *               "open_placeholder"
+                     *             ]
+                     *           }
+                     *         ]
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RequestView"];
+                };
+            };
+            /** @description The request did not match the schema */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or wrong CSRF token, or a request from another origin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No follow-up for this request for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The follow-up cannot be edited now */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The text looks like it contains an ID number */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    sendFollowup: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A client-chosen key, 8 to 128 characters (letters, digits and . _ : -). Reuse the same key to retry the same send. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description Prefixed ULID (`req_` followed by 26 characters) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sent (or the stored answer for a repeated key) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "followup": {
+                     *         "sequence": 1,
+                     *         "status": "sent",
+                     *         "sentAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "delivery": "fake",
+                     *       "notice": "No email was sent. This is a development send to the fake sender."
+                     *     }
+                     */
+                    "application/json": components["schemas"]["FollowupSendResponse"];
+                };
+            };
+            /** @description The request did not match the schema */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or wrong CSRF token, or a request from another origin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No follow-up for this request for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not sendable now */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsafe draft, or a reused key */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Daily limit reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The message was not sent, or the outcome is unknown */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Sending is not available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    markFollowupSubmitted: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Prefixed ULID (`req_` followed by 26 characters) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "draftHash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+                 *     }
+                 */
+                "application/json": {
+                    /** @description The hash of the version the person copied into the form. If it is no longer the latest the call is refused (409 `draft_changed`). */
+                    draftHash: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The request, with its follow-up marked as submitted (or already marked) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "request": {
+                     *         "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                     *         "status": "no_reply",
+                     *         "channel": "email",
+                     *         "createdAt": "2026-11-22T10:00:00.000Z",
+                     *         "updatedAt": "2026-11-22T10:00:00.000Z",
+                     *         "sentAt": "2026-11-22T10:00:00.000Z",
+                     *         "dueAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "company": {
+                     *         "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                     *         "name": "Sample Shop",
+                     *         "mustKeep": false,
+                     *         "kept": false,
+                     *         "selfServeUrl": "https://example.com/account/delete"
+                     *       },
+                     *       "contact": {
+                     *         "channel": "email",
+                     *         "formUrl": null
+                     *       },
+                     *       "useForm": false,
+                     *       "draft": {
+                     *         "version": 1,
+                     *         "to": "grievance@example.com",
+                     *         "subject": "Request to erase my personal data",
+                     *         "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                     *         "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                     *         "createdBy": "template",
+                     *         "createdAt": "2026-11-22T10:00:00.000Z"
+                     *       },
+                     *       "approved": true,
+                     *       "events": [
+                     *         {
+                     *           "type": "drafted",
+                     *           "actor": "system",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1,
+                     *             "createdBy": "template"
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "approved",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1
+                     *           }
+                     *         },
+                     *         {
+                     *           "type": "sent",
+                     *           "actor": "user",
+                     *           "at": "2026-11-22T10:00:00.000Z",
+                     *           "payload": {
+                     *             "version": 1,
+                     *             "delivery": "fake"
+                     *           }
+                     *         }
+                     *       ],
+                     *       "canSend": false,
+                     *       "blockers": [],
+                     *       "replies": {
+                     *         "count": 0,
+                     *         "automaticCount": 0,
+                     *         "firstAt": null,
+                     *         "lastAt": null,
+                     *         "senderMatch": null
+                     *       },
+                     *       "outcome": {
+                     *         "value": "no_answer_yet",
+                     *         "setByUser": false,
+                     *         "at": null
+                     *       },
+                     *       "canSetOutcome": true,
+                     *       "canMarkSubmitted": false,
+                     *       "followup": {
+                     *         "state": "submitted",
+                     *         "dueAt": "2026-11-22T10:00:00.000Z",
+                     *         "remaining": 0,
+                     *         "sequence": 1,
+                     *         "sentAt": "2026-11-22T10:00:00.000Z",
+                     *         "draft": {
+                     *           "version": 1,
+                     *           "to": "grievance@example.com",
+                     *           "subject": "Re: Request to erase my personal data",
+                     *           "body": "To the Grievance Officer, Sample Shop\n\nI am following up on my email of 22 November 2026, in which I asked about personal data that Sample Shop likely holds about me. I have not seen a reply yet. Messages can go astray, so I am writing again in case it did not reach the right person.\n\nMy details\nName: Asha Rao\nEmail address: asha.rao@example.com\n\nMy request\nMy request is the same as before: I would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a reply, even a short one, that tells me:\n1. whether you received my first message;\n2. whether the data has been erased, or when you expect to be able to tell me; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you have already replied, thank you. Please point me to your answer, as I may have missed it.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you for your time.\nAsha Rao",
+                     *           "hash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                     *           "createdBy": "template",
+                     *           "createdAt": "2026-11-22T10:00:00.000Z"
+                     *         },
+                     *         "approved": false,
+                     *         "canCreate": false,
+                     *         "canSend": false,
+                     *         "canMarkSubmitted": false,
+                     *         "blockers": []
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RequestView"];
+                };
+            };
+            /** @description The request did not match the schema */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or wrong CSRF token, or a request from another origin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No follow-up for this request for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Cannot be marked as submitted */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The draft cannot be used yet */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2364,7 +3456,20 @@ export interface operations {
                      *         "at": "2026-11-22T10:00:00.000Z"
                      *       },
                      *       "canSetOutcome": true,
-                     *       "canMarkSubmitted": false
+                     *       "canMarkSubmitted": false,
+                     *       "followup": {
+                     *         "state": "none",
+                     *         "dueAt": null,
+                     *         "remaining": 1,
+                     *         "sequence": null,
+                     *         "sentAt": null,
+                     *         "draft": null,
+                     *         "approved": false,
+                     *         "canCreate": false,
+                     *         "canSend": false,
+                     *         "canMarkSubmitted": false,
+                     *         "blockers": []
+                     *       }
                      *     }
                      */
                     "application/json": components["schemas"]["RequestView"];
@@ -2641,7 +3746,20 @@ export interface operations {
                      *         "at": null
                      *       },
                      *       "canSetOutcome": true,
-                     *       "canMarkSubmitted": false
+                     *       "canMarkSubmitted": false,
+                     *       "followup": {
+                     *         "state": "none",
+                     *         "dueAt": null,
+                     *         "remaining": 1,
+                     *         "sequence": null,
+                     *         "sentAt": null,
+                     *         "draft": null,
+                     *         "approved": false,
+                     *         "canCreate": false,
+                     *         "canSend": false,
+                     *         "canMarkSubmitted": false,
+                     *         "blockers": []
+                     *       }
                      *     }
                      */
                     "application/json": components["schemas"]["RequestView"];

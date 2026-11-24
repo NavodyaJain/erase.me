@@ -177,6 +177,8 @@ export interface HarnessOptions {
   authRateLimitPerMinute?: number;
   /** Replaces the default sender choice (fake in test). */
   sender?: SenderChoice;
+  /** Pretends the owner signed off the follow-up wording, to try a real follow-up. Default: not signed off. */
+  followupWordingSignedOff?: boolean;
   /** Runs after the app is built and before it is ready, for example to register the dev helper. */
   beforeReady?: (app: FastifyInstance, ctx: { env: Env; db: Db }) => Promise<void>;
 }
@@ -216,6 +218,7 @@ export async function buildHarness(t: TestDb, opts: HarnessOptions = {}): Promis
       now: () => new Date(clock.now),
       authRateLimitPerMinute: opts.authRateLimitPerMinute ?? 10_000,
       ...(opts.sender ? { sender: opts.sender } : {}),
+      ...(opts.followupWordingSignedOff !== undefined ? { followupWordingSignedOff: opts.followupWordingSignedOff } : {}),
     },
   });
   app.addHook('onClose', async () => {

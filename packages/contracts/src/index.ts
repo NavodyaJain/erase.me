@@ -19,3 +19,4 @@ export type DraftOutcome = Schemas['DraftOutcome'];
 export type RequestListItem = Schemas['RequestListItem'];
 export type RequestView = Schemas['RequestView'];
 export type SendResponse = Schemas['SendResponse'];
+export type FollowupSendResponse = Schemas['FollowupSendResponse'];

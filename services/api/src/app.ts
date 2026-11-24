@@ -29,6 +29,8 @@ import { CompaniesService } from './modules/companies/companies.service.js';
 import { parseExcludeList } from './modules/gmail/detection-rules.js';
 import { createRequestsRepository } from './modules/requests/requests.repository.js';
 import { requestsRoutes } from './modules/requests/requests.controller.js';
+import { FollowupsService } from './modules/requests/followups.service.js';
+import { FOLLOWUP_WORDING } from './modules/requests/followup-template.js';
 import { RequestsService } from './modules/requests/requests.service.js';
 import { STATUTE_CITATION } from './modules/requests/draft-citation.js';
 import { HttpGmailSender } from './modules/requests/http-gmail-sender.js';
@@ -57,6 +59,8 @@ export interface AppDeps {
     postAuthRedirect?: string;
     /** Tests inject a sender. Otherwise the choice follows selectSender (fake in development and test, real only when allowed). */
     sender?: SenderChoice;
+    /** Tests set this to try a real follow-up. Otherwise it follows FOLLOWUP_WORDING.signedOff, which the owner changes in code. */
+    followupWordingSignedOff?: boolean;
   };
 }
 
@@ -70,6 +74,8 @@ export interface AppServices {
   auth: AuthService;
   /** Looks for replies on sent requests' threads. Run by the scheduler, and by tests. */
   replies: ReplyPoller;
+  /** Follow-ups to requests with no reply, and the sweep that prepares them. */
+  followups: FollowupsService;
 }
 
 declare module 'fastify' {
@@ -159,20 +165,36 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       now,
     });
     const account = new AccountService(authRepo, sessions, inboxes, m.queue, audit, now);
+    // One sender choice for the first request and its follow-up, so both stay behind the same real-send gates.
+    const senderChoice =
+      m.sender ??
+      selectSender(deps.env, {
+        citationVerified: STATUTE_CITATION.verified,
+        real: () => new HttpGmailSender({ getAccessToken: (inboxId) => inboxes.accessTokenById(inboxId) }),
+      });
+    const wordingSignedOff = m.followupWordingSignedOff ?? FOLLOWUP_WORDING.signedOff;
+    const requestLog = { info: (o: object, msg: string) => app.log.info(o, msg), warn: (o: object, msg: string) => app.log.warn(o, msg) };
     const requestsService = new RequestsService({
       repo: createRequestsRepository(m.db),
       audit,
       inboxes,
-      sender:
-        m.sender ??
-        selectSender(deps.env, {
-          citationVerified: STATUTE_CITATION.verified,
-          real: () => new HttpGmailSender({ getAccessToken: (inboxId) => inboxes.accessTokenById(inboxId) }),
-        }),
+      sender: senderChoice,
       realSendDailyCap: deps.env.REAL_SEND_DAILY_CAP,
       followupAfterDays: deps.env.FOLLOWUP_AFTER_DAYS,
+      followupMax: deps.env.FOLLOWUP_MAX,
+      followupWordingSignedOff: wordingSignedOff,
       now,
-      log: { info: (o, msg) => app.log.info(o, msg), warn: (o, msg) => app.log.warn(o, msg) },
+      log: requestLog,
+    });
+    const followupsService = new FollowupsService({
+      repo: createRequestsRepository(m.db),
+      audit,
+      inboxes,
+      sender: senderChoice,
+      realSendDailyCap: deps.env.REAL_SEND_DAILY_CAP,
+      settings: { afterDays: deps.env.FOLLOWUP_AFTER_DAYS, max: deps.env.FOLLOWUP_MAX, wordingSignedOff },
+      now,
+      log: requestLog,
     });
     const companiesService = new CompaniesService({
       repo: createCompaniesRepository(m.db),
@@ -193,13 +215,13 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     });
     m.queue.register(SCAN_JOB, (p) => scans.run(p.scanId ?? ''));
     m.queue.register(DELETE_ACCOUNT_JOB, (p) => account.runDeletion(p.userId ?? ''));
-    app.decorate('services', { scans, inboxes, account, requests: requestsService, companies: companiesService, sessions, auth, replies });
+    app.decorate('services', { scans, inboxes, account, requests: requestsService, companies: companiesService, sessions, auth, replies, followups: followupsService });
 
     const requireUser = createAuthGuard(sessions, deps.env.WEB_ORIGIN);
     const limiter = createRateLimiter({ max: m.authRateLimitPerMinute ?? 30, windowMs: 60_000 });
     void app.register(authRoutes, { env: deps.env, auth, postAuthRedirect: m.postAuthRedirect ?? deps.env.WEB_ORIGIN, account, sessions, requireUser, limiter });
     void app.register(companiesRoutes, { companies: companiesService, requireUser });
-    void app.register(requestsRoutes, { requests: requestsService, requireUser });
+    void app.register(requestsRoutes, { requests: requestsService, followups: followupsService, requireUser });
     void app.register(gmailRoutes, { env: deps.env, auth, inboxes, scans, requireUser });
   }
 

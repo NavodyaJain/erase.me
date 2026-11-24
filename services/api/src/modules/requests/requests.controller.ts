@@ -1,14 +1,16 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { AppError, Problems } from '../../common/errors.js';
 import { ApproveBody, CreateDraftsBody, EditDraftBody, OutcomeBody, RequestParams, SubmittedBody, idempotencyKey } from '../../contract/schemas.js';
+import type { FollowupsService } from './followups.service.js';
 import type { RequestsService } from './requests.service.js';
 
 export interface RequestsRoutesDeps {
   requests: RequestsService;
+  followups: FollowupsService;
   requireUser: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 }
 
-export const requestsRoutes: FastifyPluginAsync<RequestsRoutesDeps> = async (app, { requests, requireUser }) => {
+export const requestsRoutes: FastifyPluginAsync<RequestsRoutesDeps> = async (app, { requests, followups, requireUser }) => {
   const userId = (request: FastifyRequest): string => {
     if (!request.auth) throw Problems.unauthorized();
     return request.auth.user.id; // from the session, never from the request
@@ -47,6 +49,45 @@ export const requestsRoutes: FastifyPluginAsync<RequestsRoutesDeps> = async (app
   app.post('/v1/requests/:id/submitted', { preHandler: requireUser }, async (request) => {
     const { id } = RequestParams.parse(request.params);
     return requests.markSubmitted(userId(request), id, SubmittedBody.parse(request.body).draftHash);
+  });
+
+  // ---- follow-ups: one polite follow-up to a request that has had no reply ----
+
+  app.post('/v1/requests/:id/followup', { preHandler: requireUser }, async (request) => {
+    const { id } = RequestParams.parse(request.params);
+    await followups.create(userId(request), id);
+    return requests.get(userId(request), id);
+  });
+
+  app.patch('/v1/requests/:id/followup/draft', { preHandler: requireUser }, async (request) => {
+    const { id } = RequestParams.parse(request.params);
+    await followups.editDraft(userId(request), id, EditDraftBody.parse(request.body));
+    return requests.get(userId(request), id);
+  });
+
+  app.post('/v1/requests/:id/followup/approve', { preHandler: requireUser }, async (request) => {
+    const { id } = RequestParams.parse(request.params);
+    await followups.approve(userId(request), id, ApproveBody.parse(request.body).draftHash);
+    return requests.get(userId(request), id);
+  });
+
+  // For a web-form request the follow-up is copy-only: the person says they pasted it into the form. Nothing is sent.
+  app.post('/v1/requests/:id/followup/submitted', { preHandler: requireUser }, async (request) => {
+    const { id } = RequestParams.parse(request.params);
+    await followups.markSubmitted(userId(request), id, SubmittedBody.parse(request.body).draftHash);
+    return requests.get(userId(request), id);
+  });
+
+  app.post('/v1/requests/:id/followup/send', { preHandler: requireUser }, async (request, reply) => {
+    const { id } = RequestParams.parse(request.params);
+    const header = request.headers['idempotency-key'];
+    if (typeof header !== 'string') {
+      throw new AppError(400, 'idempotency_key_required', 'Idempotency-Key required', 'Send an Idempotency-Key header so a retry cannot send twice.');
+    }
+    const key = idempotencyKey.safeParse(header);
+    if (!key.success) throw new AppError(400, 'idempotency_key_invalid', 'Invalid Idempotency-Key', 'Use 8 to 128 characters: letters, digits and . _ : -');
+    const result = await followups.send(userId(request), id, key.data);
+    return reply.status(result.status).send(result.body);
   });
 
   app.post('/v1/requests/:id/close', { preHandler: requireUser }, async (request) => {

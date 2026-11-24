@@ -71,6 +71,9 @@ export async function start(opts: StartOptions = {}): Promise<void> {
   const scheduler = new Scheduler({ lock: new PgTaskLock(pool), log: { info: (o, m) => app.log.info(o, m), warn: (o, m) => app.log.warn(o, m) } });
   const replies = app.services?.replies;
   if (replies) scheduler.add({ name: 'poll-replies', everyMs: env.REPLY_POLL_MINUTES * 60_000, run: () => replies.runOnce() });
+  const followups = app.services?.followups;
+  // Hourly: a request is due its follow-up once FOLLOWUP_AFTER_DAYS have passed, so the check never needs to be faster.
+  if (followups) scheduler.add({ name: 'followup-sweep', everyMs: 60 * 60_000, run: () => followups.sweep() });
 
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, 'shutting down');

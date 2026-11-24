@@ -12,6 +12,7 @@ export type RequestEventType =
   | 'closed'
   | 'reply_received'
   | 'outcome_set'
+  | 'followup_drafted'
   | 'followup_approved'
   | 'followup_sent'
   | 'submitted';

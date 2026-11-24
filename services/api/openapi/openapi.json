@@ -1991,7 +1991,20 @@
                   },
                   "outcome": null,
                   "canSetOutcome": false,
-                  "canMarkSubmitted": false
+                  "canMarkSubmitted": false,
+                  "followup": {
+                    "state": "none",
+                    "dueAt": null,
+                    "remaining": 1,
+                    "sequence": null,
+                    "sentAt": null,
+                    "draft": null,
+                    "approved": false,
+                    "canCreate": false,
+                    "canSend": false,
+                    "canMarkSubmitted": false,
+                    "blockers": []
+                  }
                 }
               }
             }
@@ -2203,7 +2216,20 @@
                   },
                   "outcome": null,
                   "canSetOutcome": false,
-                  "canMarkSubmitted": false
+                  "canMarkSubmitted": false,
+                  "followup": {
+                    "state": "none",
+                    "dueAt": null,
+                    "remaining": 1,
+                    "sequence": null,
+                    "sentAt": null,
+                    "draft": null,
+                    "approved": false,
+                    "canCreate": false,
+                    "canSend": false,
+                    "canMarkSubmitted": false,
+                    "blockers": []
+                  }
                 }
               }
             }
@@ -2543,7 +2569,20 @@
                   },
                   "outcome": null,
                   "canSetOutcome": false,
-                  "canMarkSubmitted": false
+                  "canMarkSubmitted": false,
+                  "followup": {
+                    "state": "none",
+                    "dueAt": null,
+                    "remaining": 1,
+                    "sequence": null,
+                    "sentAt": null,
+                    "draft": null,
+                    "approved": false,
+                    "canCreate": false,
+                    "canSend": false,
+                    "canMarkSubmitted": false,
+                    "blockers": []
+                  }
                 }
               }
             }
@@ -2839,7 +2878,20 @@
                   },
                   "outcome": null,
                   "canSetOutcome": false,
-                  "canMarkSubmitted": false
+                  "canMarkSubmitted": false,
+                  "followup": {
+                    "state": "none",
+                    "dueAt": null,
+                    "remaining": 1,
+                    "sequence": null,
+                    "sentAt": null,
+                    "draft": null,
+                    "approved": false,
+                    "canCreate": false,
+                    "canSend": false,
+                    "canMarkSubmitted": false,
+                    "blockers": []
+                  }
                 }
               }
             }
@@ -3048,6 +3100,2227 @@
         ]
       }
     },
+    "/v1/requests/{id}/followup": {
+      "post": {
+        "operationId": "createFollowup",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Prepare the follow-up to a request with no reply",
+        "description": "Offered once `FOLLOWUP_AFTER_DAYS` (30 by default) have passed since the message was sent, and no reply from a person has arrived. An automatic reply (out of office and similar) does not stop the clock; a reply from a person or an outcome the person reported ends the wait. One follow-up per request (`FOLLOWUP_MAX`). Makes the draft from a fixed, polite template that asks for a reply and claims no deadline was missed; the statute paragraph stays behind the same verified-citation gate as the first message. The request moves from `sent` to `no_reply`. Asking again returns the draft that exists. The guards of the first request run again: a must-keep or kept company, a verified contact that has not changed. Nothing is sent. For a web-form request the follow-up is copy-only.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`req_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request, with its follow-up draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestView"
+                },
+                "example": {
+                  "request": {
+                    "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "status": "no_reply",
+                    "channel": "email",
+                    "createdAt": "2026-11-22T10:00:00.000Z",
+                    "updatedAt": "2026-11-22T10:00:00.000Z",
+                    "sentAt": "2026-11-22T10:00:00.000Z",
+                    "dueAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "company": {
+                    "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "name": "Sample Shop",
+                    "mustKeep": false,
+                    "kept": false,
+                    "selfServeUrl": "https://example.com/account/delete"
+                  },
+                  "contact": {
+                    "channel": "email",
+                    "formUrl": null
+                  },
+                  "useForm": false,
+                  "draft": {
+                    "version": 1,
+                    "to": "grievance@example.com",
+                    "subject": "Request to erase my personal data",
+                    "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                    "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                    "createdBy": "template",
+                    "createdAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "approved": true,
+                  "events": [
+                    {
+                      "type": "drafted",
+                      "actor": "system",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1,
+                        "createdBy": "template"
+                      }
+                    },
+                    {
+                      "type": "approved",
+                      "actor": "user",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1
+                      }
+                    },
+                    {
+                      "type": "sent",
+                      "actor": "user",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1,
+                        "delivery": "fake"
+                      }
+                    }
+                  ],
+                  "canSend": false,
+                  "blockers": [],
+                  "replies": {
+                    "count": 0,
+                    "automaticCount": 0,
+                    "firstAt": null,
+                    "lastAt": null,
+                    "senderMatch": null
+                  },
+                  "outcome": {
+                    "value": "no_answer_yet",
+                    "setByUser": false,
+                    "at": null
+                  },
+                  "canSetOutcome": true,
+                  "canMarkSubmitted": false,
+                  "followup": {
+                    "state": "drafted",
+                    "dueAt": "2026-11-22T10:00:00.000Z",
+                    "remaining": 0,
+                    "sequence": 1,
+                    "sentAt": null,
+                    "draft": {
+                      "version": 1,
+                      "to": "grievance@example.com",
+                      "subject": "Re: Request to erase my personal data",
+                      "body": "To the Grievance Officer, Sample Shop\n\nI am following up on my email of 22 November 2026, in which I asked about personal data that Sample Shop likely holds about me. I have not seen a reply yet. Messages can go astray, so I am writing again in case it did not reach the right person.\n\nMy details\nName: Asha Rao\nEmail address: asha.rao@example.com\n\nMy request\nMy request is the same as before: I would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a reply, even a short one, that tells me:\n1. whether you received my first message;\n2. whether the data has been erased, or when you expect to be able to tell me; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you have already replied, thank you. Please point me to your answer, as I may have missed it.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you for your time.\nAsha Rao",
+                      "hash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                      "createdBy": "template",
+                      "createdAt": "2026-11-22T10:00:00.000Z"
+                    },
+                    "approved": false,
+                    "canCreate": false,
+                    "canSend": false,
+                    "canMarkSubmitted": false,
+                    "blockers": [
+                      {
+                        "code": "draft_unsafe",
+                        "message": "The text still has an [OPEN] placeholder. Replace it with the wording you want to send, or remove the line.",
+                        "findings": [
+                          "open_placeholder"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such request for this user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No follow-up can be prepared now",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "followup_not_due": {
+                    "summary": "Too early for a follow-up",
+                    "value": {
+                      "type": "urn:erase:problem:followup_not_due",
+                      "title": "Too early for a follow-up",
+                      "status": 409,
+                      "code": "followup_not_due",
+                      "detail": "A follow-up is offered 30 days after the last message, on 2026-12-22. Replies can be slow.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "followup_limit_reached": {
+                    "summary": "No more follow-ups for this request",
+                    "value": {
+                      "type": "urn:erase:problem:followup_limit_reached",
+                      "title": "No more follow-ups for this request",
+                      "status": 409,
+                      "code": "followup_limit_reached",
+                      "detail": "A request has at most 1 follow-up, and it has had them.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "invalid_transition": {
+                    "summary": "No follow-up is needed",
+                    "value": {
+                      "type": "urn:erase:problem:invalid_transition",
+                      "title": "No follow-up is needed",
+                      "status": 409,
+                      "code": "invalid_transition",
+                      "detail": "A reply has arrived on this request, so no follow-up is sent. Open it in Gmail to read it, then report what it says.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "must_keep": {
+                    "summary": "No deletion request is offered for this company",
+                    "value": {
+                      "type": "urn:erase:problem:must_keep",
+                      "title": "No deletion request is offered for this company",
+                      "status": 409,
+                      "code": "must_keep",
+                      "detail": "Sample Account Provider is needed to keep your account working, so Erase.me does not offer a deletion request for it. If you stop using it, you can close the account with the company directly.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "kept": {
+                    "summary": "You chose to keep this company",
+                    "value": {
+                      "type": "urn:erase:problem:kept",
+                      "title": "You chose to keep this company",
+                      "status": 409,
+                      "code": "kept",
+                      "detail": "You chose to keep Sample Shop, so Erase.me makes no request for it. Undo \"keep\" to continue.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "no_contact": {
+                    "summary": "No verified contact for this company",
+                    "value": {
+                      "type": "urn:erase:problem:no_contact",
+                      "title": "No verified contact for this company",
+                      "status": 409,
+                      "code": "no_contact",
+                      "detail": "We do not have a verified grievance contact for Sample Bank yet, so this request is blocked. We have noted it so the contact can be found. Nothing is sent without one.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "company_excluded": {
+                    "summary": "Company excluded",
+                    "value": {
+                      "type": "urn:erase:problem:company_excluded",
+                      "title": "Company excluded",
+                      "status": 409,
+                      "code": "company_excluded",
+                      "detail": "You marked this company as not yours, so no request can be made for it.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "contact_bounced": {
+                    "summary": "No verified contact for this company",
+                    "value": {
+                      "type": "urn:erase:problem:contact_bounced",
+                      "title": "No verified contact for this company",
+                      "status": 409,
+                      "code": "contact_bounced",
+                      "detail": "The contact we have for this company did not accept earlier mail, so this request is blocked until it is checked.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "contact_changed": {
+                    "summary": "The request cannot move forward",
+                    "value": {
+                      "type": "urn:erase:problem:contact_changed",
+                      "title": "The request cannot move forward",
+                      "status": 409,
+                      "code": "contact_changed",
+                      "detail": "The grievance contact for Sample Shop changed since the first message was sent. A follow-up would not reach the same place.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "draft_integrity": {
+                    "summary": "The request cannot move forward",
+                    "value": {
+                      "type": "urn:erase:problem:draft_integrity",
+                      "title": "The request cannot move forward",
+                      "status": 409,
+                      "code": "draft_integrity",
+                      "detail": "This draft does not match its saved fingerprint. Close this follow-up and start again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/requests/{id}/followup/approve": {
+      "post": {
+        "operationId": "approveFollowup",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Approve the follow-up draft",
+        "description": "Records the person’s approval of exactly the follow-up version they were shown (`draftHash`). A changed draft answers 409 `draft_changed`, and the call is never retried by itself. The guards run again, including the unresolved [OPEN] line. A web-form follow-up is not approved here: it answers 409 `use_form`; copy it and use `/followup/submitted`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`req_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "draftHash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "description": "The hash of the version the user was shown"
+                  }
+                },
+                "required": [
+                  "draftHash"
+                ],
+                "additionalProperties": false
+              },
+              "example": {
+                "draftHash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approved (or already approved)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestView"
+                },
+                "example": {
+                  "request": {
+                    "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "status": "no_reply",
+                    "channel": "email",
+                    "createdAt": "2026-11-22T10:00:00.000Z",
+                    "updatedAt": "2026-11-22T10:00:00.000Z",
+                    "sentAt": "2026-11-22T10:00:00.000Z",
+                    "dueAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "company": {
+                    "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "name": "Sample Shop",
+                    "mustKeep": false,
+                    "kept": false,
+                    "selfServeUrl": "https://example.com/account/delete"
+                  },
+                  "contact": {
+                    "channel": "email",
+                    "formUrl": null
+                  },
+                  "useForm": false,
+                  "draft": {
+                    "version": 1,
+                    "to": "grievance@example.com",
+                    "subject": "Request to erase my personal data",
+                    "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                    "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                    "createdBy": "template",
+                    "createdAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "approved": true,
+                  "events": [
+                    {
+                      "type": "drafted",
+                      "actor": "system",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1,
+                        "createdBy": "template"
+                      }
+                    },
+                    {
+                      "type": "approved",
+                      "actor": "user",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1
+                      }
+                    },
+                    {
+                      "type": "sent",
+                      "actor": "user",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1,
+                        "delivery": "fake"
+                      }
+                    }
+                  ],
+                  "canSend": false,
+                  "blockers": [],
+                  "replies": {
+                    "count": 0,
+                    "automaticCount": 0,
+                    "firstAt": null,
+                    "lastAt": null,
+                    "senderMatch": null
+                  },
+                  "outcome": {
+                    "value": "no_answer_yet",
+                    "setByUser": false,
+                    "at": null
+                  },
+                  "canSetOutcome": true,
+                  "canMarkSubmitted": false,
+                  "followup": {
+                    "state": "approved",
+                    "dueAt": "2026-11-22T10:00:00.000Z",
+                    "remaining": 0,
+                    "sequence": 1,
+                    "sentAt": null,
+                    "draft": {
+                      "version": 1,
+                      "to": "grievance@example.com",
+                      "subject": "Re: Request to erase my personal data",
+                      "body": "To the Grievance Officer, Sample Shop\n\nI am following up on my email of 22 November 2026, in which I asked about personal data that Sample Shop likely holds about me. I have not seen a reply yet. Messages can go astray, so I am writing again in case it did not reach the right person.\n\nMy details\nName: Asha Rao\nEmail address: asha.rao@example.com\n\nMy request\nMy request is the same as before: I would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a reply, even a short one, that tells me:\n1. whether you received my first message;\n2. whether the data has been erased, or when you expect to be able to tell me; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you have already replied, thank you. Please point me to your answer, as I may have missed it.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you for your time.\nAsha Rao",
+                      "hash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                      "createdBy": "template",
+                      "createdAt": "2026-11-22T10:00:00.000Z"
+                    },
+                    "approved": true,
+                    "canCreate": false,
+                    "canSend": false,
+                    "canMarkSubmitted": false,
+                    "blockers": []
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No follow-up for this request for this user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not approvable now",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "draft_changed": {
+                    "summary": "The draft changed",
+                    "value": {
+                      "type": "urn:erase:problem:draft_changed",
+                      "title": "The draft changed",
+                      "status": 409,
+                      "code": "draft_changed",
+                      "detail": "The text you approved is not the latest version. Review it again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "use_form": {
+                    "summary": "Use the company’s web form",
+                    "value": {
+                      "type": "urn:erase:problem:use_form",
+                      "title": "Use the company’s web form",
+                      "status": 409,
+                      "code": "use_form",
+                      "detail": "Sample Forms Co takes requests through a web form, so Erase.me cannot send this by email. Copy the draft into the form. It is shown here for that.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "formUrl": "https://example.com/privacy/request",
+                      "selfServeUrl": "https://example.com/account/delete"
+                    }
+                  },
+                  "already_sent": {
+                    "summary": "Already sent",
+                    "value": {
+                      "type": "urn:erase:problem:already_sent",
+                      "title": "Already sent",
+                      "status": 409,
+                      "code": "already_sent",
+                      "detail": "This follow-up was already sent.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "invalid_transition": {
+                    "summary": "No follow-up is needed",
+                    "value": {
+                      "type": "urn:erase:problem:invalid_transition",
+                      "title": "No follow-up is needed",
+                      "status": 409,
+                      "code": "invalid_transition",
+                      "detail": "A reply has arrived on this request, so no follow-up is sent. Open it in Gmail to read it, then report what it says.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "must_keep": {
+                    "summary": "No deletion request is offered for this company",
+                    "value": {
+                      "type": "urn:erase:problem:must_keep",
+                      "title": "No deletion request is offered for this company",
+                      "status": 409,
+                      "code": "must_keep",
+                      "detail": "Sample Account Provider is needed to keep your account working, so Erase.me does not offer a deletion request for it. If you stop using it, you can close the account with the company directly.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "kept": {
+                    "summary": "You chose to keep this company",
+                    "value": {
+                      "type": "urn:erase:problem:kept",
+                      "title": "You chose to keep this company",
+                      "status": 409,
+                      "code": "kept",
+                      "detail": "You chose to keep Sample Shop, so Erase.me makes no request for it. Undo \"keep\" to continue.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "no_contact": {
+                    "summary": "No verified contact for this company",
+                    "value": {
+                      "type": "urn:erase:problem:no_contact",
+                      "title": "No verified contact for this company",
+                      "status": 409,
+                      "code": "no_contact",
+                      "detail": "We do not have a verified grievance contact for Sample Bank yet, so this request is blocked. We have noted it so the contact can be found. Nothing is sent without one.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "company_excluded": {
+                    "summary": "Company excluded",
+                    "value": {
+                      "type": "urn:erase:problem:company_excluded",
+                      "title": "Company excluded",
+                      "status": 409,
+                      "code": "company_excluded",
+                      "detail": "You marked this company as not yours, so no request can be made for it.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "contact_bounced": {
+                    "summary": "No verified contact for this company",
+                    "value": {
+                      "type": "urn:erase:problem:contact_bounced",
+                      "title": "No verified contact for this company",
+                      "status": 409,
+                      "code": "contact_bounced",
+                      "detail": "The contact we have for this company did not accept earlier mail, so this request is blocked until it is checked.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "contact_changed": {
+                    "summary": "The request cannot move forward",
+                    "value": {
+                      "type": "urn:erase:problem:contact_changed",
+                      "title": "The request cannot move forward",
+                      "status": 409,
+                      "code": "contact_changed",
+                      "detail": "The grievance contact for Sample Shop changed since the first message was sent. A follow-up would not reach the same place.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "draft_integrity": {
+                    "summary": "The request cannot move forward",
+                    "value": {
+                      "type": "urn:erase:problem:draft_integrity",
+                      "title": "The request cannot move forward",
+                      "status": 409,
+                      "code": "draft_integrity",
+                      "detail": "This draft does not match its saved fingerprint. Close this follow-up and start again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemUseForm"
+            ]
+          },
+          "422": {
+            "description": "The draft cannot be used yet",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "draft_unsafe": {
+                    "summary": "The draft cannot be used yet",
+                    "value": {
+                      "type": "urn:erase:problem:draft_unsafe",
+                      "title": "The draft cannot be used yet",
+                      "status": 422,
+                      "code": "draft_unsafe",
+                      "detail": "The text looks like it contains a PAN-like number. Erase.me does not put ID numbers in requests. Remove it and try again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "findings": [
+                        "pan"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemDraftUnsafe"
+            ]
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/requests/{id}/followup/draft": {
+      "patch": {
+        "operationId": "editFollowupDraft",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Edit the follow-up draft",
+        "description": "Creates a new version of the follow-up draft with a new hash and puts an approved follow-up back to `drafted`: the earlier approval no longer counts. The recipient cannot be edited. Text containing an ID-like number is refused and not stored. If the draft changed since the person saw it (`baseHash` is not the latest) the edit is refused with `draft_changed` and not retried.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`req_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "baseHash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "description": "The hash of the version being edited. If it is no longer the latest the edit is refused (409 `draft_changed`)."
+                  },
+                  "subject": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "pattern": "^[^\\r\\n]+$"
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  }
+                },
+                "required": [
+                  "baseHash",
+                  "subject",
+                  "body"
+                ],
+                "additionalProperties": false
+              },
+              "example": {
+                "baseHash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                "subject": "Re: Request to erase my personal data",
+                "body": "I am following up on my email. I would be grateful for a short reply."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request with its new follow-up draft version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestView"
+                },
+                "example": {
+                  "request": {
+                    "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "status": "no_reply",
+                    "channel": "email",
+                    "createdAt": "2026-11-22T10:00:00.000Z",
+                    "updatedAt": "2026-11-22T10:00:00.000Z",
+                    "sentAt": "2026-11-22T10:00:00.000Z",
+                    "dueAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "company": {
+                    "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "name": "Sample Shop",
+                    "mustKeep": false,
+                    "kept": false,
+                    "selfServeUrl": "https://example.com/account/delete"
+                  },
+                  "contact": {
+                    "channel": "email",
+                    "formUrl": null
+                  },
+                  "useForm": false,
+                  "draft": {
+                    "version": 1,
+                    "to": "grievance@example.com",
+                    "subject": "Request to erase my personal data",
+                    "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                    "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                    "createdBy": "template",
+                    "createdAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "approved": true,
+                  "events": [
+                    {
+                      "type": "drafted",
+                      "actor": "system",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1,
+                        "createdBy": "template"
+                      }
+                    },
+                    {
+                      "type": "approved",
+                      "actor": "user",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1
+                      }
+                    },
+                    {
+                      "type": "sent",
+                      "actor": "user",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1,
+                        "delivery": "fake"
+                      }
+                    }
+                  ],
+                  "canSend": false,
+                  "blockers": [],
+                  "replies": {
+                    "count": 0,
+                    "automaticCount": 0,
+                    "firstAt": null,
+                    "lastAt": null,
+                    "senderMatch": null
+                  },
+                  "outcome": {
+                    "value": "no_answer_yet",
+                    "setByUser": false,
+                    "at": null
+                  },
+                  "canSetOutcome": true,
+                  "canMarkSubmitted": false,
+                  "followup": {
+                    "state": "drafted",
+                    "dueAt": "2026-11-22T10:00:00.000Z",
+                    "remaining": 0,
+                    "sequence": 1,
+                    "sentAt": null,
+                    "draft": {
+                      "version": 1,
+                      "to": "grievance@example.com",
+                      "subject": "Re: Request to erase my personal data",
+                      "body": "To the Grievance Officer, Sample Shop\n\nI am following up on my email of 22 November 2026, in which I asked about personal data that Sample Shop likely holds about me. I have not seen a reply yet. Messages can go astray, so I am writing again in case it did not reach the right person.\n\nMy details\nName: Asha Rao\nEmail address: asha.rao@example.com\n\nMy request\nMy request is the same as before: I would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a reply, even a short one, that tells me:\n1. whether you received my first message;\n2. whether the data has been erased, or when you expect to be able to tell me; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you have already replied, thank you. Please point me to your answer, as I may have missed it.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you for your time.\nAsha Rao",
+                      "hash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                      "createdBy": "template",
+                      "createdAt": "2026-11-22T10:00:00.000Z"
+                    },
+                    "approved": false,
+                    "canCreate": false,
+                    "canSend": false,
+                    "canMarkSubmitted": false,
+                    "blockers": [
+                      {
+                        "code": "draft_unsafe",
+                        "message": "The text still has an [OPEN] placeholder. Replace it with the wording you want to send, or remove the line.",
+                        "findings": [
+                          "open_placeholder"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No follow-up for this request for this user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The follow-up cannot be edited now",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "draft_changed": {
+                    "summary": "The draft changed",
+                    "value": {
+                      "type": "urn:erase:problem:draft_changed",
+                      "title": "The draft changed",
+                      "status": 409,
+                      "code": "draft_changed",
+                      "detail": "The text you approved is not the latest version. Review it again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "request_not_editable": {
+                    "summary": "This follow-up can no longer be edited",
+                    "value": {
+                      "type": "urn:erase:problem:request_not_editable",
+                      "title": "This follow-up can no longer be edited",
+                      "status": 409,
+                      "code": "request_not_editable",
+                      "detail": "It was already sent.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "send_in_progress": {
+                    "summary": "This follow-up is being sent",
+                    "value": {
+                      "type": "urn:erase:problem:send_in_progress",
+                      "title": "This follow-up is being sent",
+                      "status": 409,
+                      "code": "send_in_progress",
+                      "detail": "It cannot be edited while it is being sent.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "invalid_transition": {
+                    "summary": "No follow-up is needed",
+                    "value": {
+                      "type": "urn:erase:problem:invalid_transition",
+                      "title": "No follow-up is needed",
+                      "status": 409,
+                      "code": "invalid_transition",
+                      "detail": "A reply has arrived on this request, so no follow-up is sent. Open it in Gmail to read it, then report what it says.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The text looks like it contains an ID number",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "draft_unsafe": {
+                    "summary": "The draft cannot be used yet",
+                    "value": {
+                      "type": "urn:erase:problem:draft_unsafe",
+                      "title": "The draft cannot be used yet",
+                      "status": 422,
+                      "code": "draft_unsafe",
+                      "detail": "The text looks like it contains a PAN-like number. Erase.me does not put ID numbers in requests. Remove it and try again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "findings": [
+                        "pan"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemDraftUnsafe"
+            ]
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/requests/{id}/followup/send": {
+      "post": {
+        "operationId": "sendFollowup",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Send an approved follow-up, in the same Gmail conversation",
+        "description": "Needs an `Idempotency-Key`: a repeat with the same key returns the first answer and never sends twice. Needs the person’s approval of the exact current follow-up draft (also enforced in the database), the first request’s guards, and the same real-send gates as the first message. Real sending also stays off until the follow-up wording has been signed off. In development and test the fake sender answers `delivery: \"fake\"` and nothing leaves the machine. A reply or a reported outcome since the draft was made stops it. An unknown outcome (a timeout) leaves the follow-up unsent and is not retried automatically.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`req_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "A client-chosen key, 8 to 128 characters (letters, digits and . _ : -). Reuse the same key to retry the same send.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sent (or the stored answer for a repeated key)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowupSendResponse"
+                },
+                "example": {
+                  "followup": {
+                    "sequence": 1,
+                    "status": "sent",
+                    "sentAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "delivery": "fake",
+                  "notice": "No email was sent. This is a development send to the fake sender."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "idempotency_key_required": {
+                    "summary": "Idempotency-Key required",
+                    "value": {
+                      "type": "urn:erase:problem:idempotency_key_required",
+                      "title": "Idempotency-Key required",
+                      "status": 400,
+                      "code": "idempotency_key_required",
+                      "detail": "Send an Idempotency-Key header so a retry cannot send twice.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "idempotency_key_invalid": {
+                    "summary": "Invalid Idempotency-Key",
+                    "value": {
+                      "type": "urn:erase:problem:idempotency_key_invalid",
+                      "title": "Invalid Idempotency-Key",
+                      "status": 400,
+                      "code": "idempotency_key_invalid",
+                      "detail": "Use 8 to 128 characters: letters, digits and . _ : -",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No follow-up for this request for this user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not sendable now",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "approval_required": {
+                    "summary": "Approval needed",
+                    "value": {
+                      "type": "urn:erase:problem:approval_required",
+                      "title": "Approval needed",
+                      "status": 409,
+                      "code": "approval_required",
+                      "detail": "Review the follow-up and approve it before sending. Nothing is sent without your approval.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "use_form": {
+                    "summary": "Use the company’s web form",
+                    "value": {
+                      "type": "urn:erase:problem:use_form",
+                      "title": "Use the company’s web form",
+                      "status": 409,
+                      "code": "use_form",
+                      "detail": "Sample Forms Co takes requests through a web form, so Erase.me cannot send this by email. Copy the draft into the form. It is shown here for that.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "formUrl": "https://example.com/privacy/request",
+                      "selfServeUrl": "https://example.com/account/delete"
+                    }
+                  },
+                  "already_sent": {
+                    "summary": "Already sent",
+                    "value": {
+                      "type": "urn:erase:problem:already_sent",
+                      "title": "Already sent",
+                      "status": 409,
+                      "code": "already_sent",
+                      "detail": "This follow-up was already sent.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "send_in_progress": {
+                    "summary": "This follow-up is being sent",
+                    "value": {
+                      "type": "urn:erase:problem:send_in_progress",
+                      "title": "This follow-up is being sent",
+                      "status": 409,
+                      "code": "send_in_progress",
+                      "detail": "A send with this key is already running or its result is unknown. Check the Sent folder in Gmail.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "inbox_not_connected": {
+                    "summary": "Inbox not connected",
+                    "value": {
+                      "type": "urn:erase:problem:inbox_not_connected",
+                      "title": "Inbox not connected",
+                      "status": 409,
+                      "code": "inbox_not_connected",
+                      "detail": "The inbox this company was found in is not connected. Reconnect it to send.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "fictional_company": {
+                    "summary": "Sample company",
+                    "value": {
+                      "type": "urn:erase:problem:fictional_company",
+                      "title": "Sample company",
+                      "status": 409,
+                      "code": "fictional_company",
+                      "detail": "This is a sample company. It cannot be sent for real.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "invalid_transition": {
+                    "summary": "No follow-up is needed",
+                    "value": {
+                      "type": "urn:erase:problem:invalid_transition",
+                      "title": "No follow-up is needed",
+                      "status": 409,
+                      "code": "invalid_transition",
+                      "detail": "A reply has arrived on this request, so no follow-up is sent. Open it in Gmail to read it, then report what it says.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "must_keep": {
+                    "summary": "No deletion request is offered for this company",
+                    "value": {
+                      "type": "urn:erase:problem:must_keep",
+                      "title": "No deletion request is offered for this company",
+                      "status": 409,
+                      "code": "must_keep",
+                      "detail": "Sample Account Provider is needed to keep your account working, so Erase.me does not offer a deletion request for it. If you stop using it, you can close the account with the company directly.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "kept": {
+                    "summary": "You chose to keep this company",
+                    "value": {
+                      "type": "urn:erase:problem:kept",
+                      "title": "You chose to keep this company",
+                      "status": 409,
+                      "code": "kept",
+                      "detail": "You chose to keep Sample Shop, so Erase.me makes no request for it. Undo \"keep\" to continue.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "no_contact": {
+                    "summary": "No verified contact for this company",
+                    "value": {
+                      "type": "urn:erase:problem:no_contact",
+                      "title": "No verified contact for this company",
+                      "status": 409,
+                      "code": "no_contact",
+                      "detail": "We do not have a verified grievance contact for Sample Bank yet, so this request is blocked. We have noted it so the contact can be found. Nothing is sent without one.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "company_excluded": {
+                    "summary": "Company excluded",
+                    "value": {
+                      "type": "urn:erase:problem:company_excluded",
+                      "title": "Company excluded",
+                      "status": 409,
+                      "code": "company_excluded",
+                      "detail": "You marked this company as not yours, so no request can be made for it.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "contact_bounced": {
+                    "summary": "No verified contact for this company",
+                    "value": {
+                      "type": "urn:erase:problem:contact_bounced",
+                      "title": "No verified contact for this company",
+                      "status": 409,
+                      "code": "contact_bounced",
+                      "detail": "The contact we have for this company did not accept earlier mail, so this request is blocked until it is checked.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "contact_changed": {
+                    "summary": "The request cannot move forward",
+                    "value": {
+                      "type": "urn:erase:problem:contact_changed",
+                      "title": "The request cannot move forward",
+                      "status": 409,
+                      "code": "contact_changed",
+                      "detail": "The grievance contact for Sample Shop changed since the first message was sent. A follow-up would not reach the same place.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "draft_integrity": {
+                    "summary": "The request cannot move forward",
+                    "value": {
+                      "type": "urn:erase:problem:draft_integrity",
+                      "title": "The request cannot move forward",
+                      "status": 409,
+                      "code": "draft_integrity",
+                      "detail": "This draft does not match its saved fingerprint. Close this follow-up and start again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemUseForm"
+            ]
+          },
+          "422": {
+            "description": "Unsafe draft, or a reused key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "draft_unsafe": {
+                    "summary": "The draft cannot be used yet",
+                    "value": {
+                      "type": "urn:erase:problem:draft_unsafe",
+                      "title": "The draft cannot be used yet",
+                      "status": 422,
+                      "code": "draft_unsafe",
+                      "detail": "The text looks like it contains a PAN-like number. Erase.me does not put ID numbers in requests. Remove it and try again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "findings": [
+                        "pan"
+                      ]
+                    }
+                  },
+                  "idempotency_key_reuse": {
+                    "summary": "Idempotency key already used",
+                    "value": {
+                      "type": "urn:erase:problem:idempotency_key_reuse",
+                      "title": "Idempotency key already used",
+                      "status": 422,
+                      "code": "idempotency_key_reuse",
+                      "detail": "This key was used for a different request. Use a new key.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemDraftUnsafe"
+            ]
+          },
+          "429": {
+            "description": "Daily limit reached",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "daily_cap_reached": {
+                    "summary": "Daily limit reached",
+                    "value": {
+                      "type": "urn:erase:problem:daily_cap_reached",
+                      "title": "Daily limit reached",
+                      "status": 429,
+                      "code": "daily_cap_reached",
+                      "detail": "You have reached the daily limit for sent requests. Try again tomorrow.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The message was not sent, or the outcome is unknown",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "send_failed": {
+                    "summary": "The message was not sent",
+                    "value": {
+                      "type": "urn:erase:problem:send_failed",
+                      "title": "The message was not sent",
+                      "status": 502,
+                      "code": "send_failed",
+                      "detail": "Gmail did not accept the message, so nothing was sent. You can try again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "send_outcome_unknown": {
+                    "summary": "We could not confirm the message was sent",
+                    "value": {
+                      "type": "urn:erase:problem:send_outcome_unknown",
+                      "title": "We could not confirm the message was sent",
+                      "status": 502,
+                      "code": "send_outcome_unknown",
+                      "detail": "Check the Sent folder in Gmail before doing anything else. Erase.me has not marked this follow-up as sent and will not retry it on its own.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sending is not available",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "real_send_blocked": {
+                    "summary": "Sending is not available",
+                    "value": {
+                      "type": "urn:erase:problem:real_send_blocked",
+                      "title": "Sending is not available",
+                      "status": 503,
+                      "code": "real_send_blocked",
+                      "detail": "Real sending stays off until the statute citation in the draft template has been verified, and real follow-ups also until their wording has been signed off.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "send_disabled": {
+                    "summary": "Sending is not available",
+                    "value": {
+                      "type": "urn:erase:problem:send_disabled",
+                      "title": "Sending is not available",
+                      "status": 503,
+                      "code": "send_disabled",
+                      "detail": "Sending is not switched on in this environment.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/requests/{id}/followup/submitted": {
+      "post": {
+        "operationId": "markFollowupSubmitted",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Say the follow-up was pasted into the company’s web form",
+        "description": "For a web-form request only. Nothing is sent from here: the person copied the follow-up into the form and says so, naming the exact draft they copied (`draftHash`). It is recorded like an approval and a send: the guards run again and the follow-up becomes `submitted`. Saying it again changes nothing. An email request answers 409 `not_a_form_request`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Prefixed ULID (`req_` followed by 26 characters)",
+            "schema": {
+              "type": "string",
+              "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "draftHash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "description": "The hash of the version the person copied into the form. If it is no longer the latest the call is refused (409 `draft_changed`)."
+                  }
+                },
+                "required": [
+                  "draftHash"
+                ],
+                "additionalProperties": false
+              },
+              "example": {
+                "draftHash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request, with its follow-up marked as submitted (or already marked)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestView"
+                },
+                "example": {
+                  "request": {
+                    "id": "req_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "status": "no_reply",
+                    "channel": "email",
+                    "createdAt": "2026-11-22T10:00:00.000Z",
+                    "updatedAt": "2026-11-22T10:00:00.000Z",
+                    "sentAt": "2026-11-22T10:00:00.000Z",
+                    "dueAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "company": {
+                    "id": "cmp_01J8Z3K9M2Q7R6T5V4W3X2Y1ZA",
+                    "name": "Sample Shop",
+                    "mustKeep": false,
+                    "kept": false,
+                    "selfServeUrl": "https://example.com/account/delete"
+                  },
+                  "contact": {
+                    "channel": "email",
+                    "formUrl": null
+                  },
+                  "useForm": false,
+                  "draft": {
+                    "version": 1,
+                    "to": "grievance@example.com",
+                    "subject": "Request to erase my personal data",
+                    "body": "To the Grievance Officer, Sample Shop\n\nI am writing to ask about personal data that Sample Shop likely holds about me.\n\nMy details\nName: Asha Rao\nEmail address: asha@example.com\n\nWhat I think you hold\nFrom emails that Sample Shop sent to this address, I think you likely holds an account or purchase record.\n\nMy request\nI would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a written reply within 30 days that tells me:\n1. whether the data has been erased;\n2. if you keep any of it, what you keep, why, and for how long; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you can, I would also appreciate a short summary of the personal data you hold about me.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you.\nAsha Rao",
+                    "hash": "5c875a5cf7868d8028240db93cce8082a6ba89bcc2b47f948c02b98e3b8f2fa8",
+                    "createdBy": "template",
+                    "createdAt": "2026-11-22T10:00:00.000Z"
+                  },
+                  "approved": true,
+                  "events": [
+                    {
+                      "type": "drafted",
+                      "actor": "system",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1,
+                        "createdBy": "template"
+                      }
+                    },
+                    {
+                      "type": "approved",
+                      "actor": "user",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1
+                      }
+                    },
+                    {
+                      "type": "sent",
+                      "actor": "user",
+                      "at": "2026-11-22T10:00:00.000Z",
+                      "payload": {
+                        "version": 1,
+                        "delivery": "fake"
+                      }
+                    }
+                  ],
+                  "canSend": false,
+                  "blockers": [],
+                  "replies": {
+                    "count": 0,
+                    "automaticCount": 0,
+                    "firstAt": null,
+                    "lastAt": null,
+                    "senderMatch": null
+                  },
+                  "outcome": {
+                    "value": "no_answer_yet",
+                    "setByUser": false,
+                    "at": null
+                  },
+                  "canSetOutcome": true,
+                  "canMarkSubmitted": false,
+                  "followup": {
+                    "state": "submitted",
+                    "dueAt": "2026-11-22T10:00:00.000Z",
+                    "remaining": 0,
+                    "sequence": 1,
+                    "sentAt": "2026-11-22T10:00:00.000Z",
+                    "draft": {
+                      "version": 1,
+                      "to": "grievance@example.com",
+                      "subject": "Re: Request to erase my personal data",
+                      "body": "To the Grievance Officer, Sample Shop\n\nI am following up on my email of 22 November 2026, in which I asked about personal data that Sample Shop likely holds about me. I have not seen a reply yet. Messages can go astray, so I am writing again in case it did not reach the right person.\n\nMy details\nName: Asha Rao\nEmail address: asha.rao@example.com\n\nMy request\nMy request is the same as before: I would like to ask Sample Shop to erase the personal data it holds about me. I would be grateful for a reply, even a short one, that tells me:\n1. whether you received my first message;\n2. whether the data has been erased, or when you expect to be able to tell me; and\n3. if you need anything from me to confirm who I am, what you need.\n\nIf you have already replied, thank you. Please point me to your answer, as I may have missed it.\n\n[OPEN: statute citation and commencement date pending verification. To verify: Section 12(3) (erasure) and Section 11(1) (summary of data held) of the Digital Personal Data Protection Act, 2023; rights provisions to commence about 13 May 2027 (18 months from 13 November 2025). Replace this paragraph with the verified wording before approving.]\n\nI am also making this request under any erasure process described in your privacy policy.\n\nI am sending this from the email address above. Please reply to it.\n\nThank you for your time.\nAsha Rao",
+                      "hash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                      "createdBy": "template",
+                      "createdAt": "2026-11-22T10:00:00.000Z"
+                    },
+                    "approved": false,
+                    "canCreate": false,
+                    "canSend": false,
+                    "canMarkSubmitted": false,
+                    "blockers": []
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the schema",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "validation_failed": {
+                    "summary": "Request validation failed",
+                    "value": {
+                      "type": "urn:erase:problem:validation_failed",
+                      "title": "Request validation failed",
+                      "status": 400,
+                      "code": "validation_failed",
+                      "detail": "See `errors`. Submitted values are never echoed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "errors": [
+                        {
+                          "path": "userCompanyIds.0",
+                          "message": "Invalid string"
+                        }
+                      ]
+                    }
+                  },
+                  "malformed_request": {
+                    "summary": "Bad request",
+                    "value": {
+                      "type": "urn:erase:problem:malformed_request",
+                      "title": "Bad request",
+                      "status": 400,
+                      "code": "malformed_request",
+                      "detail": "The request could not be processed.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemValidation"
+            ]
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No follow-up for this request for this user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Not found",
+                    "value": {
+                      "type": "urn:erase:problem:not_found",
+                      "title": "Not found",
+                      "status": 404,
+                      "code": "not_found",
+                      "detail": "No such resource for this user. Another user’s resource looks the same.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Cannot be marked as submitted",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_a_form_request": {
+                    "summary": "This company does not use a web form",
+                    "value": {
+                      "type": "urn:erase:problem:not_a_form_request",
+                      "title": "This company does not use a web form",
+                      "status": 409,
+                      "code": "not_a_form_request",
+                      "detail": "Sample Shop takes requests by email. Review the follow-up, approve it and send it instead.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "draft_changed": {
+                    "summary": "The draft changed",
+                    "value": {
+                      "type": "urn:erase:problem:draft_changed",
+                      "title": "The draft changed",
+                      "status": 409,
+                      "code": "draft_changed",
+                      "detail": "The text you approved is not the latest version. Review it again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "already_sent": {
+                    "summary": "Already sent",
+                    "value": {
+                      "type": "urn:erase:problem:already_sent",
+                      "title": "Already sent",
+                      "status": 409,
+                      "code": "already_sent",
+                      "detail": "This follow-up was already sent.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "invalid_transition": {
+                    "summary": "No follow-up is needed",
+                    "value": {
+                      "type": "urn:erase:problem:invalid_transition",
+                      "title": "No follow-up is needed",
+                      "status": 409,
+                      "code": "invalid_transition",
+                      "detail": "A reply has arrived on this request, so no follow-up is sent. Open it in Gmail to read it, then report what it says.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "must_keep": {
+                    "summary": "No deletion request is offered for this company",
+                    "value": {
+                      "type": "urn:erase:problem:must_keep",
+                      "title": "No deletion request is offered for this company",
+                      "status": 409,
+                      "code": "must_keep",
+                      "detail": "Sample Account Provider is needed to keep your account working, so Erase.me does not offer a deletion request for it. If you stop using it, you can close the account with the company directly.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "kept": {
+                    "summary": "You chose to keep this company",
+                    "value": {
+                      "type": "urn:erase:problem:kept",
+                      "title": "You chose to keep this company",
+                      "status": 409,
+                      "code": "kept",
+                      "detail": "You chose to keep Sample Shop, so Erase.me makes no request for it. Undo \"keep\" to continue.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "no_contact": {
+                    "summary": "No verified contact for this company",
+                    "value": {
+                      "type": "urn:erase:problem:no_contact",
+                      "title": "No verified contact for this company",
+                      "status": 409,
+                      "code": "no_contact",
+                      "detail": "We do not have a verified grievance contact for Sample Bank yet, so this request is blocked. We have noted it so the contact can be found. Nothing is sent without one.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "company_excluded": {
+                    "summary": "Company excluded",
+                    "value": {
+                      "type": "urn:erase:problem:company_excluded",
+                      "title": "Company excluded",
+                      "status": 409,
+                      "code": "company_excluded",
+                      "detail": "You marked this company as not yours, so no request can be made for it.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "contact_bounced": {
+                    "summary": "No verified contact for this company",
+                    "value": {
+                      "type": "urn:erase:problem:contact_bounced",
+                      "title": "No verified contact for this company",
+                      "status": 409,
+                      "code": "contact_bounced",
+                      "detail": "The contact we have for this company did not accept earlier mail, so this request is blocked until it is checked.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "contact_changed": {
+                    "summary": "The request cannot move forward",
+                    "value": {
+                      "type": "urn:erase:problem:contact_changed",
+                      "title": "The request cannot move forward",
+                      "status": 409,
+                      "code": "contact_changed",
+                      "detail": "The grievance contact for Sample Shop changed since the first message was sent. A follow-up would not reach the same place.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "draft_integrity": {
+                    "summary": "The request cannot move forward",
+                    "value": {
+                      "type": "urn:erase:problem:draft_integrity",
+                      "title": "The request cannot move forward",
+                      "status": 409,
+                      "code": "draft_integrity",
+                      "detail": "This draft does not match its saved fingerprint. Close this follow-up and start again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The draft cannot be used yet",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "draft_unsafe": {
+                    "summary": "The draft cannot be used yet",
+                    "value": {
+                      "type": "urn:erase:problem:draft_unsafe",
+                      "title": "The draft cannot be used yet",
+                      "status": 422,
+                      "code": "draft_unsafe",
+                      "detail": "The text looks like it contains a PAN-like number. Erase.me does not put ID numbers in requests. Remove it and try again.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000",
+                      "findings": [
+                        "pan"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "x-problem-schemas": [
+              "ProblemDraftUnsafe"
+            ]
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
     "/v1/requests/{id}/outcome": {
       "put": {
         "operationId": "setRequestOutcome",
@@ -3190,7 +5463,20 @@
                     "at": "2026-11-22T10:00:00.000Z"
                   },
                   "canSetOutcome": true,
-                  "canMarkSubmitted": false
+                  "canMarkSubmitted": false,
+                  "followup": {
+                    "state": "none",
+                    "dueAt": null,
+                    "remaining": 1,
+                    "sequence": null,
+                    "sentAt": null,
+                    "draft": null,
+                    "approved": false,
+                    "canCreate": false,
+                    "canSend": false,
+                    "canMarkSubmitted": false,
+                    "blockers": []
+                  }
                 }
               }
             }
@@ -3442,6 +5728,18 @@
                       "status": 400,
                       "code": "idempotency_key_required",
                       "detail": "Send an Idempotency-Key header so a retry cannot send twice.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "idempotency_key_invalid": {
+                    "summary": "Invalid Idempotency-Key",
+                    "value": {
+                      "type": "urn:erase:problem:idempotency_key_invalid",
+                      "title": "Invalid Idempotency-Key",
+                      "status": 400,
+                      "code": "idempotency_key_invalid",
+                      "detail": "Use 8 to 128 characters: letters, digits and . _ : -",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -3911,7 +6209,20 @@
                     "at": null
                   },
                   "canSetOutcome": true,
-                  "canMarkSubmitted": false
+                  "canMarkSubmitted": false,
+                  "followup": {
+                    "state": "none",
+                    "dueAt": null,
+                    "remaining": 1,
+                    "sequence": null,
+                    "sentAt": null,
+                    "draft": null,
+                    "approved": false,
+                    "canCreate": false,
+                    "canSend": false,
+                    "canMarkSubmitted": false,
+                    "blockers": []
+                  }
                 }
               }
             }
@@ -4521,6 +6832,52 @@
         ],
         "additionalProperties": false
       },
+      "FollowupSendResponse": {
+        "type": "object",
+        "properties": {
+          "followup": {
+            "type": "object",
+            "properties": {
+              "sequence": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "status": {
+                "type": "string",
+                "const": "sent"
+              },
+              "sentAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              }
+            },
+            "required": [
+              "sequence",
+              "status",
+              "sentAt"
+            ],
+            "additionalProperties": false
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "fake",
+              "real"
+            ],
+            "description": "`fake` in development and test: nothing left the machine"
+          },
+          "notice": {
+            "description": "Present when nothing really left the machine",
+            "type": "string"
+          }
+        },
+        "required": [
+          "followup",
+          "delivery"
+        ],
+        "additionalProperties": false
+      },
       "Inbox": {
         "type": "object",
         "properties": {
@@ -4660,6 +7017,8 @@
               "fictional_company",
               "invalid_transition",
               "not_a_form_request",
+              "followup_not_due",
+              "followup_limit_reached",
               "request_not_closable",
               "request_not_editable",
               "send_in_progress",
@@ -5422,6 +7781,203 @@
           "canMarkSubmitted": {
             "type": "boolean",
             "description": "True for a web-form request whose draft is ready: the person can say they pasted it into the form"
+          },
+          "followup": {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "not_due",
+                  "due",
+                  "drafted",
+                  "approved",
+                  "sent",
+                  "submitted"
+                ],
+                "description": "`none`: no follow-up applies (not sent, a reply arrived, an outcome was reported, or follow-ups are off). `not_due`: waiting. `due`: \"Follow up?\" can be offered. Then `drafted`, `approved`, and `sent` (email) or `submitted` (web form, copied by the person)."
+              },
+              "dueAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "UTC timestamp, ISO 8601"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "When a follow-up becomes due. Null when none can be."
+              },
+              "remaining": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "How many more follow-ups this request may have"
+              },
+              "sequence": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sentAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "UTC timestamp, ISO 8601"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "When it was sent, or when the person said they pasted it into the form"
+              },
+              "draft": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "to": {
+                        "type": "string"
+                      },
+                      "subject": {
+                        "type": "string"
+                      },
+                      "body": {
+                        "type": "string"
+                      },
+                      "hash": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$",
+                        "description": "sha256 (hex) of the recipient, subject and body of a draft, exactly as shown"
+                      },
+                      "createdBy": {
+                        "type": "string",
+                        "enum": [
+                          "template",
+                          "ai",
+                          "user"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "UTC timestamp, ISO 8601"
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "to",
+                      "subject",
+                      "body",
+                      "hash",
+                      "createdBy",
+                      "createdAt"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The follow-up the person reviews and approves. The recipient is fixed: the same place as the first message."
+              },
+              "approved": {
+                "type": "boolean",
+                "description": "True when the person approved exactly this version of the follow-up"
+              },
+              "canCreate": {
+                "type": "boolean",
+                "description": "True when \"Follow up?\" can be offered"
+              },
+              "canSend": {
+                "type": "boolean",
+                "description": "True for an approved email follow-up that nothing blocks"
+              },
+              "canMarkSubmitted": {
+                "type": "boolean",
+                "description": "True for a web-form follow-up that is ready: copy it into the form, then say so. Nothing is sent."
+              },
+              "blockers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "company_excluded",
+                        "must_keep",
+                        "kept",
+                        "no_contact",
+                        "contact_bounced",
+                        "contact_changed",
+                        "use_form",
+                        "draft_integrity",
+                        "draft_unsafe",
+                        "send_disabled",
+                        "real_send_blocked"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "findings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "aadhaar",
+                          "pan",
+                          "passport",
+                          "voter_id",
+                          "gstin",
+                          "card",
+                          "open_placeholder"
+                        ]
+                      }
+                    },
+                    "formUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Everything stopping this follow-up right now"
+              }
+            },
+            "required": [
+              "state",
+              "dueAt",
+              "remaining",
+              "sequence",
+              "sentAt",
+              "draft",
+              "approved",
+              "canCreate",
+              "canSend",
+              "canMarkSubmitted",
+              "blockers"
+            ],
+            "additionalProperties": false,
+            "description": "The follow-up to a request that has had no reply by the follow-up day. One per request. An automatic reply does not stop the clock; a reply from a person or a reported outcome ends the wait."
           }
         },
         "required": [
@@ -5437,7 +7993,8 @@
           "replies",
           "outcome",
           "canSetOutcome",
-          "canMarkSubmitted"
+          "canMarkSubmitted",
+          "followup"
         ],
         "additionalProperties": false
       },

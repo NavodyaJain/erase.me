@@ -133,7 +133,12 @@ function standardResponses(op: OperationDoc): Record<number, Json> {
     out[400] = problemResponse(400, 'The request did not match the schema', [
       { code: 'validation_failed', title: 'Request validation failed', detail: 'See `errors`. Submitted values are never echoed.', extra: { errors: [{ path: 'userCompanyIds.0', message: 'Invalid string' }] } },
       { code: 'malformed_request', title: 'Bad request', detail: 'The request could not be processed.' },
-      ...(op.headers ? [{ code: 'idempotency_key_required' as const, title: 'Idempotency-Key required', detail: 'Send an Idempotency-Key header so a retry cannot send twice.' }] : []),
+      ...(op.headers
+        ? [
+            { code: 'idempotency_key_required' as const, title: 'Idempotency-Key required', detail: 'Send an Idempotency-Key header so a retry cannot send twice.' },
+            { code: 'idempotency_key_invalid' as const, title: 'Invalid Idempotency-Key', detail: 'Use 8 to 128 characters: letters, digits and . _ : -' },
+          ]
+        : []),
     ]);
   }
   if (op.rateLimited || op.operationId === 'sendRequest') {

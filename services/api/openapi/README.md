@@ -39,6 +39,8 @@ Branch on `code`. `title` and `detail` are sentences for a person; they never co
 | 404 | `not_found` | No such resource for this user. Another user's resource looks the same. |
 | 409 | `draft_changed` | **Stale hash.** The draft changed since the person saw it (edit, or approve with an old `draftHash`). Reload the request and show the latest version. |
 | 409 | `use_form` | **Web-form company.** It cannot be sent by email. Show the draft to copy and link to `formUrl`. |
+| 409 | `followup_not_due` | **Too early.** The follow-up is offered `FOLLOWUP_AFTER_DAYS` (30 by default) after the message was sent. The `detail` gives the date; `followup.dueAt` has it too. Show it as a date, not as a fault of the company. |
+| 409 | `followup_limit_reached` | The request has had its follow-ups (`FOLLOWUP_MAX`, one by default), or follow-ups are switched off. Do not offer another. |
 | 409 | `not_a_form_request` | **Email company.** `POST /v1/requests/{id}/submitted` is only for a web-form company. Offer to review, approve and send the draft instead. |
 | 409 | `must_keep` | The company is needed to keep an account working (for example the account provider). No deletion request is offered. Explain; do not promise anything. |
 | 409 | `kept` | The user chose "keep this". Offer to undo it (`DELETE /v1/companies/{id}/keep`) to continue. |
@@ -63,6 +65,20 @@ Branch on `code`. `title` and `detail` are sentences for a person; they never co
 The outcome is what the person **reports**: `confirmed_erased`, `refused`, `needs_more_info`, or `no_answer_yet` to take a report back. Erase.me never infers it, not from a reply it found, who sent it or what it said. Always show it as **"Reported by you"**, never as a verified fact, and say nothing about what the company did or will do. `replies` on a request view is only counts and times found from message headers (`count` replies from a person, `automaticCount` automatic ones, which do not change the status); Erase.me does not read or keep what a reply says, so point the person to Gmail to read it.
 
 `POST /v1/requests/{id}/submitted` sends nothing. The person pasted the draft into the company's web form and says so, naming the exact draft they copied (`draftHash`). The request then becomes `sent` with `channel: "web_form"`, which starts the clock for a reply. A web form has no Gmail thread, so there are no reply checks for it and the person reports the outcome.
+
+### New in Phase 2: the follow-up
+
+A request that has had no reply from a person by `FOLLOWUP_AFTER_DAYS` (30 by default) is offered one polite follow-up, in the same Gmail conversation. The request view's `followup` says where it stands: `state` is `none`, `not_due`, `due`, `drafted`, `approved`, `sent` or `submitted`; `dueAt`; the `draft` to review; and `canCreate`, `canSend`, `canMarkSubmitted` and `blockers`.
+
+| Call | What it does | Errors worth a screen of their own |
+| --- | --- | --- |
+| `POST /v1/requests/{id}/followup` | Prepares the draft (asking again returns it). A request still `sent` moves to `no_reply`. Nothing is sent. | 409 `followup_not_due`, `followup_limit_reached`; `invalid_transition` (a reply arrived, an outcome was reported, or the request was never sent); the first request's guards: `must_keep`, `kept`, `company_excluded`, `no_contact`, `contact_bounced`, `contact_changed` |
+| `PATCH /v1/requests/{id}/followup/draft` | A new version. An approved follow-up goes back to `drafted`. | 409 `draft_changed` (reload, never retry by itself), `request_not_editable`, `send_in_progress`; 422 `draft_unsafe` |
+| `POST /v1/requests/{id}/followup/approve` | Approves exactly the version shown (`draftHash`). | 409 `draft_changed`, `use_form` (a web-form follow-up is copy-only), `already_sent`; 422 `draft_unsafe` (including the unresolved `[OPEN]` line) |
+| `POST /v1/requests/{id}/followup/send` | Sends it in the first message's thread. Needs an `Idempotency-Key`. | 409 `approval_required`, `already_sent`, `send_in_progress`; 422 `idempotency_key_reuse`; 502 `send_failed`, `send_outcome_unknown`; 503 `real_send_blocked`, `send_disabled` |
+| `POST /v1/requests/{id}/followup/submitted` | Web-form requests only: the person pasted it into the form. Nothing is sent. | 409 `not_a_form_request`, `draft_changed`, `already_sent` |
+
+An **automatic reply** (out of office and similar) does not stop the follow-up clock: it never changes the request's status. A reply from a person, or an outcome the person reported, ends the wait. Real follow-ups stay off, behind the same gates as the first message (`real_send_blocked` until the statute wording is verified), and also until the follow-up wording has been signed off. In development and test every send answers `delivery: "fake"`: nothing left the machine, and the screen must say so.
 
 ## Outcomes that are not errors
 

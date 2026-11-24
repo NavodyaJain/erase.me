@@ -5,6 +5,8 @@ import type { InboxService } from '../gmail/inbox.service.js';
 import { hashDraft, isDraftHash } from './draft-hash.js';
 import { explainFindings, findSafetyIssues, ID_FINDINGS, type SafetyFinding } from './draft-safety.js';
 import { renderDraft } from './draft-template.js';
+import { FOLLOWUP_WORDING } from './followup-template.js';
+import { summariseFollowup, type FollowupSettings, type FollowupSummary } from './followup-state.js';
 import { isReportedOutcome, isWaiting, outcomeOfStatus, reportedOutcomeOf, statusForOutcome, TRACKING_STATUSES, type OutcomeValue } from './outcomes.js';
 import type { ClaimRow, DraftRow, EventRow, ReplySummary, RequestRow, RequestsRepository, RequestsTx } from './requests.repository.js';
 import { SenderOutcomeUnknownError, SenderRejectedError, type SenderChoice, type SentMessage } from './sender.js';
@@ -53,6 +55,11 @@ export interface RequestView {
   canSetOutcome: boolean;
   /** A web-form request whose draft is ready: the person can say they pasted it into the form. */
   canMarkSubmitted: boolean;
+  /**
+   * The follow-up to a request with no reply: when it is due, its draft, whether it can be sent, and what blocks it. For a
+   * web-form request it is copy-only.
+   */
+  followup: FollowupSummary;
 }
 
 export interface SendResponse {
@@ -71,6 +78,10 @@ export interface RequestsServiceDeps {
   now?: () => Date;
   /** Days after sending before a request counts as overdue (FOLLOWUP_AFTER_DAYS). Default 30. */
   followupAfterDays?: number;
+  /** Follow-ups allowed per request (FOLLOWUP_MAX). Default 1; 0 turns them off. */
+  followupMax?: number;
+  /** The owner has signed off the follow-up wording. Default: FOLLOWUP_WORDING.signedOff (false). */
+  followupWordingSignedOff?: boolean;
   log?: { info(o: object, m: string): void; warn(o: object, m: string): void };
 }
 
@@ -79,9 +90,11 @@ const FAKE_NOTICE = 'No email was sent. This is a development send to the fake s
 export class RequestsService {
   private readonly now: () => Date;
   private readonly log: NonNullable<RequestsServiceDeps['log']>;
+  private readonly followupSettings: FollowupSettings;
 
   constructor(private readonly deps: RequestsServiceDeps) {
     this.now = deps.now ?? (() => new Date());
+    this.followupSettings = { afterDays: deps.followupAfterDays ?? 30, max: deps.followupMax ?? 1, wordingSignedOff: deps.followupWordingSignedOff ?? FOLLOWUP_WORDING.signedOff };
     this.log = deps.log ?? { info: () => undefined, warn: () => undefined };
   }
 
@@ -179,6 +192,10 @@ export class RequestsService {
     if (this.deps.sender.kind === 'unavailable') blockers.push({ code: this.deps.sender.code, message: this.deps.sender.detail });
     const canSend = req.status === 'approved' && approved && blockers.length === 0;
     const replies = await r.replySummary(req.id);
+    const followups = await r.followups(req.id);
+    const currentFollowup = followups.filter((f) => f.status !== 'cancelled').at(-1);
+    const followupDraft = currentFollowup ? await r.latestFollowupDraft(currentFollowup.id) : undefined;
+    const followupApproved = followupDraft ? await r.hasFollowupApproval(req.id, followupDraft.draftHash, followupDraft.createdAt) : false;
     const lastOutcomeEvent = [...events].reverse().find((e) => e.type === 'outcome_set');
     const useForm = ctx.grievanceChannel === 'web_form';
     return {
@@ -196,6 +213,7 @@ export class RequestsService {
       canSetOutcome: TRACKING_STATUSES.includes(req.status),
       // The form blocker is the very reason to use the form, so it does not count against marking it as submitted.
       canMarkSubmitted: useForm && PRE_SEND_STATUSES.includes(req.status) && draftBlockers(ctx, draft).every((b) => b.code === 'use_form'),
+      followup: summariseFollowup({ req, ctx, firstDraft: draft, followups, draft: followupDraft, approved: followupApproved, now: this.now(), settings: this.followupSettings, sender: this.deps.sender }),
     };
   }
 

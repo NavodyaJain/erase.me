@@ -1,7 +1,7 @@
-import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { newId } from '../../common/ids.js';
 import type { Db } from '../../db/client.js';
-import { companies, idempotencyKeys, inboxes, requestDrafts, requestEvents, requestReplies, requests, userCompanies, users } from '../../db/schema/index.js';
+import { companies, idempotencyKeys, inboxes, requestDrafts, requestEvents, requestFollowups, requestReplies, requests, userCompanies, users } from '../../db/schema/index.js';
 import type { RequestEventType, RequestStatus } from './state-machine.js';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -15,6 +15,8 @@ export interface RequestRow {
   threadId: string | null;
   /** `email`: sent from the person's Gmail. `web_form`: the person pasted it into the company's form. */
   channel: 'email' | 'web_form';
+  /** The Message-ID of the message that was sent, so a follow-up can answer it. */
+  sentRfcMessageId: string | null;
   sentAt: Date | null;
   dueAt: Date | null;
   createdAt: Date;
@@ -35,6 +37,8 @@ export interface ReplySummary {
 export interface DraftRow {
   id: string;
   requestId: string;
+  /** Set for a follow-up's draft; null for the first request's. */
+  followupId: string | null;
   version: number;
   toEmail: string;
   subject: string;
@@ -42,6 +46,25 @@ export interface DraftRow {
   draftHash: string;
   createdBy: 'template' | 'ai' | 'user';
   createdAt: Date;
+}
+
+/** A follow-up to a request with no reply: its status and when it was sent. The text is in its drafts. */
+export interface FollowupRow {
+  id: string;
+  requestId: string;
+  sequence: number;
+  status: 'drafted' | 'approved' | 'sent' | 'submitted' | 'cancelled';
+  approvedHash: string | null;
+  sentAt: Date | null;
+  gmailMessageId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** A request the follow-up sweep may act on. */
+export interface FollowupCandidate {
+  requestId: string;
+  userId: string;
 }
 
 export interface EventRow {
@@ -82,6 +105,8 @@ export interface ClaimRow {
   status: 'in_progress' | 'completed' | 'failed';
   responseStatus: number | null;
   response: unknown;
+  /** Set for a follow-up's send. */
+  followupId: string | null;
 }
 
 const requestColumns = {
@@ -91,6 +116,7 @@ const requestColumns = {
   status: requests.status,
   threadId: requests.threadId,
   channel: requests.channel,
+  sentRfcMessageId: requests.sentRfcMessageId,
   sentAt: requests.sentAt,
   dueAt: requests.dueAt,
   createdAt: requests.createdAt,
@@ -100,6 +126,7 @@ const requestColumns = {
 const draftColumns = {
   id: requestDrafts.id,
   requestId: requestDrafts.requestId,
+  followupId: requestDrafts.followupId,
   version: requestDrafts.version,
   toEmail: requestDrafts.toEmail,
   subject: requestDrafts.subject,
@@ -129,12 +156,25 @@ const contextColumns = {
   selfServeUrl: companies.selfServeUrl,
 };
 
+const followupColumns = {
+  id: requestFollowups.id,
+  requestId: requestFollowups.requestId,
+  sequence: requestFollowups.sequence,
+  status: requestFollowups.status,
+  approvedHash: requestFollowups.approvedHash,
+  sentAt: requestFollowups.sentAt,
+  gmailMessageId: requestFollowups.gmailMessageId,
+  createdAt: requestFollowups.createdAt,
+  updatedAt: requestFollowups.updatedAt,
+};
+
 const claimColumns = {
   id: idempotencyKeys.id,
   requestId: idempotencyKeys.requestId,
   status: idempotencyKeys.status,
   responseStatus: idempotencyKeys.responseStatus,
   response: idempotencyKeys.response,
+  followupId: idempotencyKeys.followupId,
 };
 
 function methods(x: Executor) {
@@ -267,10 +307,96 @@ function methods(x: Executor) {
       const [row] = await x
         .select(draftColumns)
         .from(requestDrafts)
-        .where(eq(requestDrafts.requestId, requestId))
+        .where(and(eq(requestDrafts.requestId, requestId), isNull(requestDrafts.followupId)))
         .orderBy(desc(requestDrafts.version))
         .limit(1);
       return row as DraftRow | undefined;
+    },
+
+    // ---- follow-ups (Phase 2) ----
+
+    /** Every follow-up of a request, the first one first. */
+    async followups(requestId: string): Promise<FollowupRow[]> {
+      const rows = await x.select(followupColumns).from(requestFollowups).where(eq(requestFollowups.requestId, requestId)).orderBy(requestFollowups.sequence);
+      return rows as FollowupRow[];
+    },
+
+    /** Undefined when this sequence number or another open follow-up already exists. */
+    async insertFollowup(requestId: string, sequence: number): Promise<FollowupRow | undefined> {
+      const [row] = await x.insert(requestFollowups).values({ id: newId('followup'), requestId, sequence, status: 'drafted' }).onConflictDoNothing().returning(followupColumns);
+      return row as FollowupRow | undefined;
+    },
+
+    async setFollowup(id: string, patch: { status: FollowupRow['status']; approvedHash?: string | null; sentAt?: Date; gmailMessageId?: string }): Promise<void> {
+      await x
+        .update(requestFollowups)
+        .set({
+          status: patch.status,
+          ...(patch.approvedHash !== undefined ? { approvedHash: patch.approvedHash } : {}),
+          ...(patch.sentAt ? { sentAt: patch.sentAt } : {}),
+          ...(patch.gmailMessageId ? { gmailMessageId: patch.gmailMessageId } : {}),
+          updatedAt: sql`now()`,
+        })
+        .where(eq(requestFollowups.id, id));
+    },
+
+    async latestFollowupDraft(followupId: string): Promise<DraftRow | undefined> {
+      const [row] = await x.select(draftColumns).from(requestDrafts).where(eq(requestDrafts.followupId, followupId)).orderBy(desc(requestDrafts.version)).limit(1);
+      return row as DraftRow | undefined;
+    },
+
+    async insertFollowupDraft(d: { requestId: string; followupId: string; version: number; to: string; subject: string; body: string; hash: string; createdBy: 'template' | 'user' }): Promise<DraftRow> {
+      const [row] = await x
+        .insert(requestDrafts)
+        .values({
+          id: newId('draft'),
+          requestId: d.requestId,
+          followupId: d.followupId,
+          version: d.version,
+          toEmail: d.to,
+          subject: d.subject,
+          body: d.body,
+          draftHash: d.hash,
+          createdBy: d.createdBy,
+          createdAt: sql`clock_timestamp()`,
+        })
+        .returning(draftColumns);
+      return row as DraftRow;
+    },
+
+    /** A user approval of exactly this follow-up draft hash, at or after the draft (mirrors migration 0013). */
+    async hasFollowupApproval(requestId: string, draftHash: string, notBefore: Date): Promise<boolean> {
+      const rows = await x
+        .select({ id: requestEvents.id })
+        .from(requestEvents)
+        .where(and(eq(requestEvents.requestId, requestId), eq(requestEvents.type, 'followup_approved'), eq(requestEvents.actorType, 'user'), eq(requestEvents.draftHash, draftHash), gte(requestEvents.createdAt, notBefore)))
+        .limit(1);
+      return rows.length > 0;
+    },
+
+    /**
+     * Requests whose follow-up day has come and that have no follow-up yet. Nobody who asked to delete their data, no company the
+     * person keeps, no must-keep company and none marked as not theirs. Only requests still waiting (sent, or no reply): one with a
+     * reply or a reported outcome is left alone.
+     */
+    async followupCandidates(now: Date, afterDays: number, limit: number): Promise<FollowupCandidate[]> {
+      const result = await x.execute<{ request_id: string; user_id: string }>(sql`
+        SELECT r.id AS request_id, r.user_id
+          FROM requests r
+          JOIN user_companies uc ON uc.id = r.user_company_id AND uc.user_id = r.user_id
+          JOIN companies c ON c.id = uc.company_id
+          JOIN users u ON u.id = r.user_id AND u.status = 'active'
+         WHERE r.status IN ('sent', 'no_reply')
+           AND r.sent_at IS NOT NULL
+           AND r.sent_at + make_interval(days => ${afterDays}) <= ${now}::timestamptz
+           AND uc.kept_at IS NULL
+           AND uc.status <> 'not_mine'
+           AND uc.risk_level IS DISTINCT FROM 'must_keep'
+           AND c.must_keep = false
+           AND NOT EXISTS (SELECT 1 FROM request_followups f WHERE f.request_id = r.id)
+         ORDER BY r.sent_at ASC, r.id
+         LIMIT ${limit}`);
+      return result.rows.map((row) => ({ requestId: row.request_id, userId: row.user_id }));
     },
 
     /** `created_at` is the wall clock at insert (not the transaction start), so event order matches lock order. */
@@ -356,7 +482,7 @@ function methods(x: Executor) {
 
     // ---- idempotency claims ----
 
-    async findClaim(userId: string, scope: 'send', key: string): Promise<ClaimRow | undefined> {
+    async findClaim(userId: string, scope: 'send' | 'followup_send', key: string): Promise<ClaimRow | undefined> {
       const [row] = await x
         .select(claimColumns)
         .from(idempotencyKeys)
@@ -372,11 +498,20 @@ function methods(x: Executor) {
       return row as ClaimRow | undefined;
     },
 
-    /** Undefined when another send for this request is already in flight or done, or the key was used. */
-    async insertClaim(userId: string, requestId: string, key: string): Promise<ClaimRow | undefined> {
+    /** A follow-up send is in flight or done for this follow-up. */
+    async activeFollowupClaim(followupId: string): Promise<ClaimRow | undefined> {
+      const [row] = await x
+        .select(claimColumns)
+        .from(idempotencyKeys)
+        .where(and(eq(idempotencyKeys.followupId, followupId), eq(idempotencyKeys.scope, 'followup_send'), inArray(idempotencyKeys.status, ['in_progress', 'completed'])));
+      return row as ClaimRow | undefined;
+    },
+
+    /** Undefined when another send for this request (or follow-up) is already in flight or done, or the key was used. */
+    async insertClaim(userId: string, requestId: string, key: string, followupId?: string): Promise<ClaimRow | undefined> {
       const [row] = await x
         .insert(idempotencyKeys)
-        .values({ id: newId('idempotencyKey'), userId, scope: 'send', key, requestId, status: 'in_progress' })
+        .values({ id: newId('idempotencyKey'), userId, scope: followupId ? 'followup_send' : 'send', key, requestId, ...(followupId ? { followupId } : {}), status: 'in_progress' })
         .onConflictDoNothing()
         .returning(claimColumns);
       return row as ClaimRow | undefined;
@@ -409,7 +544,7 @@ function methods(x: Executor) {
         .select({ n: sql<number>`count(*)::int` })
         .from(requestEvents)
         .innerJoin(requests, eq(requests.id, requestEvents.requestId))
-        .where(and(eq(requests.userId, userId), eq(requestEvents.type, 'sent'), gte(requestEvents.createdAt, since), sql`${requestEvents.payload}->>'delivery' = 'real'`));
+        .where(and(eq(requests.userId, userId), inArray(requestEvents.type, ['sent', 'followup_sent']), gte(requestEvents.createdAt, since), sql`${requestEvents.payload}->>'delivery' = 'real'`));
       return row?.n ?? 0;
     },
   };
