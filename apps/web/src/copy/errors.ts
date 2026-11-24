@@ -23,6 +23,7 @@ export const ERROR_MESSAGES: Record<Known, string> = {
   approval_required: 'Review the draft and approve it before sending. Nothing is sent without your approval.',
   draft_changed: 'The draft changed since you read it. Review the latest version before approving.',
   fictional_company: 'This is a sample company, so it cannot be sent for real.',
+  not_a_form_request: 'This company takes requests by email, not through a web form. Review the draft, approve it and send it instead.',
   invalid_transition: 'This request cannot move to that step. Reload to see where it is.',
   request_not_closable: 'This request has already been sent, so it cannot be closed here.',
   request_not_editable: 'This request can no longer be edited.',

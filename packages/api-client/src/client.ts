@@ -2,6 +2,9 @@ import type { CompanyItem, DraftOutcome, Inbox, Me, paths, RequestListItem, Requ
 import createClient from 'openapi-fetch';
 import { ApiError, isApiError } from './errors';
 
+/** What the person reports the company answered. `no_answer_yet` takes a report back. */
+export type Outcome = NonNullable<RequestView['outcome']>['value'];
+
 export interface ApiClientOptions {
   /** The API origin, for example `http://localhost:4000`. */
   baseUrl: string;
@@ -147,6 +150,19 @@ export function createApiClient(opts: ApiClientOptions) {
       approve: (id: string, draftHash: string): Promise<RequestView> =>
         mutate(() => http.POST('/v1/requests/{id}/approve', { params: { path: { id } }, body: { draftHash } })),
       close: (id: string): Promise<RequestView> => mutate(() => http.POST('/v1/requests/{id}/close', { params: { path: { id } } })),
+      /**
+       * The person reports what the company answered. Show it as "Reported by you", never as a verified fact: nothing
+       * infers it, not even a reply that was found. It can be set whether or not a reply was detected, and `no_answer_yet`
+       * takes it back.
+       */
+      setOutcome: (id: string, outcome: Outcome): Promise<RequestView> =>
+        mutate(() => http.PUT('/v1/requests/{id}/outcome', { params: { path: { id } }, body: { outcome } })),
+      /**
+       * For a web-form company: the person pasted the draft into the form. Nothing is sent. `draftHash` is the version
+       * they copied (409 `draft_changed` if it is no longer the latest).
+       */
+      markSubmitted: (id: string, draftHash: string): Promise<RequestView> =>
+        mutate(() => http.POST('/v1/requests/{id}/submitted', { params: { path: { id } }, body: { draftHash } })),
       /**
        * Sends an approved request. `idempotencyKey` is required: make one with `createIdempotencyKey()` when the person
        * confirms and reuse it for every retry, so a retry can never send twice.

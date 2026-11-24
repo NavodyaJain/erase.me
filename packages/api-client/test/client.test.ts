@@ -5,6 +5,7 @@ import {
   createIdempotencyKey,
   IDEMPOTENCY_KEY_PATTERN,
   isDraftUnsafe,
+  isNotFormRequest,
   isNotOffered,
   isSendUnavailable,
   isStaleDraft,
@@ -225,5 +226,68 @@ describe('typed results', () => {
     const got: RequestView = (await createApiClient({ baseUrl: BASE, fetch: api.fetch }).requests.get(REQUEST_ID)) as unknown as RequestView;
     expect(got.draft.hash).toBe(HASH);
     expect(api.requests[0]?.path).toBe(`/v1/requests/${REQUEST_ID}`);
+  });
+});
+
+describe('reporting an outcome and marking a form request as submitted', () => {
+  const view = { request: { id: REQUEST_ID, status: 'replied_refused', channel: 'email' }, outcome: { value: 'refused', setByUser: true, at: null } };
+
+  it('puts the outcome with the session cookie and the CSRF token, and returns the request', async () => {
+    const api = fakeApi({ 'GET /v1/me': { body: ME }, [`PUT /v1/requests/${REQUEST_ID}/outcome`]: { body: view } });
+    const got = await createApiClient({ baseUrl: BASE, fetch: api.fetch }).requests.setOutcome(REQUEST_ID, 'refused');
+    expect(got).toEqual(view);
+    const call = api.requests.find((r) => r.method === 'PUT');
+    expect(call?.path).toBe(`/v1/requests/${REQUEST_ID}/outcome`);
+    expect(call?.body).toEqual({ outcome: 'refused' });
+    expect(call?.headers.get('x-csrf-token')).toBe(ME.csrfToken);
+    expect(call?.credentials).toBe('include');
+  });
+
+  it('takes an outcome back with no_answer_yet', async () => {
+    const api = fakeApi({ 'GET /v1/me': { body: ME }, [`PUT /v1/requests/${REQUEST_ID}/outcome`]: { body: view } });
+    await createApiClient({ baseUrl: BASE, fetch: api.fetch }).requests.setOutcome(REQUEST_ID, 'no_answer_yet');
+    expect(api.requests.find((r) => r.method === 'PUT')?.body).toEqual({ outcome: 'no_answer_yet' });
+  });
+
+  it('reports a request that has not been sent as a 409 invalid_transition ApiError', async () => {
+    const api = fakeApi({ 'GET /v1/me': { body: ME }, [`PUT /v1/requests/${REQUEST_ID}/outcome`]: problem(409, 'invalid_transition', 'There is no outcome to report yet') });
+    const err = await createApiClient({ baseUrl: BASE, fetch: api.fetch }).requests.setOutcome(REQUEST_ID, 'refused').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 409, code: 'invalid_transition' });
+  });
+
+  it("answers a missing or another user's request as 404 not_found", async () => {
+    const api = fakeApi({ 'GET /v1/me': { body: ME }, [`PUT /v1/requests/${REQUEST_ID}/outcome`]: problem(404, 'not_found', 'Not found') });
+    await expect(createApiClient({ baseUrl: BASE, fetch: api.fetch }).requests.setOutcome(REQUEST_ID, 'refused')).rejects.toMatchObject({ status: 404, code: 'not_found' });
+  });
+
+  it('posts the hash of the version that was copied when marking a form request as submitted', async () => {
+    const api = fakeApi({ 'GET /v1/me': { body: ME }, [`POST /v1/requests/${REQUEST_ID}/submitted`]: { body: { request: { id: REQUEST_ID, status: 'sent', channel: 'web_form' } } } });
+    const got = await createApiClient({ baseUrl: BASE, fetch: api.fetch }).requests.markSubmitted(REQUEST_ID, HASH);
+    expect(got).toMatchObject({ request: { status: 'sent', channel: 'web_form' } });
+    const call = api.requests.find((r) => r.method === 'POST');
+    expect(call?.body).toEqual({ draftHash: HASH });
+    expect(call?.headers.get('x-csrf-token')).toBe(ME.csrfToken);
+    expect(call?.headers.has('idempotency-key')).toBe(false); // nothing is sent, and doing it twice changes nothing
+  });
+
+  it.each([
+    ['draft_changed', 409],
+    ['draft_unsafe', 422],
+    ['must_keep', 409],
+    ['kept', 409],
+    ['no_contact', 409],
+    ['not_a_form_request', 409],
+    ['already_sent', 409],
+    ['invalid_transition', 409],
+    ['validation_failed', 400],
+  ])('turns a %s refusal into an ApiError with that code', async (code, status) => {
+    const api = fakeApi({ 'GET /v1/me': { body: ME }, [`POST /v1/requests/${REQUEST_ID}/submitted`]: problem(status, code, 'Refused', code === 'draft_unsafe' ? { findings: ['open_placeholder'] } : {}) });
+    const err = await createApiClient({ baseUrl: BASE, fetch: api.fetch }).requests.markSubmitted(REQUEST_ID, HASH).catch((e: unknown) => e);
+    expect(err).toMatchObject({ status, code });
+    expect(isStaleDraft(err)).toBe(code === 'draft_changed');
+    expect(isNotOffered(err)).toBe(code === 'must_keep' || code === 'kept');
+    expect(isNotFormRequest(err)).toBe(code === 'not_a_form_request');
+    expect(isDraftUnsafe(err)).toBe(code === 'draft_unsafe');
   });
 });

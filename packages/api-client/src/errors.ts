@@ -49,6 +49,9 @@ export function isUseForm(e: unknown): e is ApiError & { code: 'use_form'; exten
   return isApiError(e) && e.code === 'use_form' && typeof e.extensions.formUrl === 'string';
 }
 
+/** The company takes requests by email, so there is no web form to mark as submitted. Review the draft, approve it and send it instead. */
+export const isNotFormRequest = (e: unknown): boolean => isApiError(e) && e.status === 409 && e.code === 'not_a_form_request';
+
 /** The draft changed since the person saw it: reload the request and show the latest version. */
 export const isStaleDraft = (e: unknown): boolean => isApiError(e) && e.status === 409 && e.code === 'draft_changed';
 
