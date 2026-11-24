@@ -109,7 +109,9 @@ describe('loadEnv', () => {
       REPLY_POLL_MAX_AGE_DAYS: 120,
       INBOX_RETENTION_DAYS: 30,
       ACCOUNT_PURGE_AFTER_DAYS: 7,
+      REQUEST_RETENTION_DAYS: 0, // closed requests are kept unless this is set
     });
+    expect(loadEnv({ ...base, REQUEST_RETENTION_DAYS: '90' })).toMatchObject({ REQUEST_RETENTION_DAYS: 90 });
     expect(loadEnv({ ...base, FOLLOWUP_AFTER_DAYS: '14', FOLLOWUP_MAX: '0', ACCOUNT_PURGE_AFTER_DAYS: '0' })).toMatchObject({
       FOLLOWUP_AFTER_DAYS: 14,
       FOLLOWUP_MAX: 0,
@@ -125,6 +127,8 @@ describe('loadEnv', () => {
     ['REPLY_POLL_MAX_AGE_DAYS', '1000'],
     ['INBOX_RETENTION_DAYS', '-1'],
     ['ACCOUNT_PURGE_AFTER_DAYS', '31'],
+    ['REQUEST_RETENTION_DAYS', '-1'],
+    ['REQUEST_RETENTION_DAYS', '3651'],
   ])('refuses %s=%s, naming only the variable', (name, value) => {
     expect(failure({ ...base, [name]: value }).issues.map((i) => i.variable)).toEqual([name]);
   });

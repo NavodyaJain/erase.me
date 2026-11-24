@@ -182,41 +182,7 @@ describe('sessions and CSRF', () => {
   });
 });
 
-describe('account deletion', () => {
-  it('ends every session at once, anonymises the user, and keeps the audit trail', async () => {
-    const s1 = await signIn(h, { email: 'gone@example.test', sub: 'sub-gone' }, 'gone-1');
-    const s2 = await signIn(h, { email: 'gone@example.test', sub: 'sub-gone' }, 'gone-2');
-    const res = await h.app.inject({ method: 'DELETE', url: '/v1/me', headers: authed(s1) });
-    expect(res.statusCode).toBe(202);
-    expect((await h.app.inject({ method: 'GET', url: '/v1/me', headers: { cookie: s2.cookie } })).statusCode).toBe(401);
-    await h.queue.drain();
-
-    const { rows } = await t.owner.query<{ email: string; name: string; google_sub: string; deleted_at: Date | null; status: string }>(
-      'SELECT email, name, google_sub, deleted_at, status FROM users WHERE id = $1',
-      [s1.userId],
-    );
-    expect(rows[0]).toMatchObject({ name: 'Deleted user', status: 'deleting' });
-    expect(rows[0]?.email).not.toContain('gone@');
-    expect(rows[0]?.google_sub).not.toContain('sub-gone');
-    expect(rows[0]?.deleted_at).not.toBeNull();
-
-    const audit = await t.owner.query<{ action: string }>('SELECT action FROM audit_log WHERE target_id = $1 ORDER BY at', [s1.userId]);
-    expect(audit.rows.map((r) => r.action)).toEqual(expect.arrayContaining(['account.deletion_requested', 'account.deletion_completed']));
-  });
-
-  it('does not let a deleted account sign back in', async () => {
-    const s = await signIn(h, { email: 'back@example.test', sub: 'sub-back' }, 'back-1');
-    await h.app.inject({ method: 'DELETE', url: '/v1/me', headers: authed(s) });
-    await h.queue.drain();
-    h.google.grant('back-2', { email: 'back@example.test', sub: 'sub-back' });
-    await h.app.inject({ method: 'GET', url: '/v1/auth/google/start' });
-    const state = h.google.lastAuthorization?.state ?? '';
-    const res = await h.app.inject({ method: 'GET', url: `/v1/auth/google/callback?code=back-2&state=${state}`, headers: { cookie: `erase_oauth_state=${state}` } });
-    // The google_sub was replaced, so this becomes a brand-new account rather than reviving the deleted one.
-    const me = await h.app.inject({ method: 'GET', url: '/v1/me', headers: { cookie: String(([] as string[]).concat(header(res, 'set-cookie') ?? []).find((c) => c.startsWith('erase_session='))).split(';')[0] ?? '' } });
-    expect(me.json<{ id: string }>().id).not.toBe(s.userId);
-  });
-});
+// Account deletion (the undo period, the purge and the tombstone) is tested in account-deletion.integration.test.ts.
 
 describe('rate limiting', () => {
   it('limits the auth start route per client', async () => {
