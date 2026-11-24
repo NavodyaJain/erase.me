@@ -3,25 +3,10 @@ import { STATUTE_CITATION } from './draft-citation.js';
 import { hashDraft, isDraftHash } from './draft-hash.js';
 import { findSafetyIssues } from './draft-safety.js';
 import { renderDraft, SUBJECT } from './draft-template.js';
+import { BANNED_WORDS, LEGAL_DEMAND_PHRASES } from '../../../test/wording.js';
 
 const input = { userName: 'Asha Rao', userEmail: 'asha@example.test', companyName: 'Sample Shop', signals: ['welcome', 'list_unsubscribe'] };
 const verified = { ...STATUTE_CITATION, verified: true };
-
-/** Phrases that would turn a polite request into a legal demand, a threat or a claim about a duty. */
-const LEGAL_DEMAND_PHRASES: Array<[string, RegExp]> = [
-  ['you must', /\byou must\b/i],
-  ['you are required / legally required', /\b(you are|is|are) (legally )?(required|obliged|bound|liable)\b|\blegally (required|obliged|bound)\b/i],
-  ['obliged / obligation / mandatory', /\bobliged\b|\bobligation\b|\bmandatory\b|\bcompulsory\b/i],
-  ['a deadline or ultimatum', /\bdeadline\b|\bfailing which\b|\bfailure to\b|\bif you do not\b|\botherwise\b|\bno later than\b|\bat the latest\b|\bwithin 30 days or\b/i],
-  ['threats and consequences', /\blegal action\b|\blegal notice\b|\bprosecut|\bpenalt|\bcourt\b|\btribunal\b|\bsue\b|\bfine\b|\bcomplaint to\b|\bescalate\b/i],
-  ['accusations', /\bviolat|\bbreach|\bunlawful|\billegal|\bnon-?complian|\bin contravention\b/i],
-  ['demanding language', /\bdemand/i],
-  ['compliance language', /\bcomply\b|\bcompliance\b/i],
-  ['claims about the law or outcome', /\bthe law (says|requires)\b|\bstatutory (right|duty|obligation)\b|\bunder the law\b|\byou will\b|\bwe will\b/i],
-];
-
-/** PRD 4.4 words that never appear in product text. The repo lint checks the source; this checks the rendered text. */
-const BANNED_WORDS = /will\s+(be\s+)?delete|guaranteed|non-?compliant|\bcompliant\b|\bviolating\b|\billegal\b|your data is safe|\bleaked\b/i; // banned-words:ignore - the list of banned words itself
 
 describe('renderDraft', () => {
   const d = renderDraft(input);

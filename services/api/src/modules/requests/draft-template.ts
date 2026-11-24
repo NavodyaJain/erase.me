@@ -20,10 +20,10 @@ export const SUBJECT = 'Request to erase my personal data';
 
 /** No line breaks or control characters in values that go into the header lines or the greeting. */
 // eslint-disable-next-line no-control-regex -- stripping control characters is the point
-const oneLine = (s: string): string => s.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+export const oneLine = (s: string): string => s.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** What the company likely holds, in plain words, from the kinds of mail it sent. Hedged by the caller. */
-function holdsPhrases(signals: readonly string[]): string {
+export function holdsPhrases(signals: readonly string[]): string {
   const phrases: string[] = [];
   if (signals.some((s) => ['welcome', 'receipt', 'transactional', 'verify'].includes(s))) {
     phrases.push('an account or purchase record');
@@ -35,7 +35,7 @@ function holdsPhrases(signals: readonly string[]): string {
 }
 
 /** The statute wording as one paragraph, or the [OPEN] paragraph that stands in for it until it is verified. */
-function statuteParagraph(c: StatuteCitation): string {
+export function statuteParagraph(c: StatuteCitation): string {
   if (!c.verified) {
     return `[OPEN: statute citation and commencement date pending verification. To verify: ${c.candidate}. Replace this paragraph with the verified wording before approving.]`;
   }
