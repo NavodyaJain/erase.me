@@ -79,11 +79,13 @@ describe('the generated OpenAPI document', () => {
     }
   });
 
-  it('requires the Idempotency-Key header on send, and nowhere else', () => {
+  it('requires the Idempotency-Key header on the two sends (a request and its follow-up), and nowhere else', () => {
     const withKey = allOperations().filter(({ op }) => (op.parameters ?? []).some((p: Json) => p.name === 'Idempotency-Key'));
-    expect(withKey.map((o) => o.op.operationId)).toEqual(['sendRequest']);
-    const param = withKey[0]?.op.parameters.find((p: Json) => p.name === 'Idempotency-Key');
-    expect(param).toMatchObject({ in: 'header', required: true });
+    expect(withKey.map((o) => o.op.operationId).sort()).toEqual(['sendFollowup', 'sendRequest']);
+    for (const o of withKey) {
+      const param = o.op.parameters.find((p: Json) => p.name === 'Idempotency-Key');
+      expect(param, o.op.operationId).toMatchObject({ in: 'header', required: true });
+    }
   });
 
   it('documents the error and outcome shapes the client has to handle', () => {

@@ -365,6 +365,94 @@ describe('responses match the document', () => {
     expect((await checked('POST', `/v1/requests/req_00000000000000000000000000/submitted`, authed(a.s), { draftHash: 'a'.repeat(64) })).code).toBe('not_found');
   });
 
+  it('follow-ups: every status and error code the five routes answer is documented, and every body matches its schema', async () => {
+    const a = await actor(h, 'contract9');
+    const base = new Date(h.clock.now);
+    const later = async (days: number) => {
+      h.clock.now = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+      await t.owner.query(`UPDATE sessions SET expires_at = '2100-01-01T00:00:00Z' WHERE revoked_at IS NULL`); // the person keeps using the app
+    };
+    const f = (id: string, route: string) => `/v1/requests/${id}/followup${route}`;
+    const resolve = (body: string) => body.split('\n').filter((l) => !l.startsWith('[OPEN')).join('\n');
+
+    // An email request, sent. It is not due yet.
+    const r = await makeApproved(a, { contact: 'fictional' });
+    expect((await checked('POST', f(r.id, ''), authed(a.s))).code).toBe('invalid_transition'); // not sent yet
+    expect((await checked('POST', `/v1/requests/${r.id}/send`, { ...authed(a.s), 'idempotency-key': key() })).res.statusCode).toBe(200);
+    expect((await checked('POST', f(r.id, ''), authed(a.s))).code).toBe('followup_not_due');
+    expect((await checked('POST', f('req_00000000000000000000000000', ''), authed(a.s))).code).toBe('not_found');
+    expect((await checked('PATCH', f(r.id, '/draft'), authed(a.s), { baseHash: 'ab'.repeat(32), subject: 'S', body: 'B' })).code).toBe('not_found'); // no follow-up yet
+
+    // Due: prepared, then edited, approved and sent.
+    await later(31);
+    const created = (await checked('POST', f(r.id, ''), authed(a.s))).res.json<{ request: { status: string }; followup: { state: string; draft: { hash: string; subject: string; body: string } } }>();
+    expect(created.request.status).toBe('no_reply');
+    expect(created.followup.state).toBe('drafted');
+    const draft = created.followup.draft;
+    expect((await checked('POST', f(r.id, ''), authed(a.s))).res.statusCode).toBe(200); // asking again answers the same draft
+    expect((await checked('POST', f(r.id, '/approve'), authed(a.s), { draftHash: draft.hash })).code).toBe('draft_unsafe'); // the [OPEN] line
+    expect((await checked('PATCH', f(r.id, '/draft'), authed(a.s), { baseHash: 'ab'.repeat(32), subject: 'S', body: 'B' })).code).toBe('draft_changed');
+    expect((await checked('PATCH', f(r.id, '/draft'), authed(a.s), { baseHash: draft.hash, subject: 'S', body: 'My card is 4111 1111 1111 1111' })).code).toBe('draft_unsafe');
+    const edited = (await checked('PATCH', f(r.id, '/draft'), authed(a.s), { baseHash: draft.hash, subject: draft.subject, body: resolve(draft.body) })).res.json<{ followup: { draft: { hash: string } } }>();
+    const hash = edited.followup.draft.hash;
+    expect((await checked('POST', f(r.id, '/submitted'), authed(a.s), { draftHash: hash })).code).toBe('not_a_form_request'); // an email company: send it instead
+    expect((await checked('POST', f(r.id, '/send'), { ...authed(a.s), 'idempotency-key': key() })).code).toBe('approval_required');
+    expect((await checked('POST', f(r.id, '/approve'), authed(a.s), { draftHash: 'ab'.repeat(32) })).code).toBe('draft_changed');
+    expect((await checked('POST', f(r.id, '/approve'), authed(a.s), { draftHash: 'not-a-hash' })).code).toBe('validation_failed');
+    const approved = (await checked('POST', f(r.id, '/approve'), authed(a.s), { draftHash: hash })).res.json<{ followup: { state: string; canSend: boolean } }>();
+    expect(approved.followup).toMatchObject({ state: 'approved', canSend: true });
+    expect((await checked('POST', f(r.id, '/send'), authed(a.s))).code).toBe('idempotency_key_required');
+    expect((await checked('POST', f(r.id, '/send'), { ...authed(a.s), 'idempotency-key': 'short' })).code).toBe('idempotency_key_invalid');
+    const k = key();
+    const sent = await checked('POST', f(r.id, '/send'), { ...authed(a.s), 'idempotency-key': k });
+    expect(sent.res.json()).toMatchObject({ followup: { sequence: 1, status: 'sent' }, delivery: 'fake', notice: expect.stringContaining('No email was sent') });
+    expect((await checked('POST', f(r.id, '/send'), { ...authed(a.s), 'idempotency-key': k })).res.json()).toEqual(sent.res.json());
+    expect((await checked('POST', f(r.id, '/send'), { ...authed(a.s), 'idempotency-key': key() })).code).toBe('already_sent');
+    expect((await checked('POST', f(r.id, '/approve'), authed(a.s), { draftHash: hash })).code).toBe('already_sent');
+    expect((await checked('PATCH', f(r.id, '/draft'), authed(a.s), { baseHash: hash, subject: 'S', body: 'B' })).code).toBe('request_not_editable');
+    expect((await checked('POST', f(r.id, '/submitted'), authed(a.s), { draftHash: hash })).code).toBe('already_sent');
+    await later(120);
+    expect((await checked('POST', f(r.id, ''), authed(a.s))).code).toBe('followup_limit_reached');
+
+    // A key used for another request is refused.
+    const other = await makeApproved(a, { contact: 'fictional' });
+    await checked('POST', `/v1/requests/${other.id}/send`, { ...authed(a.s), 'idempotency-key': key() });
+    await later(151);
+    const otherDraft = (await checked('POST', f(other.id, ''), authed(a.s))).res.json<{ followup: { draft: { hash: string; subject: string; body: string } } }>().followup.draft;
+    const otherEdited = (await checked('PATCH', f(other.id, '/draft'), authed(a.s), { baseHash: otherDraft.hash, subject: otherDraft.subject, body: resolve(otherDraft.body) })).res.json<{ followup: { draft: { hash: string } } }>();
+    await checked('POST', f(other.id, '/approve'), authed(a.s), { draftHash: otherEdited.followup.draft.hash });
+    expect((await checked('POST', f(other.id, '/send'), { ...authed(a.s), 'idempotency-key': k })).code).toBe('idempotency_key_reuse');
+
+    // A company that is kept or must be kept, and a reply that has arrived.
+    const kept = await makeApproved(a, { contact: 'fictional' });
+    await checked('POST', `/v1/requests/${kept.id}/send`, { ...authed(a.s), 'idempotency-key': key() });
+    await later(190);
+    await t.owner.query('UPDATE user_companies SET kept_at = now() WHERE id = $1', [kept.ucId]);
+    expect((await checked('POST', f(kept.id, ''), authed(a.s))).code).toBe('kept');
+    await t.owner.query('UPDATE user_companies SET kept_at = NULL WHERE id = $1', [kept.ucId]);
+    await t.owner.query('UPDATE requests SET status = $2 WHERE id = $1', [kept.id, 'reply_received']);
+    expect((await checked('POST', f(kept.id, ''), authed(a.s))).code).toBe('invalid_transition');
+
+    // A web-form request: copy only.
+    const form = await a.seed({ contact: 'form' });
+    const formId = (await checked('POST', '/v1/requests/drafts', authed(a.s), { userCompanyIds: [form.ucId] })).res.json<{ results: Array<{ requestId: string }> }>().results[0]?.requestId as string;
+    const formView = (await checked('GET', `/v1/requests/${formId}`, { cookie: a.s.cookie })).res.json<{ draft: { hash: string; subject: string; body: string } }>();
+    const formEdited = (await checked('PATCH', `/v1/requests/${formId}/draft`, authed(a.s), { baseHash: formView.draft.hash, subject: formView.draft.subject, body: resolve(formView.draft.body) })).res.json<{ draft: { hash: string } }>();
+    await checked('POST', `/v1/requests/${formId}/submitted`, authed(a.s), { draftHash: formEdited.draft.hash });
+    await later(230);
+    const formDraft = (await checked('POST', f(formId, ''), authed(a.s))).res.json<{ followup: { draft: { hash: string; subject: string; body: string } } }>().followup.draft;
+    const formFollowup = (await checked('PATCH', f(formId, '/draft'), authed(a.s), { baseHash: formDraft.hash, subject: formDraft.subject, body: resolve(formDraft.body) })).res.json<{ followup: { draft: { hash: string } } }>();
+    const formHash = formFollowup.followup.draft.hash;
+    expect((await checked('POST', f(formId, '/approve'), authed(a.s), { draftHash: formHash })).code).toBe('use_form');
+    expect((await checked('POST', f(formId, '/send'), { ...authed(a.s), 'idempotency-key': key() })).code).toBe('use_form');
+    expect((await checked('POST', f(formId, '/submitted'), authed(a.s), { draftHash: formDraft.hash })).code).toBe('draft_changed');
+    const done = (await checked('POST', f(formId, '/submitted'), authed(a.s), { draftHash: formHash })).res.json<{ followup: { state: string } }>();
+    expect(done.followup.state).toBe('submitted');
+    expect((await checked('POST', f(formId, '/submitted'), authed(a.s), { draftHash: formHash })).res.statusCode).toBe(200);
+    expect((await checked('POST', f(formId, '/submitted'), authed(a.s), { draftHash: 'nope' })).code).toBe('validation_failed');
+    h.clock.now = new Date(base);
+  });
+
   it('inbox limit', async () => {
     const s = await signIn(h, { email: 'contract7@example.test', sub: 'g-contract7' });
     for (let i = 1; i <= 5; i++) await connectInbox(h, s, { email: `c7-box${i}@example.test`, sub: `g-c7-box${i}` });
