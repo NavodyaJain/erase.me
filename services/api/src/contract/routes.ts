@@ -4,7 +4,7 @@ import { hashDraft } from '../modules/requests/draft-hash.js';
 import { renderDraft } from '../modules/requests/draft-template.js';
 import { renderFollowup } from '../modules/requests/followup-template.js';
 import {
-  AccountDeleting,
+  AccountDeletion,
   ApproveBody,
   CallbackQuery,
   CompanyList,
@@ -63,6 +63,8 @@ export interface OperationDoc {
   description?: string;
   /** Needs the session cookie. State-changing calls also need the CSRF header. */
   auth: boolean;
+  /** Works while the person's deletion is pending. Every other signed-in route answers 403 `deletion_pending` then. */
+  allowsPendingDeletion?: boolean;
   /** The auth start and callback routes are rate limited per client. */
   rateLimited?: boolean;
   params?: z.ZodObject;
@@ -78,6 +80,17 @@ export interface OperationDoc {
 const ULID = '01J8Z3K9M2Q7R6T5V4W3X2Y1Z';
 export const exId = (kind: IdKind, n = 'A'): string => `${ID_PREFIXES[kind]}_${ULID}${n}`;
 const T0 = '2026-11-20T09:30:00.000Z';
+
+const deletionExample = {
+  status: 'deleting',
+  requestedAt: T0,
+  deleteAfter: '2026-11-27T09:30:00.000Z',
+  canUndo: true,
+  paused: true,
+  googleAccess: { notRevoked: 0, message: null },
+  gmailCopies: 'Copies of the requests you sent stay in your own Gmail. Erase.me does not delete them.',
+  notice: 'Your data will be removed after the undo period. Reply checks, follow-ups and sending are paused until then.',
+};
 const T1 = '2026-11-22T10:00:00.000Z';
 const DUE = '2026-12-22T10:00:00.000Z';
 const FORM = 'https://example.com/privacy/request';
@@ -257,11 +270,56 @@ export const operations: OperationDoc[] = [
     method: 'delete',
     path: '/v1/me',
     tag: 'Account',
-    summary: 'Delete the account',
+    summary: 'Ask to delete the account',
     description:
-      'Starts account deletion: every session ends at once, Gmail access is revoked and dropped, and the personal fields are replaced. Rows that refer to the user are removed by a later purge job.',
+      'Starts the undo period (7 days by default). Gmail access is asked to be revoked for every inbox now, and reply checks, follow-ups and sending stop for this person. After the undo period the personal data is deleted and only a tombstone with no personal data stays. `POST /v1/me/deletion/undo` cancels it; `POST /v1/me/deletion/now` skips the wait. The copies of sent requests in the person’s own Gmail are not touched. Asking again keeps the first end date.',
     auth: true,
-    responses: { 202: { description: 'Deletion started', schema: AccountDeleting, example: { status: 'deleting' } } },
+    allowsPendingDeletion: true,
+    responses: { 202: { description: 'Deletion asked for', schema: AccountDeletion, example: deletionExample } },
+  },
+  {
+    operationId: 'getDeletion',
+    method: 'get',
+    path: '/v1/me/deletion',
+    tag: 'Account',
+    summary: 'Where deletion stands',
+    description: 'For the “Your data” screen. While deletion is pending it says when the data is deleted, that sending and checking are paused, and whether the person must remove Google access themselves.',
+    auth: true,
+    allowsPendingDeletion: true,
+    responses: { 200: { description: 'The state of deletion', schema: AccountDeletion, example: deletionExample } },
+  },
+  {
+    operationId: 'undoDeletion',
+    method: 'post',
+    path: '/v1/me/deletion/undo',
+    tag: 'Account',
+    summary: 'Undo the deletion',
+    description:
+      'Only inside the undo period. Everything the person had is still there. Their Gmail inboxes were disconnected when deletion was asked for, so they connect them again to scan or follow up.',
+    auth: true,
+    allowsPendingDeletion: true,
+    responses: {
+      200: { description: 'Deletion cancelled', schema: AccountDeletion, example: { ...deletionExample, status: 'active', requestedAt: null, deleteAfter: null, canUndo: false, paused: false } },
+      409: {
+        description: 'Nothing to undo, or the undo period is over',
+        problems: [
+          prob('not_pending_deletion', 'No deletion is pending', 'There is nothing to undo.'),
+          prob('undo_window_closed', 'The undo period is over', 'The data is being or has been deleted, so it can no longer be undone.'),
+        ],
+      },
+    },
+  },
+  {
+    operationId: 'deleteNow',
+    method: 'post',
+    path: '/v1/me/deletion/now',
+    tag: 'Account',
+    summary: 'Delete now',
+    description:
+      'Skips the undo period. Works whether or not deletion was asked for before. The personal data is deleted at once (a very large account may take a few runs, then `status` is `deleting` with `canUndo` false). Every session ends and the session cookie is cleared. The copies of sent requests in the person’s own Gmail are not touched.',
+    auth: true,
+    allowsPendingDeletion: true,
+    responses: { 200: { description: 'Deleted, or being deleted', schema: AccountDeletion, example: { ...deletionExample, status: 'deleted', canUndo: false, deleteAfter: T0 } } },
   },
   // ----- inboxes and scans -----
   {

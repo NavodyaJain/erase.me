@@ -67,8 +67,11 @@ export const PROBLEM_CODES = [
   // 401, 403, 404
   'unauthorized',
   'forbidden',
+  'deletion_pending',
   'not_found',
   // 409
+  'undo_window_closed',
+  'not_pending_deletion',
   'inbox_limit',
   'inbox_not_connected',
   'already_sent',
@@ -203,7 +206,26 @@ export const Scan = component(
 );
 export const ScanResponse = component('ScanResponse', z.object({ scan: Scan }));
 
-export const AccountDeleting = component('AccountDeleting', z.object({ status: z.literal('deleting') }));
+export const AccountDeletion = component(
+  'AccountDeletion',
+  z.object({
+    status: z
+      .enum(['active', 'deleting', 'deleted'])
+      .describe('`deleting`: asked for, and can be undone until `deleteAfter`. `deleted`: the personal data has been removed. `active`: no deletion is pending.'),
+    requestedAt: isoDateTime.nullable(),
+    deleteAfter: isoDateTime.nullable().describe('When the personal data is deleted if it is not undone. Until then the person can undo it.'),
+    canUndo: z.boolean(),
+    paused: z.boolean().describe('True while deletion is pending: reply checks, follow-ups and sending are stopped for this person.'),
+    googleAccess: z
+      .object({
+        notRevoked: z.number().int().min(0).describe('How many inboxes Google did not confirm removing access for. A count only.'),
+        message: z.string().nullable().describe('Set when `notRevoked` is above zero: tells the person to remove Erase.me in their Google account settings.'),
+      })
+      .describe('Erase.me asks Google to remove its access to each inbox when deletion is asked for.'),
+    gmailCopies: z.string().describe('Always says that the copies of sent requests in the person’s own Gmail are not touched.'),
+    notice: z.string(),
+  }),
+);
 
 // ---------- companies ----------
 

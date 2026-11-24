@@ -453,6 +453,29 @@ describe('responses match the document', () => {
     h.clock.now = new Date(base);
   });
 
+  it('account deletion: every status and error code the four routes answer is documented, and every body matches its schema', async () => {
+    const a = await actor(h, 'contract-del');
+    const base = new Date(h.clock.now);
+    expect((await checked('GET', '/v1/me/deletion', { cookie: a.s.cookie })).res.json()).toMatchObject({ status: 'active', canUndo: false, paused: false });
+    expect((await checked('POST', '/v1/me/deletion/undo', authed(a.s))).code).toBe('not_pending_deletion');
+    const asked = await checked('DELETE', '/v1/me', authed(a.s));
+    expect(asked.res.statusCode).toBe(202);
+    expect(asked.res.json()).toMatchObject({ status: 'deleting', canUndo: true, paused: true });
+    // Every other signed-in route refuses while it is pending, and says why.
+    expect((await checked('GET', '/v1/requests', { cookie: a.s.cookie })).code).toBe('deletion_pending');
+    expect((await checked('POST', '/v1/requests/drafts', authed(a.s), { userCompanyIds: [] })).code).toBe('deletion_pending');
+    expect((await checked('GET', '/v1/inboxes', { cookie: a.s.cookie })).code).toBe('deletion_pending');
+    expect((await checked('POST', '/v1/me/deletion/undo', authed(a.s))).res.json()).toMatchObject({ status: 'active', canUndo: false });
+    await checked('DELETE', '/v1/me', authed(a.s));
+    h.clock.now = new Date(base.getTime() + 8 * 24 * 60 * 60 * 1000);
+    await t.owner.query(`UPDATE sessions SET expires_at = '2100-01-01T00:00:00Z' WHERE revoked_at IS NULL`);
+    expect((await checked('POST', '/v1/me/deletion/undo', authed(a.s))).code).toBe('undo_window_closed');
+    h.clock.now = new Date(base);
+    const now = await checked('POST', '/v1/me/deletion/now', authed(a.s));
+    expect(now.res.json()).toMatchObject({ status: 'deleted', canUndo: false });
+    expect(String(now.res.headers['set-cookie'])).toMatch(/Max-Age=0/);
+  });
+
   it('inbox limit', async () => {
     const s = await signIn(h, { email: 'contract7@example.test', sub: 'g-contract7' });
     for (let i = 1; i <= 5; i++) await connectInbox(h, s, { email: `c7-box${i}@example.test`, sub: `g-c7-box${i}` });

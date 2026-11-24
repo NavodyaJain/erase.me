@@ -36,11 +36,14 @@ Branch on `code`. `title` and `detail` are sentences for a person; they never co
 | 400 | `idempotency_key_required`, `idempotency_key_invalid` | Send a well-formed `Idempotency-Key` on send. |
 | 401 | `unauthorized` | Not signed in. Go to sign-in. |
 | 403 | `forbidden` | Missing or wrong CSRF token, or a request from another origin. Refresh the token from `GET /v1/me` once. |
+| 403 | `deletion_pending` | The person asked to delete their data and the undo period has not ended. Only `GET /v1/me`, `DELETE /v1/me` and the `/v1/me/deletion` routes work; everything else, including sending, answers this. Show the “Your data” screen and offer Undo. |
 | 404 | `not_found` | No such resource for this user. Another user's resource looks the same. |
 | 409 | `draft_changed` | **Stale hash.** The draft changed since the person saw it (edit, or approve with an old `draftHash`). Reload the request and show the latest version. |
 | 409 | `use_form` | **Web-form company.** It cannot be sent by email. Show the draft to copy and link to `formUrl`. |
 | 409 | `followup_not_due` | **Too early.** The follow-up is offered `FOLLOWUP_AFTER_DAYS` (30 by default) after the message was sent. The `detail` gives the date; `followup.dueAt` has it too. Show it as a date, not as a fault of the company. |
 | 409 | `followup_limit_reached` | The request has had its follow-ups (`FOLLOWUP_MAX`, one by default), or follow-ups are switched off. Do not offer another. |
+| 409 | `not_pending_deletion` | `POST /v1/me/deletion/undo` when no deletion is pending. |
+| 409 | `undo_window_closed` | `POST /v1/me/deletion/undo` after the undo period. The data is being or has been deleted. |
 | 409 | `not_a_form_request` | **Email company.** `POST /v1/requests/{id}/submitted` is only for a web-form company. Offer to review, approve and send the draft instead. |
 | 409 | `must_keep` | The company is needed to keep an account working (for example the account provider). No deletion request is offered. Explain; do not promise anything. |
 | 409 | `kept` | The user chose "keep this". Offer to undo it (`DELETE /v1/companies/{id}/keep`) to continue. |
@@ -79,6 +82,19 @@ A request that has had no reply from a person by `FOLLOWUP_AFTER_DAYS` (30 by de
 | `POST /v1/requests/{id}/followup/submitted` | Web-form requests only: the person pasted it into the form. Nothing is sent. | 409 `not_a_form_request`, `draft_changed`, `already_sent` |
 
 An **automatic reply** (out of office and similar) does not stop the follow-up clock: it never changes the request's status. A reply from a person, or an outcome the person reported, ends the wait. Real follow-ups stay off, behind the same gates as the first message (`real_send_blocked` until the statute wording is verified), and also until the follow-up wording has been signed off. In development and test every send answers `delivery: "fake"`: nothing left the machine, and the screen must say so.
+
+### New in Phase 2: deleting an account
+
+| Call | What it does |
+| --- | --- |
+| `DELETE /v1/me` | Asks for deletion. Starts the undo period (`ACCOUNT_PURGE_AFTER_DAYS`, 7 by default). At once Google is asked to remove access for each inbox, and reply checks, follow-ups and sending stop for this person. The session stays, limited to the routes below. Asking again keeps the first end date. |
+| `GET /v1/me/deletion` | Where it stands: `status` (`active`, `deleting`, `deleted`), `deleteAfter`, `canUndo`, `paused`, and `googleAccess`. |
+| `POST /v1/me/deletion/undo` | Cancels it inside the undo period. Their data is still there. The inboxes were disconnected when deletion was asked for, so they connect them again. 409 `not_pending_deletion` or `undo_window_closed`. |
+| `POST /v1/me/deletion/now` | Skips the wait and deletes the personal data now. Ends every session and clears the cookie. |
+
+Show `googleAccess.message` when it is not null: Google did not confirm removing access for `googleAccess.notRevoked` inboxes (a count, never an address), and the person should remove Erase.me in their Google account settings.
+
+After the undo period an hourly job deletes the personal data. A tombstone user row stays with no email, no name, no Google id and no hash of any of them. **The copies of sent requests in the person’s own Gmail are not touched**, and `gmailCopies` in every response says so. Detected companies are deleted `INBOX_RETENTION_DAYS` (30) after an inbox is disconnected, except those a request was made about, which stay with the inbox address removed. Closed requests are not deleted on a timer unless `REQUEST_RETENTION_DAYS` is set above 0.
 
 ## Outcomes that are not errors
 

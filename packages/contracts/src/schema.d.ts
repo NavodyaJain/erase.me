@@ -198,10 +198,70 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Delete the account
-         * @description Starts account deletion: every session ends at once, Gmail access is revoked and dropped, and the personal fields are replaced. Rows that refer to the user are removed by a later purge job.
+         * Ask to delete the account
+         * @description Starts the undo period (7 days by default). Gmail access is asked to be revoked for every inbox now, and reply checks, follow-ups and sending stop for this person. After the undo period the personal data is deleted and only a tombstone with no personal data stays. `POST /v1/me/deletion/undo` cancels it; `POST /v1/me/deletion/now` skips the wait. The copies of sent requests in the person’s own Gmail are not touched. Asking again keeps the first end date.
          */
         delete: operations["deleteMe"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where deletion stands
+         * @description For the “Your data” screen. While deletion is pending it says when the data is deleted, that sending and checking are paused, and whether the person must remove Google access themselves.
+         */
+        get: operations["getDeletion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/deletion/now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete now
+         * @description Skips the undo period. Works whether or not deletion was asked for before. The personal data is deleted at once (a very large account may take a few runs, then `status` is `deleting` with `canUndo` false). Every session ends and the session cookie is cleared. The copies of sent requests in the person’s own Gmail are not touched.
+         */
+        post: operations["deleteNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/deletion/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo the deletion
+         * @description Only inside the undo period. Everything the person had is still there. Their Gmail inboxes were disconnected when deletion was asked for, so they connect them again to scan or follow up.
+         */
+        post: operations["undoDeletion"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -488,9 +548,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        AccountDeleting: {
-            /** @constant */
-            status: "deleting";
+        AccountDeletion: {
+            /**
+             * @description `deleting`: asked for, and can be undone until `deleteAfter`. `deleted`: the personal data has been removed. `active`: no deletion is pending.
+             * @enum {string}
+             */
+            status: "active" | "deleting" | "deleted";
+            requestedAt: string | null;
+            /** @description When the personal data is deleted if it is not undone. Until then the person can undo it. */
+            deleteAfter: string | null;
+            canUndo: boolean;
+            /** @description True while deletion is pending: reply checks, follow-ups and sending are stopped for this person. */
+            paused: boolean;
+            /** @description Erase.me asks Google to remove its access to each inbox when deletion is asked for. */
+            googleAccess: {
+                /** @description How many inboxes Google did not confirm removing access for. A count only. */
+                notRevoked: number;
+                /** @description Set when `notRevoked` is above zero: tells the person to remove Erase.me in their Google account settings. */
+                message: string | null;
+            };
+            /** @description Always says that the copies of sent requests in the person’s own Gmail are not touched. */
+            gmailCopies: string;
+            notice: string;
         };
         CompanyItem: {
             /** @description The detected-company id. Use it for keep and for creating a request. */
@@ -629,7 +708,7 @@ export interface components {
              * @description A stable machine-readable code. Branch on this, not on `title` or `detail`.
              * @enum {string}
              */
-            code: "validation_failed" | "malformed_request" | "idempotency_key_required" | "idempotency_key_invalid" | "unauthorized" | "forbidden" | "not_found" | "inbox_limit" | "inbox_not_connected" | "already_sent" | "approval_required" | "draft_changed" | "fictional_company" | "invalid_transition" | "not_a_form_request" | "followup_not_due" | "followup_limit_reached" | "request_not_closable" | "request_not_editable" | "send_in_progress" | "company_excluded" | "must_keep" | "kept" | "no_contact" | "contact_bounced" | "contact_changed" | "use_form" | "draft_integrity" | "draft_unsafe" | "idempotency_key_reuse" | "rate_limited" | "daily_cap_reached" | "internal_error" | "send_failed" | "send_outcome_unknown" | "auth_not_configured" | "encryption_not_configured" | "send_disabled" | "real_send_blocked" | "not_ready";
+            code: "validation_failed" | "malformed_request" | "idempotency_key_required" | "idempotency_key_invalid" | "unauthorized" | "forbidden" | "deletion_pending" | "not_found" | "undo_window_closed" | "not_pending_deletion" | "inbox_limit" | "inbox_not_connected" | "already_sent" | "approval_required" | "draft_changed" | "fictional_company" | "invalid_transition" | "not_a_form_request" | "followup_not_due" | "followup_limit_reached" | "request_not_closable" | "request_not_editable" | "send_in_progress" | "company_excluded" | "must_keep" | "kept" | "no_contact" | "contact_bounced" | "contact_changed" | "use_form" | "draft_integrity" | "draft_unsafe" | "idempotency_key_reuse" | "rate_limited" | "daily_cap_reached" | "internal_error" | "send_failed" | "send_outcome_unknown" | "auth_not_configured" | "encryption_not_configured" | "send_disabled" | "real_send_blocked" | "not_ready";
             /** @description A sentence a person can act on. Never contains draft text, addresses or tokens. */
             detail?: string;
             /** @description The request path, without the query string */
@@ -1057,7 +1136,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1112,6 +1191,15 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Deletion is pending */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1182,7 +1270,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1272,7 +1360,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1341,6 +1429,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Deletion is pending */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     startInboxConnect: {
@@ -1375,7 +1472,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1440,7 +1537,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1506,6 +1603,15 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Deletion is pending */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1600,7 +1706,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1664,6 +1770,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Deletion is pending */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     deleteMe: {
@@ -1675,7 +1790,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deletion started */
+            /** @description Deletion asked for */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -1683,10 +1798,20 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "status": "deleting"
+                     *       "status": "deleting",
+                     *       "requestedAt": "2026-11-20T09:30:00.000Z",
+                     *       "deleteAfter": "2026-11-27T09:30:00.000Z",
+                     *       "canUndo": true,
+                     *       "paused": true,
+                     *       "googleAccess": {
+                     *         "notRevoked": 0,
+                     *         "message": null
+                     *       },
+                     *       "gmailCopies": "Copies of the requests you sent stay in your own Gmail. Erase.me does not delete them.",
+                     *       "notice": "Your data will be removed after the undo period. Reply checks, follow-ups and sending are paused until then."
                      *     }
                      */
-                    "application/json": components["schemas"]["AccountDeleting"];
+                    "application/json": components["schemas"]["AccountDeletion"];
                 };
             };
             /** @description Not signed in */
@@ -1700,6 +1825,165 @@ export interface operations {
             };
             /** @description Missing or wrong CSRF token, or a request from another origin */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getDeletion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state of deletion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": "deleting",
+                     *       "requestedAt": "2026-11-20T09:30:00.000Z",
+                     *       "deleteAfter": "2026-11-27T09:30:00.000Z",
+                     *       "canUndo": true,
+                     *       "paused": true,
+                     *       "googleAccess": {
+                     *         "notRevoked": 0,
+                     *         "message": null
+                     *       },
+                     *       "gmailCopies": "Copies of the requests you sent stay in your own Gmail. Erase.me does not delete them.",
+                     *       "notice": "Your data will be removed after the undo period. Reply checks, follow-ups and sending are paused until then."
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AccountDeletion"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted, or being deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": "deleted",
+                     *       "requestedAt": "2026-11-20T09:30:00.000Z",
+                     *       "deleteAfter": "2026-11-20T09:30:00.000Z",
+                     *       "canUndo": false,
+                     *       "paused": true,
+                     *       "googleAccess": {
+                     *         "notRevoked": 0,
+                     *         "message": null
+                     *       },
+                     *       "gmailCopies": "Copies of the requests you sent stay in your own Gmail. Erase.me does not delete them.",
+                     *       "notice": "Your data will be removed after the undo period. Reply checks, follow-ups and sending are paused until then."
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AccountDeletion"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or wrong CSRF token, or a request from another origin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    undoDeletion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deletion cancelled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": "active",
+                     *       "requestedAt": null,
+                     *       "deleteAfter": null,
+                     *       "canUndo": false,
+                     *       "paused": false,
+                     *       "googleAccess": {
+                     *         "notRevoked": 0,
+                     *         "message": null
+                     *       },
+                     *       "gmailCopies": "Copies of the requests you sent stay in your own Gmail. Erase.me does not delete them.",
+                     *       "notice": "Your data will be removed after the undo period. Reply checks, follow-ups and sending are paused until then."
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AccountDeletion"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or wrong CSRF token, or a request from another origin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Nothing to undo, or the undo period is over */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1749,6 +2033,15 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Deletion is pending */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1845,7 +2138,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1967,6 +2260,15 @@ export interface operations {
             };
             /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Deletion is pending */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2107,7 +2409,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2263,7 +2565,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2426,7 +2728,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2611,7 +2913,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2791,7 +3093,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2992,7 +3294,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3083,7 +3385,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3299,7 +3601,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3493,7 +3795,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3576,7 +3878,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3783,7 +4085,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Missing or wrong CSRF token, or a request from another origin */
+            /** @description Missing or wrong CSRF token, a request from another origin, or deletion pending */
             403: {
                 headers: {
                     [name: string]: unknown;

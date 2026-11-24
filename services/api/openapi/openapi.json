@@ -301,7 +301,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -316,6 +316,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -390,6 +402,30 @@
                       "status": 401,
                       "code": "unauthorized",
                       "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Deletion is pending",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -527,7 +563,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -542,6 +578,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -738,7 +786,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -753,6 +801,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -882,6 +942,30 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Deletion is pending",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -938,7 +1022,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -953,6 +1037,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -1099,7 +1195,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1114,6 +1210,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -1290,7 +1398,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1305,6 +1413,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -1479,6 +1599,30 @@
               }
             }
           },
+          "403": {
+            "description": "Deletion is pending",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such inbox, or no scan yet",
             "content": {
@@ -1559,6 +1703,30 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Deletion is pending",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -1572,18 +1740,28 @@
         "tags": [
           "Account"
         ],
-        "summary": "Delete the account",
-        "description": "Starts account deletion: every session ends at once, Gmail access is revoked and dropped, and the personal fields are replaced. Rows that refer to the user are removed by a later purge job.",
+        "summary": "Ask to delete the account",
+        "description": "Starts the undo period (7 days by default). Gmail access is asked to be revoked for every inbox now, and reply checks, follow-ups and sending stop for this person. After the undo period the personal data is deleted and only a tombstone with no personal data stays. `POST /v1/me/deletion/undo` cancels it; `POST /v1/me/deletion/now` skips the wait. The copies of sent requests in the person’s own Gmail are not touched. Asking again keeps the first end date.",
         "responses": {
           "202": {
-            "description": "Deletion started",
+            "description": "Deletion asked for",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountDeleting"
+                  "$ref": "#/components/schemas/AccountDeletion"
                 },
                 "example": {
-                  "status": "deleting"
+                  "status": "deleting",
+                  "requestedAt": "2026-11-20T09:30:00.000Z",
+                  "deleteAfter": "2026-11-27T09:30:00.000Z",
+                  "canUndo": true,
+                  "paused": true,
+                  "googleAccess": {
+                    "notRevoked": 0,
+                    "message": null
+                  },
+                  "gmailCopies": "Copies of the requests you sent stay in your own Gmail. Erase.me does not delete them.",
+                  "notice": "Your data will be removed after the undo period. Reply checks, follow-ups and sending are paused until then."
                 }
               }
             }
@@ -1628,6 +1806,284 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/me/deletion": {
+      "get": {
+        "operationId": "getDeletion",
+        "tags": [
+          "Account"
+        ],
+        "summary": "Where deletion stands",
+        "description": "For the “Your data” screen. While deletion is pending it says when the data is deleted, that sending and checking are paused, and whether the person must remove Google access themselves.",
+        "responses": {
+          "200": {
+            "description": "The state of deletion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletion"
+                },
+                "example": {
+                  "status": "deleting",
+                  "requestedAt": "2026-11-20T09:30:00.000Z",
+                  "deleteAfter": "2026-11-27T09:30:00.000Z",
+                  "canUndo": true,
+                  "paused": true,
+                  "googleAccess": {
+                    "notRevoked": 0,
+                    "message": null
+                  },
+                  "gmailCopies": "Copies of the requests you sent stay in your own Gmail. Erase.me does not delete them.",
+                  "notice": "Your data will be removed after the undo period. Reply checks, follow-ups and sending are paused until then."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/me/deletion/now": {
+      "post": {
+        "operationId": "deleteNow",
+        "tags": [
+          "Account"
+        ],
+        "summary": "Delete now",
+        "description": "Skips the undo period. Works whether or not deletion was asked for before. The personal data is deleted at once (a very large account may take a few runs, then `status` is `deleting` with `canUndo` false). Every session ends and the session cookie is cleared. The copies of sent requests in the person’s own Gmail are not touched.",
+        "responses": {
+          "200": {
+            "description": "Deleted, or being deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletion"
+                },
+                "example": {
+                  "status": "deleted",
+                  "requestedAt": "2026-11-20T09:30:00.000Z",
+                  "deleteAfter": "2026-11-20T09:30:00.000Z",
+                  "canUndo": false,
+                  "paused": true,
+                  "googleAccess": {
+                    "notRevoked": 0,
+                    "message": null
+                  },
+                  "gmailCopies": "Copies of the requests you sent stay in your own Gmail. Erase.me does not delete them.",
+                  "notice": "Your data will be removed after the undo period. Reply checks, follow-ups and sending are paused until then."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/v1/me/deletion/undo": {
+      "post": {
+        "operationId": "undoDeletion",
+        "tags": [
+          "Account"
+        ],
+        "summary": "Undo the deletion",
+        "description": "Only inside the undo period. Everything the person had is still there. Their Gmail inboxes were disconnected when deletion was asked for, so they connect them again to scan or follow up.",
+        "responses": {
+          "200": {
+            "description": "Deletion cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletion"
+                },
+                "example": {
+                  "status": "active",
+                  "requestedAt": null,
+                  "deleteAfter": null,
+                  "canUndo": false,
+                  "paused": false,
+                  "googleAccess": {
+                    "notRevoked": 0,
+                    "message": null
+                  },
+                  "gmailCopies": "Copies of the requests you sent stay in your own Gmail. Erase.me does not delete them.",
+                  "notice": "Your data will be removed after the undo period. Reply checks, follow-ups and sending are paused until then."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Sign in required",
+                    "value": {
+                      "type": "urn:erase:problem:unauthorized",
+                      "title": "Sign in required",
+                      "status": 401,
+                      "code": "unauthorized",
+                      "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "Not allowed",
+                    "value": {
+                      "type": "urn:erase:problem:forbidden",
+                      "title": "Not allowed",
+                      "status": 403,
+                      "code": "forbidden",
+                      "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Nothing to undo, or the undo period is over",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "not_pending_deletion": {
+                    "summary": "No deletion is pending",
+                    "value": {
+                      "type": "urn:erase:problem:not_pending_deletion",
+                      "title": "No deletion is pending",
+                      "status": 409,
+                      "code": "not_pending_deletion",
+                      "detail": "There is nothing to undo.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "undo_window_closed": {
+                    "summary": "The undo period is over",
+                    "value": {
+                      "type": "urn:erase:problem:undo_window_closed",
+                      "title": "The undo period is over",
+                      "status": 409,
+                      "code": "undo_window_closed",
+                      "detail": "The data is being or has been deleted, so it can no longer be undone.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -1697,6 +2153,30 @@
                       "status": 401,
                       "code": "unauthorized",
                       "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Deletion is pending",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -1869,7 +2349,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1884,6 +2364,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -2070,6 +2562,30 @@
                       "status": 401,
                       "code": "unauthorized",
                       "detail": "Send the `erase_session` cookie (sign in first).",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Deletion is pending",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -2304,7 +2820,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2319,6 +2835,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -2657,7 +3185,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2672,6 +3200,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -2966,7 +3506,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2981,6 +3521,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -3307,7 +3859,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3322,6 +3874,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -3718,7 +4282,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3733,6 +4297,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -4199,7 +4775,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4214,6 +4790,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -4489,7 +5077,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4504,6 +5092,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -5091,7 +5691,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5106,6 +5706,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -5551,7 +6163,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5566,6 +6178,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -5776,7 +6400,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5791,6 +6415,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -6297,7 +6933,7 @@
             }
           },
           "403": {
-            "description": "Missing or wrong CSRF token, or a request from another origin",
+            "description": "Missing or wrong CSRF token, a request from another origin, or deletion pending",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6312,6 +6948,18 @@
                       "status": 403,
                       "code": "forbidden",
                       "detail": "Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.",
+                      "instance": "/v1/example",
+                      "requestId": "00000000-0000-4000-8000-000000000000"
+                    }
+                  },
+                  "deletion_pending": {
+                    "summary": "Your data is scheduled to be deleted",
+                    "value": {
+                      "type": "urn:erase:problem:deletion_pending",
+                      "title": "Your data is scheduled to be deleted",
+                      "status": 403,
+                      "code": "deletion_pending",
+                      "detail": "Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.",
                       "instance": "/v1/example",
                       "requestId": "00000000-0000-4000-8000-000000000000"
                     }
@@ -6544,16 +7192,90 @@
       }
     },
     "schemas": {
-      "AccountDeleting": {
+      "AccountDeletion": {
         "type": "object",
         "properties": {
           "status": {
             "type": "string",
-            "const": "deleting"
+            "enum": [
+              "active",
+              "deleting",
+              "deleted"
+            ],
+            "description": "`deleting`: asked for, and can be undone until `deleteAfter`. `deleted`: the personal data has been removed. `active`: no deletion is pending."
+          },
+          "requestedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deleteAfter": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp, ISO 8601"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the personal data is deleted if it is not undone. Until then the person can undo it."
+          },
+          "canUndo": {
+            "type": "boolean"
+          },
+          "paused": {
+            "type": "boolean",
+            "description": "True while deletion is pending: reply checks, follow-ups and sending are stopped for this person."
+          },
+          "googleAccess": {
+            "type": "object",
+            "properties": {
+              "notRevoked": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "How many inboxes Google did not confirm removing access for. A count only."
+              },
+              "message": {
+                "description": "Set when `notRevoked` is above zero: tells the person to remove Erase.me in their Google account settings.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "notRevoked",
+              "message"
+            ],
+            "additionalProperties": false,
+            "description": "Erase.me asks Google to remove its access to each inbox when deletion is asked for."
+          },
+          "gmailCopies": {
+            "type": "string",
+            "description": "Always says that the copies of sent requests in the person’s own Gmail are not touched."
+          },
+          "notice": {
+            "type": "string"
           }
         },
         "required": [
-          "status"
+          "status",
+          "requestedAt",
+          "deleteAfter",
+          "canUndo",
+          "paused",
+          "googleAccess",
+          "gmailCopies",
+          "notice"
         ],
         "additionalProperties": false
       },
@@ -7008,7 +7730,10 @@
               "idempotency_key_invalid",
               "unauthorized",
               "forbidden",
+              "deletion_pending",
               "not_found",
+              "undo_window_closed",
+              "not_pending_deletion",
               "inbox_limit",
               "inbox_not_connected",
               "already_sent",

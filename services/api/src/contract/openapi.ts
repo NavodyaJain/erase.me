@@ -125,7 +125,12 @@ function standardResponses(op: OperationDoc): Record<number, Json> {
   const unsafe = op.method !== 'get';
   if (op.auth) {
     out[401] = problemResponse(401, 'Not signed in', [{ code: 'unauthorized', title: 'Sign in required', detail: 'Send the `erase_session` cookie (sign in first).' }]);
-    if (unsafe) {
+    if (!op.allowsPendingDeletion) {
+      out[403] = problemResponse(403, unsafe ? 'Missing or wrong CSRF token, a request from another origin, or deletion pending' : 'Deletion is pending', [
+        ...(unsafe ? [{ code: 'forbidden' as const, title: 'Not allowed', detail: 'Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.' }] : []),
+        { code: 'deletion_pending' as const, title: 'Your data is scheduled to be deleted', detail: 'Undo it from Your data to use Erase.me again. Nothing is sent, checked or followed up while it is pending.' },
+      ]);
+    } else if (unsafe) {
       out[403] = problemResponse(403, 'Missing or wrong CSRF token, or a request from another origin', [{ code: 'forbidden', title: 'Not allowed', detail: 'Send the `x-csrf-token` from `GET /v1/me` on every state-changing call, from the web app’s origin.' }]);
     }
   }
