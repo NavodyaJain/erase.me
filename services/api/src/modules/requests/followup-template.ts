@@ -37,7 +37,7 @@ const dateLabel = (d: Date): string => new Intl.DateTimeFormat('en-GB', { day: '
  * no AI. What it deliberately does not do:
  * - claim a legal deadline was missed, or that any time has run out: it says only that no reply has been seen yet, and
  *   that a message can go astray;
- * - say what the company will do, or call it compliant or not: it asks, and offers to help with identification;
+ * - say what the company will do, or judge whether it has met any duty: it asks, and offers to help with identification;
  * - repeat the "within 30 days" hope of the first message, or put any pressure on the company;
  * - include any ID number.
  * The statute paragraph is the same one the first request uses, and it stays behind `citation.verified`: while it is
