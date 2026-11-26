@@ -17,6 +17,8 @@ export interface StatuteCitation {
   erasureLine: string;
   /** The optional summary-of-data request and the section it refers to. */
   summaryLine: string;
+  /** The follow-up's version: it asks only for erasure, so the summary it mentions is the earlier message's. */
+  followupSummaryLine: string;
   /** When the rights provisions are notified to commence, and what that means for this message. */
   commencementLine: string;
   /** What the owner has to verify, shown inside the [OPEN] paragraph while unverified. */
@@ -27,6 +29,7 @@ export const STATUTE_CITATION: StatuteCitation = {
   verified: false,
   erasureLine: 'I am asking for erasure with reference to Section 12(3) of the Digital Personal Data Protection Act, 2023.',
   summaryLine: 'My request for a summary refers to Section 11(1) of the Act.',
+  followupSummaryLine: 'My earlier request for a summary refers to Section 11(1) of the Act.',
   commencementLine:
     'I understand the Act’s provisions on the rights of data principals are notified to come into force in May 2027, so I am making this as a request now.',
   candidate:

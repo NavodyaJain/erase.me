@@ -92,7 +92,8 @@ describe('renderFollowup', () => {
     it('uses the verified sentences, and no marker, once the flag is set', () => {
       const v = renderFollowup(input, verified);
       expect(v.body).toContain('Section 12(3) of the Digital Personal Data Protection Act, 2023');
-      expect(v.body).toContain('Section 11(1) of the Act');
+      expect(v.body).toContain('My earlier request for a summary refers to Section 11(1) of the Act.');
+      expect(v.body).not.toContain('My request for a summary'); // the follow-up asks only for erasure
       expect(v.body).toContain('so I am making this as a request now');
       expect(v.body).not.toContain('[OPEN');
       expect(findSafetyIssues(v.subject, v.body)).toEqual([]);

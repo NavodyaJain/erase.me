@@ -68,7 +68,7 @@ export function renderFollowup(input: FollowupInput, citation: StatuteCitation =
     '',
     'If you have already replied, thank you. Please point me to your answer, as I may have missed it.',
     '',
-    statuteParagraph(citation),
+    statuteParagraph({ ...citation, summaryLine: citation.followupSummaryLine }),
     '',
     'I am also making this request under any erasure process described in your privacy policy.',
     '',
