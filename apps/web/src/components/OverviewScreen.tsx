@@ -8,6 +8,7 @@ import { copy, plural } from '@/copy/en';
 import { CompanyRow } from './CompanyRow';
 import { DraftOutcomes } from './DraftOutcomes';
 import { ErrorNotice } from './ErrorNotice';
+import { type NextAction, nextActions, summarise } from '@/lib/tracking';
 import { isScanActive, useCompanies, useCreateDrafts, useInboxes, useKeep, useLatestScan, useRequests } from '@/lib/hooks';
 
 type Filter = 'all' | 'likely' | 'possible' | 'kept';
@@ -17,6 +18,46 @@ function ScanProgress({ inboxId, email }: { inboxId: string; email: string }) {
   const scan = useLatestScan(inboxId).data;
   if (!scan || !isScanActive(scan.status)) return null;
   return <ProgressBar label={`${copy.connect.scanProgress} ${email}`} value={scan.progressPct} detail={`${copy.connect.scanProgress} ${email} · ${plural(scan.foundCount, 'company', 'companies')} so far`} />;
+}
+
+/** One thing to do next, with the way to do it. Choosing companies happens on this screen, so it has no link. */
+function NextRow({ action }: { action: NextAction }) {
+  const n = copy.overview.next;
+  const words = ((): { title: string; body: string; link?: string } => {
+    switch (action.kind) {
+      case 'reconnect':
+        return { title: n.reconnect(action.count), body: n.reconnectBody, link: n.reconnectAction };
+      case 'drafts':
+        return { title: n.drafts(action.count), body: n.draftsBody, link: n.draftsAction };
+      case 'followup_drafts':
+        return { title: n.followupDrafts(action.count, action.company), body: n.followupDraftsBody, link: n.draftsAction };
+      case 'replies':
+        return { title: n.replies(action.count, action.company), body: n.repliesBody, link: n.view };
+      case 'more_info':
+        return { title: n.moreInfo(action.count, action.company), body: n.moreInfoBody, link: n.view };
+      case 'followup_due':
+        return { title: n.followupDue(action.count, action.company), body: n.followupDueBody, link: n.view };
+      case 'connect':
+        return { title: n.connect, body: n.connectBody, link: n.connectAction };
+      case 'choose':
+        return { title: n.choose, body: n.chooseBody };
+    }
+  })();
+  return (
+    <li>
+      <div className="row-between">
+        <div className="grow">
+          <div style={{ fontWeight: 600 }}>{words.title}</div>
+          <div className="muted">{words.body}</div>
+        </div>
+        {words.link && action.kind !== 'choose' ? (
+          <Link href={action.href} className={buttonClass(action.kind === 'drafts' || action.kind === 'connect' ? 'primary' : 'secondary')}>
+            {words.link}
+          </Link>
+        ) : null}
+      </div>
+    </li>
+  );
 }
 
 /** Overview (PRD F3, Home and Desktop boards): the numbers Phase 1 has, what to do next, and the companies. */
@@ -32,8 +73,8 @@ export function OverviewScreen() {
 
   const list: CompanyItem[] = companies.data ?? [];
   const live = (inboxes.data ?? []).filter((i) => i.status !== 'disconnected');
-  const sent = (requests.data ?? []).filter((r) => r.status === 'sent').length;
-  const awaiting = (requests.data ?? []).filter((r) => r.status === 'drafted' || r.status === 'approved').length;
+  // Everything ever sent counts, whatever happened since: a reply does not make a request unsent.
+  const summary = summarise(requests.data ?? []);
   const scanning = live.map((i) => i.id);
 
   const shown = useMemo(
@@ -62,6 +103,8 @@ export function OverviewScreen() {
   }
 
   const loading = companies.isPending || inboxes.isPending;
+  // Ranked once everything is known, so the list does not reshuffle while it loads.
+  const actions = loading || requests.isPending ? [] : nextActions({ inboxes: inboxes.data ?? [], requests: requests.data ?? [], companies: list.length });
 
   return (
     <div className="page">
@@ -76,16 +119,21 @@ export function OverviewScreen() {
       <div className="cards" aria-label={copy.overview.title}>
         <Card padded aria-label={copy.overview.cards.companies}>
           <div className="stat">
-            <span className="stat-label">{copy.overview.cards.companies}</span>
+            <a className="stat-label ui-link" href="#companies">
+              {copy.overview.cards.companies}
+            </a>
             <span className="stat-value">{loading ? '–' : list.length}</span>
             <span className="muted">{copy.overview.cards.companiesNote}</span>
           </div>
         </Card>
         <Card padded aria-label={copy.overview.cards.control}>
           <div className="stat">
-            <span className="stat-label">{copy.overview.cards.control}</span>
-            <span className="stat-value">{requests.isPending ? '–' : sent}</span>
+            <Link className="stat-label ui-link" href="/requests">
+              {copy.overview.cards.control}
+            </Link>
+            <span className="stat-value">{requests.isPending ? '–' : summary.sent}</span>
             <span className="muted">{copy.overview.cards.controlNote}</span>
+            {summary.reportedErased > 0 ? <span className="muted">{copy.overview.cards.controlErased(summary.reportedErased)}</span> : null}
           </div>
         </Card>
         {[copy.overview.cards.money, copy.overview.cards.risk].map((label) => (
@@ -110,39 +158,10 @@ export function OverviewScreen() {
 
       <Card title={copy.overview.next.title}>
         <ul className="list">
-          {live.length === 0 && !inboxes.isPending ? (
-            <li>
-              <div className="row-between">
-                <div className="grow">
-                  <div style={{ fontWeight: 600 }}>{copy.overview.next.connect}</div>
-                  <div className="muted">{copy.overview.next.connectBody}</div>
-                </div>
-                <Link href="/connect" className={buttonClass('primary')}>
-                  {copy.overview.next.connectAction}
-                </Link>
-              </div>
-            </li>
-          ) : null}
-          {awaiting > 0 ? (
-            <li>
-              <div className="row-between">
-                <div className="grow">
-                  <div style={{ fontWeight: 600 }}>{copy.overview.next.drafts(awaiting)}</div>
-                  <div className="muted">{copy.overview.next.draftsBody}</div>
-                </div>
-                <Link href="/requests/review" className={buttonClass('primary')}>
-                  {copy.overview.next.draftsAction}
-                </Link>
-              </div>
-            </li>
-          ) : null}
-          {list.length > 0 && awaiting === 0 ? (
-            <li>
-              <div style={{ fontWeight: 600 }}>{copy.overview.next.choose}</div>
-              <div className="muted">{copy.overview.next.chooseBody}</div>
-            </li>
-          ) : null}
-          {live.length > 0 && list.length === 0 && awaiting === 0 && !loading ? (
+          {actions.map((a) => (
+            <NextRow key={a.kind} action={a} />
+          ))}
+          {!loading && !requests.isPending && actions.length === 0 ? (
             <li>
               <div className="muted">{copy.overview.next.allClear}</div>
             </li>
@@ -154,6 +173,7 @@ export function OverviewScreen() {
       {create.isError ? <ErrorNotice error={create.error} /> : null}
       {keep.isError ? <Alert tone="warn">{copy.overview.company.keepFailed}</Alert> : null}
 
+      <div id="companies" />
       <Card title={copy.overview.list.title}>
         <p className="muted" style={{ marginBottom: 'var(--space-3)' }}>
           {copy.overview.list.note}

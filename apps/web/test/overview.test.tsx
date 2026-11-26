@@ -26,6 +26,20 @@ const company = (n: number, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 const INBOX = { id: 'inb_1', email: 'asha.mail@example.com', status: 'connected', connectedAt: '2026-11-20T09:30:00.000Z', lastScanAt: '2026-11-21T09:30:00.000Z' };
+/** A request list item as the API sends it. */
+const request = (requestId: string, status: string) => ({
+  id: requestId,
+  status,
+  company: { name: 'Examplo 1', mustKeep: false },
+  channel: 'email',
+  outcome: null,
+  createdAt: '2026-11-20T09:30:00.000Z',
+  updatedAt: '2026-11-20T09:30:00.000Z',
+  sentAt: status === 'drafted' || status === 'approved' ? null : '2026-11-21T09:30:00.000Z',
+  dueAt: null,
+  replies: { count: 0, automaticCount: 0 },
+  followup: { state: 'none', canCreate: false },
+});
 const base = (companies: unknown[], requests: unknown[] = []) => ({
   'GET /v1/companies': { body: { companies } },
   'GET /v1/inboxes': { body: { inboxes: [INBOX] } },
@@ -35,7 +49,7 @@ const base = (companies: unknown[], requests: unknown[] = []) => ({
 
 describe('Overview', () => {
   it('shows the Phase 1 cards: Companies, Control = requests sent, and Money and Risk as Not available yet', async () => {
-    const { container } = renderApp(<OverviewScreen />, base([company(1), company(2)], [{ id: 'req_1', status: 'sent' }, { id: 'req_2', status: 'drafted' }]));
+    const { container } = renderApp(<OverviewScreen />, base([company(1), company(2)], [request('req_1', 'sent'), request('req_2', 'drafted')]));
     const control = await screen.findByLabelText(copy.overview.cards.control);
     await waitFor(() => expect(within(control).getByText('1')).toBeTruthy());
     expect(within(screen.getByLabelText(copy.overview.cards.companies)).getByText('2')).toBeTruthy();
@@ -94,7 +108,7 @@ describe('Overview', () => {
   });
 
   it('points to review when drafts exist', async () => {
-    renderApp(<OverviewScreen />, base([company(1)], [{ id: 'req_1', status: 'drafted' }]));
+    renderApp(<OverviewScreen />, base([company(1)], [request('req_1', 'drafted')]));
     expect(await screen.findByText(copy.overview.next.drafts(1))).toBeTruthy();
     expect(screen.getByRole('link', { name: copy.overview.next.draftsAction }).getAttribute('href')).toBe('/requests/review');
   });

@@ -248,7 +248,8 @@ describe('Requests list', () => {
   it('lists requests with status, and handles empty and error', async () => {
     const { container } = renderApp(<RequestsList />, { 'GET /v1/requests': { body: { requests: [item(1), item(2, 'sent')] } } });
     expect(await screen.findByRole('link', { name: 'Examplo 1' })).toBeTruthy();
-    expect(screen.getByText('Sent')).toBeTruthy();
+    const rows = screen.getByRole('list');
+    expect(within(rows).getByText('Sent')).toBeTruthy();
     expect(await axe(container)).toHaveNoViolations();
     const empty = renderApp(<RequestsList />, { 'GET /v1/requests': { body: { requests: [] } } });
     expect(await within(empty.container).findByText(copy.requests.listEmpty)).toBeTruthy();
