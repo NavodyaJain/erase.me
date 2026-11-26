@@ -1,6 +1,6 @@
 'use client';
 
-import { createIdempotencyKey, isApiError, isStaleDraft } from '@erase/api-client';
+import { createIdempotencyKey, isApiError, isStaleDraft, type Outcome } from '@erase/api-client';
 import type { CompanyItem, RequestView } from '@erase/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
@@ -192,3 +192,92 @@ export function useApproveAndSend() {
     }
   };
 }
+
+/** The person records what the company answered. Their report only: nothing is inferred. */
+export function useSetOutcome(id: string) {
+  const api = useApi();
+  const refresh = useRefreshRequest();
+  return useMutation({
+    mutationFn: (outcome: Outcome) => api.requests.setOutcome(id, outcome),
+    onSuccess: (view) => refresh(id, view),
+    onError: () => refresh(id),
+  });
+}
+
+/** For a web form: the person pasted this exact version into it. A changed draft is refused and shown again, never retried. */
+export function useMarkSubmitted(id: string) {
+  const api = useApi();
+  const refresh = useRefreshRequest();
+  return useMutation({
+    mutationFn: (draftHash: string) => api.requests.markSubmitted(id, draftHash),
+    onSuccess: (view) => refresh(id, view),
+    onError: () => refresh(id),
+  });
+}
+
+export function useCreateFollowup(id: string) {
+  const api = useApi();
+  const refresh = useRefreshRequest();
+  return useMutation({
+    mutationFn: () => api.requests.createFollowup(id),
+    onSuccess: (view) => refresh(id, view),
+    onError: () => refresh(id),
+  });
+}
+
+export function useEditFollowup(id: string) {
+  const api = useApi();
+  const refresh = useRefreshRequest();
+  return useMutation({
+    mutationFn: (input: { baseHash: string; subject: string; body: string }) => api.requests.editFollowupDraft(id, input),
+    onSuccess: (view) => refresh(id, view),
+    onError: (e) => {
+      if (isStaleDraft(e)) refresh(id);
+    },
+  });
+}
+
+export function useMarkFollowupSubmitted(id: string) {
+  const api = useApi();
+  const refresh = useRefreshRequest();
+  return useMutation({
+    mutationFn: (draftHash: string) => api.requests.markFollowupSubmitted(id, draftHash),
+    onSuccess: (view) => refresh(id, view),
+    onError: () => refresh(id),
+  });
+}
+
+/**
+ * Approve exactly the follow-up version the person read, then send it. The same rules as the first message: approval uses
+ * the viewed hash, a changed draft stops there with nothing retried, and one Idempotency-Key per request is reused on
+ * every retry. Follow-up keys are kept apart from the first message's.
+ */
+export function useApproveAndSendFollowup() {
+  const api = useApi();
+  const refresh = useRefreshRequest();
+  const keys = useRef(new Map<string, string>());
+  return async (id: string, input: { viewedHash: string; alreadyApproved: boolean }): Promise<StepResult> => {
+    try {
+      if (!input.alreadyApproved) await api.requests.approveFollowup(id, input.viewedHash);
+    } catch (error) {
+      refresh(id);
+      return isStaleDraft(error) ? { state: 'stale' } : { state: 'error', error };
+    }
+    let key = keys.current.get(id);
+    if (!key) {
+      key = createIdempotencyKey();
+      keys.current.set(id, key);
+    }
+    try {
+      const sent = await api.requests.sendFollowup(id, key);
+      keys.current.delete(id);
+      refresh(id);
+      return { state: 'sent', delivery: sent.delivery };
+    } catch (error) {
+      // The key stays, so pressing "try again" reuses it.
+      refresh(id);
+      return { state: 'error', error };
+    }
+  };
+}
+
