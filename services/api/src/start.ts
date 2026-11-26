@@ -22,8 +22,8 @@ export interface StartContext {
 export interface StartOptions {
   /** Extra plugins registered before listening (the dev helper). Never used by the production entry. */
   plugins?: Array<(ctx: StartContext) => Promise<void>>;
-  /** Replaces the Google and Gmail clients and the catalog folder. Used only by the end-to-end entry (e2e/server.ts); the production entry never passes it. */
-  overrides?: { google?: GoogleOAuthClient; gmail?: GmailClient; catalogDir?: string; authRateLimitPerMinute?: number };
+  /** Replaces the Google and Gmail clients, the clock and the catalog folder. Used only by the end-to-end entry (e2e/server.ts); the production entry never passes it. */
+  overrides?: { google?: GoogleOAuthClient; gmail?: GmailClient; catalogDir?: string; authRateLimitPerMinute?: number; now?: () => Date };
   /** Where the browser lands after Google. Defaults to WEB_ORIGIN. */
   postAuthRedirect?: string;
 }
@@ -55,6 +55,7 @@ export async function start(opts: StartOptions = {}): Promise<void> {
           : undefined),
       keys: env.TOKEN_MASTER_KEY ? new LocalKeyProvider(env.TOKEN_MASTER_KEY) : undefined,
       ...(opts.overrides?.authRateLimitPerMinute ? { authRateLimitPerMinute: opts.overrides.authRateLimitPerMinute } : {}),
+      ...(opts.overrides?.now ? { now: opts.overrides.now } : {}),
       ...(opts.postAuthRedirect ? { postAuthRedirect: opts.postAuthRedirect } : {}),
     },
   });

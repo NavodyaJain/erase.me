@@ -1,15 +1,37 @@
 import { CONNECT_SCOPES, SIGNIN_SCOPES, type AuthorizationParams, type CodeExchangeResult, type GoogleOAuthClient } from '../src/modules/auth/google-oauth.js';
-import type { GmailClient, GmailMessageMeta, GmailThread, MessagePage } from '../src/modules/gmail/gmail.client.js';
+import type { GmailClient, GmailMessageMeta, GmailThread, GmailThreadMessage, MessagePage } from '../src/modules/gmail/gmail.client.js';
 
-/** The person every e2e test signs in as. Fictional, on example.com. */
-export const E2E_IDENTITY = { sub: 'e2e-sub-0001', email: 'e2e.user@example.com', name: 'E2E User' } as const;
+/** The people the e2e tests sign in as. Fictional, on example.com. The first is the default; the second is for cross-user checks. */
+export const E2E_IDENTITIES = {
+  first: { sub: 'e2e-sub-0001', email: 'e2e.user@example.com', name: 'E2E User', refreshToken: 'e2e-refresh-token' },
+  second: { sub: 'e2e-sub-0002', email: 'e2e.other@example.com', name: 'E2E Other', refreshToken: 'e2e-refresh-token-second' },
+} as const;
+export type E2eWho = keyof typeof E2E_IDENTITIES;
 
 /**
  * A stand-in for Google. `authorizationUrl` points at a page on the e2e server that bounces straight back to the real
  * callback, so the real state, PKCE and nonce checks still run. Nothing here talks to Google.
  */
 export class FakeGoogle implements GoogleOAuthClient {
+  /** Every token it was asked to revoke. */
+  readonly revoked: string[] = [];
+  private who: E2eWho = 'first';
+
   constructor(private readonly publicUrl: string) {}
+
+  use(who: E2eWho): void {
+    this.who = who;
+  }
+
+  reset(): void {
+    this.who = 'first';
+    this.revoked.length = 0;
+  }
+
+  /** The code the consent page returns: it says who approved, so a later change of person cannot alter it. */
+  codeFor(purpose: 'signin' | 'connect'): string {
+    return `e2e-code-${purpose}-${this.who}`;
+  }
 
   authorizationUrl(p: AuthorizationParams): string {
     const u = new URL('/e2e/google/authorize', this.publicUrl);
@@ -19,12 +41,14 @@ export class FakeGoogle implements GoogleOAuthClient {
   }
 
   exchangeCode(code: string): Promise<CodeExchangeResult> {
-    if (!code.startsWith('e2e-code-')) return Promise.reject(new Error('unknown code'));
-    const connect = code === 'e2e-code-connect';
+    const m = /^e2e-code-(signin|connect)-(first|second)$/.exec(code);
+    if (!m) return Promise.reject(new Error('unknown code'));
+    const connect = m[1] === 'connect';
+    const { refreshToken, ...identity } = E2E_IDENTITIES[m[2] as E2eWho];
     return Promise.resolve({
-      identity: { ...E2E_IDENTITY },
+      identity: { ...identity },
       grantedScopes: [...(connect ? CONNECT_SCOPES : SIGNIN_SCOPES)],
-      ...(connect ? { refreshToken: 'e2e-refresh-token' } : {}),
+      ...(connect ? { refreshToken } : {}),
       accessToken: 'e2e-access-token',
     });
   }
@@ -33,7 +57,8 @@ export class FakeGoogle implements GoogleOAuthClient {
     return Promise.resolve({ accessToken: 'e2e-access-token', expiresInSec: 3600 });
   }
 
-  revoke(): Promise<boolean> {
+  revoke(token: string): Promise<boolean> {
+    this.revoked.push(token);
     return Promise.resolve(true);
   }
 }
@@ -59,7 +84,29 @@ export const E2E_MAILBOX: FakeMessage[] = [
 
 /** Serves E2E_MAILBOX as message metadata. Message ids are positions, so every scan is repeatable. */
 export class FakeGmail implements GmailClient {
+  private readonly replies = new Map<string, GmailThreadMessage[]>();
+
   constructor(private readonly now: () => number = Date.now) {}
+
+  /** Puts a reply on a thread, as headers only. */
+  addReply(threadId: string, reply: { from: string; inReplyTo: string; receivedAt: Date; automatic: boolean }): void {
+    const list = this.replies.get(threadId) ?? [];
+    const n = list.length + 1;
+    list.push({
+      id: `e2e-reply-${threadId.slice(-12)}-${n}`,
+      receivedAt: reply.receivedAt,
+      fromAddress: reply.from.toLowerCase(),
+      messageId: `e2e-reply-${n}@mail.example`,
+      inReplyTo: reply.inReplyTo,
+      references: [reply.inReplyTo],
+      automatic: reply.automatic,
+    });
+    this.replies.set(threadId, list);
+  }
+
+  reset(): void {
+    this.replies.clear();
+  }
 
   listMessageIds(_token: string, q: { maxResults: number; pageToken?: string }): Promise<MessagePage> {
     const start = q.pageToken ? Number(q.pageToken) : 0;
@@ -68,9 +115,9 @@ export class FakeGmail implements GmailClient {
     return Promise.resolve({ ids, ...(end < E2E_MAILBOX.length ? { nextPageToken: String(end) } : {}), estimatedTotal: E2E_MAILBOX.length });
   }
 
-  /** No replies exist in the e2e mailbox yet: every sent thread is empty. (Later e2e tests add replies through a control route.) */
+  /** A sent thread is empty until a test adds a reply through the control route. */
   getThreadMetadata(_token: string, threadId: string): Promise<GmailThread | null> {
-    return Promise.resolve({ id: threadId, messages: [] });
+    return Promise.resolve({ id: threadId, messages: [...(this.replies.get(threadId) ?? [])] });
   }
 
   getMessageMetadata(_token: string, id: string): Promise<GmailMessageMeta | null> {

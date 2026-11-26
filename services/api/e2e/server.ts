@@ -3,9 +3,10 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { loadEnv } from '../src/config/env.js';
 import { reportStartupFailure, start } from '../src/start.js';
-import { e2eAppUrl, e2eOwnerUrl, prepareE2eDatabase, wipeE2eData } from './db.js';
+import { E2eClock, registerE2eControls } from './controls.js';
+import { e2eAppUrl, e2eOwnerUrl, prepareE2eDatabase } from './db.js';
 import { FakeGmail, FakeGoogle } from './fakes.js';
-import { assertE2eAllowed } from './guard.js';
+import { assertE2eAllowed, assertE2eLaunchAllowed } from './guard.js';
 
 /**
  * The end-to-end API (`pnpm --filter @erase/api e2e:server`). It is a separate entry: src/server.ts never imports this
@@ -16,6 +17,13 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const API_PORT = process.env.E2E_API_PORT ?? '4100';
 const WEB_PORT = process.env.E2E_WEB_PORT ?? '3100';
 const adminUrl = process.env.E2E_DATABASE_ADMIN_URL ?? process.env.TEST_DATABASE_ADMIN_URL ?? 'postgres://erase:erase@localhost:5432/postgres';
+
+// Refuse on the environment as given, before anything below overrides it.
+try {
+  assertE2eLaunchAllowed(process.env);
+} catch (err) {
+  reportStartupFailure(err);
+}
 
 Object.assign(process.env, {
   NODE_ENV: 'development',
@@ -43,29 +51,22 @@ async function main(): Promise<void> {
   await prepareE2eDatabase(adminUrl);
   const owner = new pg.Pool({ connectionString: e2eOwnerUrl(adminUrl), max: 2 });
 
+  const clock = new E2eClock();
+  const google = new FakeGoogle(env.API_PUBLIC_URL);
+  const gmail = new FakeGmail();
+
   await start({
     overrides: {
-      google: new FakeGoogle(env.API_PUBLIC_URL),
-      gmail: new FakeGmail(),
+      google,
+      gmail,
+      now: clock.now,
       catalogDir: path.join(here, 'catalog'),
       // Every test signs in again from the same address, which the real limit (30 a minute) would refuse.
       authRateLimitPerMinute: 10_000,
     },
     plugins: [
       ({ app }) => {
-        // The fake Google consent page: it approves at once and returns to the real callback.
-        app.get('/e2e/google/authorize', async (request, reply) => {
-          const q = request.query as { state?: string; purpose?: string };
-          const back = new URL('/v1/auth/google/callback', env.API_PUBLIC_URL);
-          back.searchParams.set('code', q.purpose === 'connect' ? 'e2e-code-connect' : 'e2e-code-signin');
-          back.searchParams.set('state', q.state ?? '');
-          return reply.redirect(back.toString());
-        });
-        // Between tests: forget every person, inbox, scan and request.
-        app.post('/e2e/reset', async (_request, reply) => {
-          await wipeE2eData(owner);
-          return reply.code(204).send();
-        });
+        registerE2eControls(app, { env, source: process.env, owner, clock, google, gmail, services: () => app.services });
         return Promise.resolve();
       },
     ],

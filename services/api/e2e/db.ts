@@ -47,6 +47,6 @@ export async function prepareE2eDatabase(adminUrl: string): Promise<void> {
 }
 
 /** Removes everything a test created (people, inboxes, scans, requests) and keeps the synced catalog. */
-export async function wipeE2eData(pool: pg.Pool): Promise<void> {
+export async function wipeE2eData(pool: Pick<pg.Pool, 'query'>): Promise<void> {
   await pool.query('TRUNCATE users, oauth_states CASCADE');
 }
