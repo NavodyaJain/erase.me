@@ -73,7 +73,7 @@ export interface FollowupSummaryInput {
   req: RequestRow;
   ctx: CompanyContext;
   /** The first request's draft: the follow-up goes to the same place. */
-  firstDraft: DraftRow;
+  firstDraft: Pick<DraftRow, 'toEmail'>;
   followups: FollowupRow[];
   /** The current (open, or last finished) follow-up's latest draft, and whether it has a valid approval. */
   draft: DraftRow | undefined;

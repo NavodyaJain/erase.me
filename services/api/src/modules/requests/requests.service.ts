@@ -158,7 +158,21 @@ export class RequestsService {
 
   async list(userId: string) {
     const rows = await this.deps.repo.listRequests(userId);
+    const facts = await this.deps.repo.listFacts(userId);
+    const followupsOf = new Map<string, typeof facts.followups>();
+    for (const f of facts.followups) followupsOf.set(f.requestId, [...(followupsOf.get(f.requestId) ?? []), f]);
+    const now = this.now();
+    // The same summary the request view uses, so the list and the detail can never disagree about a follow-up.
+    const followupOf = (r: (typeof rows)[number]) => {
+      const ctx = facts.contexts.get(r.id);
+      const toEmail = facts.destinations.get(r.id);
+      if (!ctx || toEmail === undefined) return { state: 'none' as const, canCreate: false };
+      const s = summariseFollowup({ req: r as unknown as RequestRow, ctx, firstDraft: { toEmail }, followups: followupsOf.get(r.id) ?? [], draft: undefined, approved: false, now, settings: this.followupSettings, sender: this.deps.sender });
+      return { state: s.state, canCreate: s.canCreate };
+    };
     return rows.map((r) => ({
+      followup: followupOf(r),
+      replies: facts.replies.get(r.id) ?? { count: 0, automaticCount: 0 },
       id: r.id,
       status: r.status as RequestStatus,
       company: { name: r.companyName, mustKeep: r.mustKeep },

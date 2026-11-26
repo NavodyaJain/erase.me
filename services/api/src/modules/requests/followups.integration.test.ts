@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb, pgError, type TestDb } from '../../../test/db-helper.js';
 import { actorFactory, type Actor, type SeedOptions } from '../../../test/actors.js';
+import { newId } from '../../common/ids.js';
 import { BANNED_WORDS } from '../../../test/wording.js';
 import { authed, buildHarness, type Harness, type Session } from '../../../test/harness.js';
 import { FakeGmailSender, SenderOutcomeUnknownError, SenderRejectedError, type OutgoingMessage, type RequestSender, type SentMessage } from './sender.js';
@@ -992,3 +993,65 @@ describe('the request view shows the follow-up without any text from a reply', (
     expect(stored).not.toMatch(/@|erase my|Dear |I am following up/i);
   });
 });
+
+// ---------- the list carries the same follow-up facts, and reply counts ----------
+
+describe('the request list', () => {
+  interface Item { id: string; status: string; replies: { count: number; automaticCount: number }; followup: { state: string; canCreate: boolean } }
+  const listFor = async (a: Actor) =>
+    (await h.app.inject({ method: 'GET', url: '/v1/requests', headers: { cookie: a.s.cookie } })).json<{ requests: Item[] }>().requests;
+  const item = async (a: Actor, id: string) => (await listFor(a)).find((r) => r.id === id);
+
+  it('says where each follow-up stands, through the whole flow, and always agrees with the request view', async () => {
+    const a = await actor(h, 'list-flow');
+    const unsent = await created(a);
+    const r = await sentRequest(a);
+    expect(await item(a, unsent.id)).toMatchObject({ followup: { state: 'none', canCreate: false }, replies: { count: 0, automaticCount: 0 } });
+    expect((await item(a, r.id))?.followup).toEqual({ state: 'not_due', canCreate: false });
+    await advance(31);
+    const agrees = async (expected: { state: string; canCreate: boolean }) => {
+      expect((await item(a, r.id))?.followup).toEqual(expected);
+      const view = (await A.get(a.s, r.id)).json<View>().followup;
+      expect({ state: view.state, canCreate: view.canCreate }).toEqual(expected);
+    };
+    await agrees({ state: 'due', canCreate: true });
+    expect((await A.fCreate(a.s, r.id)).statusCode).toBe(200);
+    await agrees({ state: 'drafted', canCreate: false });
+    const f = (await A.get(a.s, r.id)).json<View>().followup.draft;
+    const edited = (await A.fEdit(a.s, r.id, f?.hash as string, f?.subject as string, resolveOpen(f?.body as string))).json<View>();
+    expect((await A.fApprove(a.s, r.id, edited.followup.draft?.hash as string)).statusCode).toBe(200);
+    await agrees({ state: 'approved', canCreate: false });
+    expect((await A.fSend(a.s, r.id)).statusCode).toBe(200);
+    await agrees({ state: 'sent', canCreate: false });
+  });
+
+  it('counts replies from a person and automatic ones apart, per request, and only the person’s own', async () => {
+    const a = await actor(h, 'list-replies-a');
+    const b = await actor(h, 'list-replies-b');
+    const ra = await sentRequest(a);
+    const other = await sentRequest(a);
+    const rb = await sentRequest(b);
+    const add = (requestId: string, n: string, automatic: boolean) =>
+      t.owner.query(`INSERT INTO request_replies (id, request_id, gmail_message_id, received_at, sender_domain, sender_match, automatic) VALUES ($1, $2, $3, now(), 'shop.example', 'company', $4)`, [newId('reply'), requestId, n, automatic]);
+    await add(ra.id, 'm1', false);
+    await add(ra.id, 'm2', true);
+    await add(ra.id, 'm3', true);
+    await add(rb.id, 'm4', false);
+    expect((await item(a, ra.id))?.replies).toEqual({ count: 1, automaticCount: 2 });
+    expect((await item(a, other.id))?.replies).toEqual({ count: 0, automaticCount: 0 });
+    expect((await listFor(a)).map((r) => r.id)).not.toContain(rb.id);
+    expect((await item(b, rb.id))?.replies).toEqual({ count: 1, automaticCount: 0 });
+  });
+
+  it('does not offer a follow-up that a guard would refuse, or one after a reply', async () => {
+    const a = await actor(h, 'list-guard');
+    const kept = await sentRequest(a);
+    const replied = await sentRequest(a);
+    await advance(31);
+    await t.owner.query('UPDATE user_companies SET kept_at = now() WHERE id = $1', [kept.ucId]);
+    await setStatus(replied.id, 'reply_received');
+    expect((await item(a, kept.id))?.followup).toEqual({ state: 'due', canCreate: false });
+    expect((await item(a, replied.id))?.followup).toEqual({ state: 'none', canCreate: false });
+  });
+});
+

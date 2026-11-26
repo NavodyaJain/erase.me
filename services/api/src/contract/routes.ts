@@ -486,7 +486,7 @@ export const operations: OperationDoc[] = [
       200: {
         description: 'Requests, most recently changed first',
         schema: RequestList,
-        example: { requests: [{ id: exId('request'), status: 'drafted', company: { name: 'Sample Shop', mustKeep: false }, channel: 'email', outcome: null, createdAt: T1, updatedAt: T1, sentAt: null, dueAt: null }] },
+        example: { requests: [{ id: exId('request'), status: 'drafted', company: { name: 'Sample Shop', mustKeep: false }, channel: 'email', outcome: null, createdAt: T1, updatedAt: T1, sentAt: null, dueAt: null, replies: { count: 0, automaticCount: 0 }, followup: { state: 'none', canCreate: false } }] },
       },
     },
   },

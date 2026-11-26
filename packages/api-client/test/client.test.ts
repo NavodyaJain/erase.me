@@ -428,3 +428,14 @@ describe('account deletion', () => {
     expect(err).toMatchObject({ status: 403, code: 'deletion_pending' });
   });
 });
+
+describe('the request list', () => {
+  it('returns each item’s follow-up state and reply counts, typed from the contract', async () => {
+    const item = { id: REQUEST_ID, status: 'no_reply', replies: { count: 0, automaticCount: 2 }, followup: { state: 'due', canCreate: true } };
+    const api = fakeApi({ 'GET /v1/requests': { body: { requests: [item] } } });
+    const [first] = await createApiClient({ baseUrl: BASE, fetch: api.fetch }).requests.list();
+    expect(first?.followup).toEqual({ state: 'due', canCreate: true });
+    expect(first?.replies.automaticCount).toBe(2);
+  });
+});
+

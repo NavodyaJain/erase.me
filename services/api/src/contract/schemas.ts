@@ -285,6 +285,18 @@ export const RequestListItem = component(
     updatedAt: isoDateTime,
     sentAt: isoDateTime.nullable(),
     dueAt: isoDateTime.nullable(),
+    replies: z
+      .object({
+        count: z.number().int().min(0).describe('Replies from a person found on the sent thread'),
+        automaticCount: z.number().int().min(0).describe('Automatic replies. They do not change the status or stop the follow-up clock.'),
+      })
+      .describe('Counts from message headers only.'),
+    followup: z
+      .object({
+        state: z.enum(['none', 'not_due', 'due', 'drafted', 'approved', 'sent', 'submitted']).describe('The same as `followup.state` on the request view.'),
+        canCreate: z.boolean().describe('True when "Follow up?" can be offered'),
+      })
+      .describe('Where the follow-up stands, so a list does not need a call per request.'),
   }),
 );
 export const RequestList = component('RequestList', z.object({ requests: z.array(RequestListItem) }));

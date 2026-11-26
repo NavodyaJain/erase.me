@@ -2130,7 +2130,15 @@
                       "createdAt": "2026-11-22T10:00:00.000Z",
                       "updatedAt": "2026-11-22T10:00:00.000Z",
                       "sentAt": null,
-                      "dueAt": null
+                      "dueAt": null,
+                      "replies": {
+                        "count": 0,
+                        "automaticCount": 0
+                      },
+                      "followup": {
+                        "state": "none",
+                        "canCreate": false
+                      }
                     }
                   ]
                 }
@@ -8067,6 +8075,55 @@
                 "type": "null"
               }
             ]
+          },
+          "replies": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Replies from a person found on the sent thread"
+              },
+              "automaticCount": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Automatic replies. They do not change the status or stop the follow-up clock."
+              }
+            },
+            "required": [
+              "count",
+              "automaticCount"
+            ],
+            "additionalProperties": false,
+            "description": "Counts from message headers only."
+          },
+          "followup": {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "not_due",
+                  "due",
+                  "drafted",
+                  "approved",
+                  "sent",
+                  "submitted"
+                ],
+                "description": "The same as `followup.state` on the request view."
+              },
+              "canCreate": {
+                "type": "boolean",
+                "description": "True when \"Follow up?\" can be offered"
+              }
+            },
+            "required": [
+              "state",
+              "canCreate"
+            ],
+            "additionalProperties": false,
+            "description": "Where the follow-up stands, so a list does not need a call per request."
           }
         },
         "required": [
@@ -8078,7 +8135,9 @@
           "createdAt",
           "updatedAt",
           "sentAt",
-          "dueAt"
+          "dueAt",
+          "replies",
+          "followup"
         ],
         "additionalProperties": false
       },

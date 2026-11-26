@@ -238,6 +238,47 @@ function methods(x: Executor) {
         .orderBy(desc(requests.updatedAt), desc(requests.id));
     },
 
+    /**
+     * What the list needs about every one of a person's requests, in a fixed number of queries: each company's contact facts, where
+     * each first message went, the follow-ups, and how many replies were found (counts only).
+     */
+    async listFacts(userId: string) {
+      const contexts = await x
+        .select({ requestId: requests.id, ...contextColumns })
+        .from(requests)
+        .innerJoin(userCompanies, and(eq(userCompanies.id, requests.userCompanyId), eq(userCompanies.userId, requests.userId)))
+        .innerJoin(companies, eq(companies.id, userCompanies.companyId))
+        .where(eq(requests.userId, userId));
+      const destinations = await x
+        .selectDistinctOn([requestDrafts.requestId], { requestId: requestDrafts.requestId, toEmail: requestDrafts.toEmail })
+        .from(requestDrafts)
+        .innerJoin(requests, eq(requests.id, requestDrafts.requestId))
+        .where(and(eq(requests.userId, userId), isNull(requestDrafts.followupId)))
+        .orderBy(requestDrafts.requestId, desc(requestDrafts.version));
+      const followups = await x
+        .select(followupColumns)
+        .from(requestFollowups)
+        .innerJoin(requests, eq(requests.id, requestFollowups.requestId))
+        .where(eq(requests.userId, userId))
+        .orderBy(requestFollowups.requestId, requestFollowups.sequence);
+      const replies = await x
+        .select({
+          requestId: requestReplies.requestId,
+          count: sql<number>`count(*) filter (where not ${requestReplies.automatic})`.mapWith(Number),
+          automaticCount: sql<number>`count(*) filter (where ${requestReplies.automatic})`.mapWith(Number),
+        })
+        .from(requestReplies)
+        .innerJoin(requests, eq(requests.id, requestReplies.requestId))
+        .where(eq(requests.userId, userId))
+        .groupBy(requestReplies.requestId);
+      return {
+        contexts: new Map(contexts.map((c) => [c.requestId, c as unknown as CompanyContext])),
+        destinations: new Map(destinations.map((d) => [d.requestId, d.toEmail])),
+        followups: followups as unknown as FollowupRow[],
+        replies: new Map(replies.map((r) => [r.requestId, { count: r.count, automaticCount: r.automaticCount }])),
+      };
+    },
+
     async findOpenRequest(userCompanyId: string): Promise<RequestRow | undefined> {
       const [row] = await x
         .select(requestColumns)

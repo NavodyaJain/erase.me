@@ -814,6 +814,23 @@ export interface components {
             updatedAt: string;
             sentAt: string | null;
             dueAt: string | null;
+            /** @description Counts from message headers only. */
+            replies: {
+                /** @description Replies from a person found on the sent thread */
+                count: number;
+                /** @description Automatic replies. They do not change the status or stop the follow-up clock. */
+                automaticCount: number;
+            };
+            /** @description Where the follow-up stands, so a list does not need a call per request. */
+            followup: {
+                /**
+                 * @description The same as `followup.state` on the request view.
+                 * @enum {string}
+                 */
+                state: "none" | "not_due" | "due" | "drafted" | "approved" | "sent" | "submitted";
+                /** @description True when "Follow up?" can be offered */
+                canCreate: boolean;
+            };
         };
         RequestView: {
             request: {
@@ -2023,7 +2040,15 @@ export interface operations {
                      *           "createdAt": "2026-11-22T10:00:00.000Z",
                      *           "updatedAt": "2026-11-22T10:00:00.000Z",
                      *           "sentAt": null,
-                     *           "dueAt": null
+                     *           "dueAt": null,
+                     *           "replies": {
+                     *             "count": 0,
+                     *             "automaticCount": 0
+                     *           },
+                     *           "followup": {
+                     *             "state": "none",
+                     *             "canCreate": false
+                     *           }
                      *         }
                      *       ]
                      *     }

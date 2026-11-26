@@ -83,6 +83,8 @@ A request that has had no reply from a person by `FOLLOWUP_AFTER_DAYS` (30 by de
 
 An **automatic reply** (out of office and similar) does not stop the follow-up clock: it never changes the request's status. A reply from a person, or an outcome the person reported, ends the wait. Real follow-ups stay off, behind the same gates as the first message (`real_send_blocked` until the statute wording is verified), and also until the follow-up wording has been signed off. In development and test every send answers `delivery: "fake"`: nothing left the machine, and the screen must say so.
 
+Each item of `GET /v1/requests` also carries `replies` (`count` from a person, `automaticCount`) and `followup` (`state` and `canCreate`, the same values as on the request view), so a list or an overview needs no call per request.
+
 ### New in Phase 2: deleting an account
 
 | Call | What it does |
