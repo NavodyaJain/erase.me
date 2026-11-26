@@ -75,3 +75,9 @@ img { max-width: 100%; }
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .centered { min-height: 100dvh; display: grid; place-items: center; padding: var(--space-6) var(--space-4); }
 .narrow { width: 100%; max-width: 480px; display: grid; gap: var(--space-5); }
+
+/* A small set of radio choices, each a full-width target of at least 44px. */
+.choices { border: 0; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.choices legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.choice { display: flex; align-items: center; gap: var(--space-3); min-height: 44px; cursor: pointer; }
+.choice input { width: 20px; height: 20px; flex: none; }

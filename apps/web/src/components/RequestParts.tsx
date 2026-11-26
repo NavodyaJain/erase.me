@@ -72,7 +72,8 @@ export function UseFormPanel({ view }: { view: RequestView }) {
 
 export function StatusChip({ status }: { status: string }) {
   const label = copy.labels.requestStatus[status as keyof typeof copy.labels.requestStatus] ?? status;
-  return <Chip tone={status === 'sent' ? 'good' : status === 'bounced' ? 'warn' : 'info'}>{label}</Chip>;
+  const tone = status === 'sent' || status === 'replied_deleted' ? 'good' : status === 'bounced' || status === 'replied_refused' ? 'warn' : 'info';
+  return <Chip tone={tone}>{label}</Chip>;
 }
 
 export function FakeNotice() {
@@ -88,7 +89,7 @@ export function SentDates({ view }: { view: RequestView }) {
   if (!r.sentAt) return null;
   return (
     <p className="muted">
-      {copy.requests.sentOn(formatDay(r.sentAt))}
+      {(r.channel === 'web_form' ? copy.requests.submittedOn : copy.requests.sentOn)(formatDay(r.sentAt))}
       {r.dueAt ? ` · ${copy.requests.dueOn(formatDay(r.dueAt))}` : ''}
     </p>
   );

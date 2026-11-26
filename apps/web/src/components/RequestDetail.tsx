@@ -8,9 +8,12 @@ import { useEffect, useState } from 'react';
 import { copy } from '@/copy/en';
 import { ERROR_MESSAGES } from '@/copy/errors';
 import { formatDay } from '@/lib/format';
-import { type StepResult, useApproveAndSend, useCloseRequest, useEditDraft, useRequest } from '@/lib/hooks';
+import { type StepResult, useApproveAndSend, useCloseRequest, useEditDraft, useMarkSubmitted, useRequest } from '@/lib/hooks';
+import { canClose, isUnsent } from '@/lib/tracking';
 import { ErrorNotice } from './ErrorNotice';
+import { FollowupPanel } from './FollowupPanel';
 import { Blockers, DraftText, FakeNotice, SentDates, StatusChip, UseFormPanel } from './RequestParts';
+import { OutcomePanel, RepliesPanel } from './TrackingPanels';
 
 /** One request: read or edit the draft, approve and send it, see what happened, or close it. */
 export function RequestDetail({ id }: { id: string }) {
@@ -37,10 +40,23 @@ export function RequestDetail({ id }: { id: string }) {
   return <Loaded id={id} view={query.data} />;
 }
 
+/** The words for one entry of the history. Some event types mean different things, which their payload says. */
+export function eventLabel(e: RequestView['events'][number]): string {
+  if (e.type === 'reply_label' && e.payload.to === 'no_reply') return copy.labels.eventNoReply;
+  if (e.type === 'outcome_set') {
+    const answer = copy.outcome.options[e.payload.outcome as keyof typeof copy.outcome.options];
+    if (answer) return copy.outcome.reported(answer);
+  }
+  if (e.type === 'submitted' && e.payload.followup !== undefined) return copy.labels.eventFollowupSubmitted;
+  if (e.type === 'edited' && e.payload.followup !== undefined) return copy.labels.eventFollowupEdited;
+  return copy.labels.event[e.type as keyof typeof copy.labels.event] ?? e.type;
+}
+
 function Loaded({ id, view }: { id: string; view: RequestView }) {
   const edit = useEditDraft(id);
   const close = useCloseRequest(id);
   const run = useApproveAndSend();
+  const submitted = useMarkSubmitted(id);
   const [subject, setSubject] = useState(view.draft.subject);
   const [body, setBody] = useState(view.draft.body);
   const [result, setResult] = useState<StepResult | null>(null);
@@ -50,7 +66,9 @@ function Loaded({ id, view }: { id: string; view: RequestView }) {
   const [seenHash, setSeenHash] = useState(view.draft.hash);
   const [justSaved, setJustSaved] = useState(false);
 
-  const editable = view.request.status === 'drafted' || view.request.status === 'approved';
+  const editable = isUnsent(view.request.status);
+  // For a web form the form itself is the way to send, so that blocker is not shown as something wrong.
+  const blockers = view.useForm ? view.blockers.filter((b) => b.code !== 'use_form') : view.blockers;
   const dirty = subject !== view.draft.subject || body !== view.draft.body;
 
   // When the server's draft changes (after saving or a refresh), show the new text. Approval stays locked until it is read.
@@ -94,11 +112,19 @@ function Loaded({ id, view }: { id: string; view: RequestView }) {
         <SentDates view={view} />
       </div>
 
-      {view.useForm ? <UseFormPanel view={view} /> : null}
-      <Blockers blockers={view.blockers} />
+      {view.useForm && editable ? <UseFormPanel view={view} /> : null}
+      {editable ? <Blockers blockers={blockers} /> : null}
+
+      {view.canSetOutcome ? (
+        <>
+          <RepliesPanel view={view} />
+          <OutcomePanel id={id} view={view} />
+        </>
+      ) : null}
+      <FollowupPanel id={id} view={view} />
 
       <Card title={copy.requests.detailsTitle}>
-        {editable && !view.useForm ? (
+        {editable ? (
           <form
             className="stack"
             onSubmit={(e) => {
@@ -108,7 +134,7 @@ function Loaded({ id, view }: { id: string; view: RequestView }) {
           >
             <p className="muted">{copy.requests.editHint}</p>
             <div>
-              <div className="muted">{copy.requests.to}</div>
+              <div className="muted">{view.useForm ? copy.requests.useFormTitle : copy.requests.to}</div>
               <div style={{ overflowWrap: 'anywhere' }}>{view.draft.to}</div>
             </div>
             <TextField label={copy.requests.subject} value={subject} onChange={(e) => setSubject(e.target.value)} />
@@ -141,6 +167,26 @@ function Loaded({ id, view }: { id: string; view: RequestView }) {
             {copy.requests.open}
           </Button>
         </Alert>
+      ) : null}
+
+      {editable && view.useForm ? (
+        <Card title={copy.requests.submitTitle}>
+          <div className="stack">
+            <p className="muted">{copy.requests.submitHelp}</p>
+            {unread ? <p>{copy.requests.submitChanged}</p> : null}
+            <div className="row">
+              {unread ? (
+                <Button variant="secondary" onClick={() => setSeenHash(view.draft.hash)}>
+                  {copy.requests.open}
+                </Button>
+              ) : null}
+              <Button variant="primary" loading={submitted.isPending} disabled={dirty || unread || !view.canMarkSubmitted} onClick={() => submitted.mutate(seenHash)}>
+                {copy.requests.submitAction}
+              </Button>
+            </div>
+            {submitted.isError ? <ErrorNotice error={submitted.error} /> : null}
+          </div>
+        </Card>
       ) : null}
 
       {editable && !view.useForm ? (
@@ -180,11 +226,11 @@ function Loaded({ id, view }: { id: string; view: RequestView }) {
 
       {view.events.some((e) => e.payload?.delivery === 'fake') ? <FakeNotice /> : null}
 
-      {view.request.status !== 'closed' && view.request.status !== 'sent' ? (
+      {canClose(view.request.status) ? (
         <Card>
           {confirmClose ? (
             <Alert tone="warn" title={copy.requests.markClosed}>
-              <p>{copy.requests.closeBody}</p>
+              <p>{editable ? copy.requests.closeBody : copy.requests.closeTrackedBody}</p>
               <div className="row" style={{ marginTop: 'var(--space-2)' }}>
                 <Button variant="primary" loading={close.isPending} onClick={() => close.mutate(undefined, { onSuccess: () => setConfirmClose(false) })}>
                   {copy.requests.closeConfirm}
@@ -208,7 +254,7 @@ function Loaded({ id, view }: { id: string; view: RequestView }) {
         <ol className="list" style={{ listStyle: 'none', padding: 0 }}>
           {view.events.map((e) => (
             <li key={`${e.type}-${e.at}`}>
-              <span style={{ fontWeight: 600 }}>{copy.labels.event[e.type as keyof typeof copy.labels.event] ?? e.type}</span>
+              <span style={{ fontWeight: 600 }}>{eventLabel(e)}</span>
               <span className="muted"> · {formatDay(e.at)}</span>
             </li>
           ))}

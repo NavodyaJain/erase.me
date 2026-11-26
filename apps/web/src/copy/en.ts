@@ -214,6 +214,7 @@ export const copy = {
     submitAction: 'Mark as submitted',
     submitChanged: 'The draft changed. Copy the latest version before marking it as submitted.',
     submittedOn: (d: string) => `You marked it as submitted ${d}`,
+    closeTrackedBody: 'Closing ends tracking for this request. You can draft another request later.',
   },
 
   replies: {
@@ -329,6 +330,9 @@ export const copy = {
       closed: 'Closed',
       bounced: 'Did not arrive',
     },
+    eventNoReply: 'No reply by the follow-up day',
+    eventFollowupSubmitted: 'You marked the follow-up as submitted',
+    eventFollowupEdited: 'Follow-up draft edited',
     event: {
       drafted: 'Draft made',
       edited: 'Draft edited',

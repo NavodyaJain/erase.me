@@ -12,7 +12,7 @@ import { problem, renderApp } from './helpers';
 
 const rid = (n: number) => `req_${String(n).padStart(26, '0')}`;
 const view = (n: number, over: Record<string, unknown> = {}, draft: Record<string, unknown> = {}) => ({
-  request: { id: rid(n), status: 'drafted', createdAt: '2026-11-20T09:00:00.000Z', updatedAt: '2026-11-20T09:00:00.000Z', sentAt: null, dueAt: null },
+  request: { id: rid(n), status: 'drafted', channel: 'email', createdAt: '2026-11-20T09:00:00.000Z', updatedAt: '2026-11-20T09:00:00.000Z', sentAt: null, dueAt: null },
   company: { id: `cmp_${n}`, name: `Examplo ${n}`, mustKeep: false, kept: false, selfServeUrl: null },
   contact: { channel: 'email', formUrl: null },
   useForm: false,
@@ -22,9 +22,14 @@ const view = (n: number, over: Record<string, unknown> = {}, draft: Record<strin
   // As the API reports it: true only once the draft is approved.
   canSend: false,
   blockers: [],
+  replies: { count: 0, automaticCount: 0, firstAt: null, lastAt: null, senderMatch: null },
+  outcome: null,
+  canSetOutcome: false,
+  canMarkSubmitted: false,
+  followup: { state: 'none', dueAt: null, remaining: 1, sequence: null, sentAt: null, draft: null, approved: false, canCreate: false, canSend: false, canMarkSubmitted: false, blockers: [] },
   ...over,
 });
-const item = (n: number, status = 'drafted') => ({ id: rid(n), status, company: { name: `Examplo ${n}`, mustKeep: false }, createdAt: '2026-11-20T09:00:00.000Z', updatedAt: '2026-11-20T09:00:00.000Z', sentAt: null, dueAt: null });
+const item = (n: number, status = 'drafted') => ({ id: rid(n), status, company: { name: `Examplo ${n}`, mustKeep: false }, createdAt: '2026-11-20T09:00:00.000Z', updatedAt: '2026-11-20T09:00:00.000Z', sentAt: null, dueAt: null, replies: { count: 0, automaticCount: 0 }, followup: { state: 'none', canCreate: false } });
 const sentBody = (n: number) => ({ request: { id: rid(n), status: 'sent', sentAt: '2026-11-22T09:00:00.000Z', dueAt: '2026-12-22T09:00:00.000Z' }, delivery: 'fake', notice: 'server words' });
 
 const routes = (views: ReturnType<typeof view>[]) => ({
