@@ -105,7 +105,9 @@ function OpenFollowup(props: {
   const [body, setBody] = useState(draft.body);
   // The version the person is looking at. Approval and "submitted" always use this, never a newer one.
   const [seenHash, setSeenHash] = useState(draft.hash);
-  const [justSaved, setJustSaved] = useState(false);
+  // The version this person saved. Only that one counts as "just saved": any later version came from somewhere else.
+  const [savedHash, setSavedHash] = useState<string | null>(null);
+  const justSaved = savedHash === draft.hash;
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -132,8 +134,8 @@ function OpenFollowup(props: {
         className="stack"
         onSubmit={(e) => {
           e.preventDefault();
-          setJustSaved(false);
-          edit.mutate({ baseHash: draft.hash, subject, body }, { onSuccess: () => setJustSaved(true) });
+          setSavedHash(null);
+          edit.mutate({ baseHash: draft.hash, subject, body }, { onSuccess: (saved) => setSavedHash(saved.followup.draft?.hash ?? null) });
         }}
       >
         <p className="muted">{copy.followup.editHint}</p>

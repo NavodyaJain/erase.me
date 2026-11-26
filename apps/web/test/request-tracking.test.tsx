@@ -245,6 +245,31 @@ describe('the follow-up', () => {
     await waitFor(() => expect(api.calls(`POST ${path('/followup/approve')}`)[0]?.body).toEqual({ draftHash: 'f-v2' }));
   });
 
+  it('after saving and reading, a change made elsewhere is still announced', async () => {
+    const saved = drafted({ draft: draft('f-v2', { body: 'My own words', version: 2 }) });
+    const elsewhere = drafted({ draft: draft('f-v3', { body: 'Changed elsewhere', version: 3 }) });
+    const { api } = show({
+      ...get(drafted()),
+      [`PATCH ${path('/followup/draft')}`]: () => {
+        api.set(`GET /v1/requests/${ID}`, { body: saved });
+        return { body: saved };
+      },
+      [`POST ${path('/followup/approve')}`]: () => {
+        api.set(`GET /v1/requests/${ID}`, { body: elsewhere });
+        return problem(409, 'draft_changed');
+      },
+    });
+    const message = (await screen.findAllByLabelText(copy.requests.message))[0] as HTMLTextAreaElement;
+    await userEvent.type(message, ' more');
+    await userEvent.click(button(copy.requests.save));
+    await screen.findByText(copy.followup.saved);
+    await userEvent.click(button(copy.followup.open));
+    await userEvent.click(button(copy.followup.approveAndSend));
+    expect(await screen.findByText(copy.followup.changed)).toBeTruthy();
+    expect(screen.queryByText(copy.followup.saved)).toBeNull();
+    expect(button(copy.followup.approveAndSend).disabled).toBe(true);
+  });
+
   it('shows why it cannot be sent (real sending off) and keeps sending disabled', async () => {
     show(get(drafted({ blockers: [{ code: 'real_send_blocked', message: 'm' }] })));
     expect((await screen.findByRole('button', { name: copy.followup.approveAndSend }) as HTMLButtonElement).disabled).toBe(true);
@@ -273,6 +298,33 @@ describe('the follow-up', () => {
     show(get(view('replied_refused', { outcome: { value: 'refused', setByUser: true, at: T } })));
     await screen.findByText(copy.outcome.reported(copy.outcome.options.refused));
     expect(screen.queryByRole('heading', { name: copy.followup.title })).toBeNull();
+  });
+});
+
+describe('the first draft', () => {
+  it('after saving and reading, a change made elsewhere is still announced', async () => {
+    const unsent = view('drafted');
+    const saved = view('drafted', { draft: draft('first-v2', { body: 'My own words', version: 2 }) });
+    const elsewhere = view('drafted', { draft: draft('first-v3', { body: 'Changed elsewhere', version: 3 }) });
+    const { api } = show({
+      ...get(unsent),
+      [`PATCH ${path('/draft')}`]: () => {
+        api.set(`GET /v1/requests/${ID}`, { body: saved });
+        return { body: saved };
+      },
+      [`POST ${path('/approve')}`]: () => {
+        api.set(`GET /v1/requests/${ID}`, { body: elsewhere });
+        return problem(409, 'draft_changed');
+      },
+    });
+    await userEvent.type(await screen.findByLabelText(copy.requests.message), ' more');
+    await userEvent.click(button(copy.requests.save));
+    await screen.findByText(copy.requests.saved);
+    await userEvent.click(button(copy.requests.open));
+    await userEvent.click(button(copy.requests.sendConfirm));
+    expect(await screen.findByText(copy.requests.changedSince)).toBeTruthy();
+    expect(screen.queryByText(copy.requests.saved)).toBeNull();
+    expect(button(copy.requests.sendConfirm).disabled).toBe(true);
   });
 });
 

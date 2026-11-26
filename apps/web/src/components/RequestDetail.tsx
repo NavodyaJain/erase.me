@@ -64,7 +64,8 @@ function Loaded({ id, view }: { id: string; view: RequestView }) {
   const [confirmClose, setConfirmClose] = useState(false);
   // The hash of the version the person is looking at. Approval always uses this, never a newer one.
   const [seenHash, setSeenHash] = useState(view.draft.hash);
-  const [justSaved, setJustSaved] = useState(false);
+  // The version this person saved. Only that one counts as "just saved": any later version came from somewhere else.
+  const [savedHash, setSavedHash] = useState<string | null>(null);
 
   const editable = isUnsent(view.request.status);
   // For a web form the form itself is the way to send, so that blocker is not shown as something wrong.
@@ -78,18 +79,12 @@ function Loaded({ id, view }: { id: string; view: RequestView }) {
   }, [view.draft.hash, view.draft.subject, view.draft.body]);
 
   const unread = seenHash !== view.draft.hash;
+  const justSaved = savedHash === view.draft.hash;
   const changedElsewhere = unread && !justSaved;
 
   function save() {
-    setJustSaved(false);
-    edit.mutate(
-      { baseHash: view.draft.hash, subject, body },
-      {
-        onSuccess: () => {
-          setJustSaved(true);
-        },
-      },
-    );
+    setSavedHash(null);
+    edit.mutate({ baseHash: view.draft.hash, subject, body }, { onSuccess: (saved) => setSavedHash(saved.draft.hash) });
   }
 
   async function approveAndSend() {
