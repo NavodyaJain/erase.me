@@ -4,6 +4,7 @@ import { createApiClient, isApiError, type ApiClient } from '@erase/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { API_URL } from './config';
+import { DeletedNoticeProvider } from './deletion';
 
 const ApiContext = createContext<ApiClient | null>(null);
 
@@ -34,7 +35,9 @@ export function AppProviders({ children, client, queryClient }: { children: Reac
   const [queries] = useState(() => queryClient ?? makeQueryClient());
   return (
     <ApiContext.Provider value={api}>
-      <QueryClientProvider client={queries}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queries}>
+        <DeletedNoticeProvider>{children}</DeletedNoticeProvider>
+      </QueryClientProvider>
     </ApiContext.Provider>
   );
 }

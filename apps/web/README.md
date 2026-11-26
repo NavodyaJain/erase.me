@@ -1,6 +1,6 @@
 # app.erase.me (web)
 The user product (PWA): sign in, connect inboxes, see which companies may hold your data, and draft, approve and send requests.
-Talks only to `services/api` through `@erase/api-client` (no hand-written fetch). No direct calls to `services/ai`. Phase 1 builds Connect, Overview and Requests; Money, KYC exposure, Aliases and Registry are deferred.
+Talks only to `services/api` through `@erase/api-client` (no hand-written fetch). No direct calls to `services/ai`. The app has Connect, Overview, Requests (with replies, the answer the person reports, web-form submission and the follow-up) and Your data (delete with an undo period); Money, KYC exposure, Aliases and Registry are deferred.
 
 ## Run it
 ```
@@ -24,5 +24,6 @@ Set `NEXT_PUBLIC_API_URL` (see `.env.example`). The API's `WEB_ORIGIN` must be t
 ## Wording and screens that differ from the design boards
 The boards are sample data and follow `docs/design`, with these deliberate differences (see also `docs/OPEN-QUESTIONS.md`):
 - Three boards state "leaked" as fact (Home, Desktop, Leak). The app uses hedged wording instead. <!-- banned-words:ignore - documents the boards' wording -->
-- Boards that show risk levels, Money, KYC, Aliases, replies, "Chase now" and the proof pack are not built in Phase 1.
+- Boards that show risk levels, Money, KYC, Aliases and the proof pack are not built. "Chase now" is worded "Follow up", and the board's "Deleted" count is "Reported erased": it is the person's report, not a verified fact.
+- "Your data" and the signed-out screen after "Delete now" have no board; they use the existing components and tokens.
 - Draft text always comes from the API; the boards' hard-coded draft wording is not used.

@@ -5,22 +5,27 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { copy } from '@/copy/en';
+import { isPaused, useDeletion } from '@/lib/deletion';
 import { useSignOut } from '@/lib/session';
 
 const NAV = [
   { href: '/overview', label: copy.nav.overview },
   { href: '/requests', label: copy.nav.requests },
   { href: '/connect', label: copy.nav.inboxes },
+  { href: '/your-data', label: copy.nav.yourData },
 ] as const;
 
 /**
- * The signed-in frame: a bottom tab bar on a phone, a side bar from 1024px. Only the screens Phase 1 builds are listed.
+ * The signed-in frame: a bottom tab bar on a phone, a side bar from 1024px. Only the screens that exist are listed, and
+ * while deletion is pending only "Your data".
  * Phone safe-area insets are respected for the installed (standalone) app.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const signOut = useSignOut();
+  const paused = isPaused(useDeletion().data);
+  const items = paused ? NAV.filter((item) => item.href === '/your-data') : NAV;
 
   return (
     <div className="app-shell">
@@ -28,7 +33,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {copy.nav.skip}
       </a>
       <header className="app-header">
-        <Link href="/overview" className="app-brand" aria-label={copy.brand.name}>
+        <Link href={paused ? '/your-data' : '/overview'} className="app-brand" aria-label={copy.brand.name}>
           <img src="/brand/logo-wordmark-light.svg" alt="" width={112} height={28} />
         </Link>
         <Button
@@ -41,7 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
       <nav className="app-nav" aria-label={copy.nav.main}>
         <ul>
-          {NAV.map((item) => {
+          {items.map((item) => {
             const current = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <li key={item.href}>

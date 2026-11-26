@@ -197,6 +197,70 @@ describe('fetch', () => {
   });
 });
 
+describe('"Your data" and deletion', () => {
+  const STATIC_ONLY = /^\/(offline|manifest\.webmanifest|brand\/|_next\/static\/)/;
+  const API = 'https://api.example';
+  /** Every way the screen and its status could be asked for: page loads, in-app navigation data, and the API on either origin. */
+  const visit = async (w: ReturnType<typeof boot>) => {
+    for (const page of ['/your-data', '/deleted']) {
+      await w.request(page, { mode: 'navigate' });
+      expect(await w.request(`${page}?_rsc=abc`)).toBeNull();
+      expect(await w.request(page)).toBeNull();
+    }
+    for (const path of ['/v1/me', '/v1/me/deletion', '/v1/requests', '/v1/requests/req_1']) {
+      expect(await w.request(path), path).toBeNull();
+      expect(await w.request(`${API}${path}`), path).toBeNull();
+    }
+    for (const path of ['/v1/me/deletion/undo', '/v1/me/deletion/now']) expect(await w.request(`${API}${path}`, { method: 'POST' })).toBeNull();
+    expect(await w.request(`${API}/v1/me`, { method: 'DELETE' })).toBeNull();
+    await w.request('/_next/static/chunks/your-data-1.js', { mode: 'no-cors' });
+  };
+  const cached = async (w: ReturnType<typeof boot>) => {
+    const out: Array<[string, string]> = [];
+    for (const store of w.c.stores.values()) for (const [key, res] of store) out.push([key, await res.clone().text()]);
+    return out;
+  };
+  const onlyStatic = async (w: ReturnType<typeof boot>) => {
+    for (const key of w.c.writes) expect(key, key).toMatch(STATIC_ONLY);
+    for (const [key, body] of await cached(w)) {
+      expect(key, key).toMatch(STATIC_ONLY);
+      expect(body, key).not.toContain('PERSONAL');
+    }
+  };
+  const server = (p: string) => new Response(/^\/(your-data|deleted|v1\/)/.test(p) ? 'PERSONAL: deletion status and a name' : 'static', { status: 200 });
+
+  it('caches the static files only: never the page, its navigation data, or any API or status response', async () => {
+    const w = boot(server);
+    await w.lifecycle('install');
+    await visit(w);
+    await onlyStatic(w);
+    expect(w.c.writes).toContain('/_next/static/chunks/your-data-1.js'); // static files are still cached
+  });
+
+  it('after a deletion clears everything, nothing personal comes back', async () => {
+    const w = boot(server);
+    await w.lifecycle('install');
+    await visit(w);
+    await w.message({ type: 'CLEAR_CACHES' }); // what the app sends after "Delete now"
+    expect(w.c.stores.size).toBe(0);
+    w.c.writes.length = 0;
+    await visit(w);
+    await onlyStatic(w);
+  });
+
+  it('offline, "Your data" shows the offline page and never an earlier copy of itself', async () => {
+    const w = boot(server);
+    await w.lifecycle('install');
+    await w.request('/your-data', { mode: 'navigate' });
+    w.setHandler(() => Promise.reject(new Error('offline')));
+    expect(await (await w.request('/your-data', { mode: 'navigate' }))?.text()).toBe(OFFLINE_HTML);
+  });
+
+  it('precaches neither screen', () => {
+    expect(code).not.toMatch(/'\/(your-data|deleted)/);
+  });
+});
+
 describe('activate and messages', () => {
   it('deletes caches from older versions and keeps the current ones', async () => {
     const w = boot(staticOk);

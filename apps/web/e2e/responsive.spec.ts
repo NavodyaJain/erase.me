@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { copy, draftFor, expect, resolveOpenLine, firstRequestId, seriousViolations, test, toOverview } from './helpers';
 
 const VIEWPORTS = [
+  { name: 'small phone', width: 320, height: 640 },
   { name: 'phone', width: 390, height: 844 },
   { name: 'desktop', width: 1440, height: 900 },
 ] as const;
@@ -11,6 +12,7 @@ const SCREENS = [
   { name: 'Requests', path: '/requests', ready: (p: Page) => p.getByRole('link', { name: 'E2E Bank' }) },
   { name: 'Review', path: '/requests/review', ready: (p: Page) => p.getByRole('button', { name: copy.requests.open }) },
   { name: 'Inboxes', path: '/connect', ready: (p: Page) => p.getByRole('heading', { level: 1, name: copy.connect.title }) },
+  { name: 'Your data', path: '/your-data', ready: (p: Page) => p.getByRole('button', { name: copy.yourData.deleteTitle }) },
 ] as const;
 
 for (const viewport of VIEWPORTS) {
