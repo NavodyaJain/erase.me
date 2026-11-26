@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { expect, test as base, type Page } from '@playwright/test';
+import { expect, test as base, type APIRequestContext, type Page } from '@playwright/test';
 import { copy } from '../src/copy/en';
 
 export const API = 'http://localhost:4100';
@@ -86,3 +86,66 @@ export async function seriousViolations(page: Page): Promise<string[]> {
     return result.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical').map((v) => `${v.id} (${v.nodes.length})`);
   });
 }
+
+// ---------- controls of the e2e stack only (services/api/e2e/controls.ts) ----------
+
+const control = async (request: APIRequestContext, path: string, data?: object) => {
+  const res = await request.post(`${API}${path}`, data ? { data } : {});
+  expect(res.ok(), `${path} answered ${res.status()}`).toBe(true);
+  return res;
+};
+
+/** Moves the app's clock on. A session unused for more than 30 days ends, as it would for a person, so sign in again. */
+export const advanceDays = (request: APIRequestContext, days: number) => control(request, '/e2e/clock', { advanceDays: days });
+
+/** A reply arrives from the company on the request's Gmail thread. */
+export const replyArrives = (request: APIRequestContext, requestId: string, automatic = false) => control(request, '/e2e/replies', { requestId, automatic });
+
+/** Runs a background task now and returns its counts. */
+export async function runJob(request: APIRequestContext, name: 'poll-replies' | 'followup-sweep' | 'purge'): Promise<Record<string, number>> {
+  return ((await (await control(request, `/e2e/jobs/${name}`)).json()) as { counts: Record<string, number> }).counts;
+}
+
+/** Who the fake Google signs in and connects next. */
+export const googleSignsIn = (request: APIRequestContext, who: 'first' | 'second') => control(request, '/e2e/google/identity', { who });
+
+export async function revokedTokens(request: APIRequestContext): Promise<string[]> {
+  return ((await (await request.get(`${API}/e2e/google/revoked`)).json()) as { tokens: string[] }).tokens;
+}
+
+export interface PersonData {
+  user: { id: string; email: string; name: string; googleSub: string; status: string; purged: boolean };
+  counts: Record<string, number>;
+  deliveries: string[];
+  content: string;
+}
+
+export async function personData(request: APIRequestContext, by: { email: string } | { userId: string }): Promise<PersonData> {
+  const res = await request.get(`${API}/e2e/data`, { params: by });
+  expect(res.ok()).toBe(true);
+  return (await res.json()) as PersonData;
+}
+
+export const FIRST_EMAIL = 'e2e.user@example.com';
+export const SECOND_EMAIL = 'e2e.other@example.com';
+
+/** Drafts, edits the unfinished line out, approves and sends one email request (a test send). Returns its id. */
+export async function sendRequest(page: Page, company = 'E2E Bank'): Promise<string> {
+  await draftFor(page, company);
+  const id = await firstRequestId(page);
+  await resolveOpenLine(page, id);
+  await (await chooseAndOpen(page, company)).click();
+  await expect(page.getByText(copy.requests.resultSent)).toBeVisible();
+  return id;
+}
+
+/** Records the POSTs the page makes to the API that match, by their last path segments. */
+export function recordPosts(page: Page, match: RegExp): string[] {
+  const calls: string[] = [];
+  page.on('request', (r) => {
+    const m = r.method() === 'POST' ? match.exec(new URL(r.url()).pathname) : null;
+    if (m) calls.push(m[1] ?? m[0]);
+  });
+  return calls;
+}
+
